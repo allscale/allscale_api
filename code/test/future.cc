@@ -34,23 +34,23 @@ namespace core {
 	}
 
 
-	Future<int> fib(int x) {
+	Future<int> naive_fib(int x) {
 		if (x <= 1) return done(x);
-		return add(fib(x-1),fib(x-2));
+		return add(naive_fib(x-1),naive_fib(x-2));
 	}
 
 	TEST(Future, Fib) {
 
-		EXPECT_EQ(1, fib(1).get());
-		EXPECT_EQ(1, fib(2).get());
-		EXPECT_EQ(2, fib(3).get());
-		EXPECT_EQ(3, fib(4).get());
-		EXPECT_EQ(5, fib(5).get());
-		EXPECT_EQ(8, fib(6).get());
-		EXPECT_EQ(13, fib(7).get());
-		EXPECT_EQ(21, fib(8).get());
+		EXPECT_EQ(1, naive_fib(1).get());
+		EXPECT_EQ(1, naive_fib(2).get());
+		EXPECT_EQ(2, naive_fib(3).get());
+		EXPECT_EQ(3, naive_fib(4).get());
+		EXPECT_EQ(5, naive_fib(5).get());
+		EXPECT_EQ(8, naive_fib(6).get());
+		EXPECT_EQ(13, naive_fib(7).get());
+		EXPECT_EQ(21, naive_fib(8).get());
 
-		EXPECT_EQ(832040, fib(30).get());
+		EXPECT_EQ(832040, naive_fib(30).get());
 
 	}
 

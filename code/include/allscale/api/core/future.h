@@ -6,11 +6,39 @@
 //		- the definintion of the future
 //		- a minimal set of basic factory functions
 //
-#include "allscale/api/core/impl/naive/future.h"
+#ifdef OMP_CILK_IMPL
+	// a OpenMP / Cilk based implementation
+	#include "allscale/api/core/impl/omp_cilk/future.h"
+#else
+	// a Simple-Runtime based implementation
+	#include "allscale/api/core/impl/omp_cilk/future.h"
+	//#include "allscale/api/core/impl/simple/future.h"
+#endif
 
 namespace allscale {
 namespace api {
 namespace core {
+
+	// ---------------------------------------------------------------------------------------------
+	//											Type Traits
+	// ---------------------------------------------------------------------------------------------
+
+	template<typename T>
+	struct to_future {
+		using type = Future<T>;
+	};
+
+	template<typename T>
+	struct to_future<Future<T>> {
+		using type = Future<T>;
+	};
+
+	template<typename T>
+	struct is_future : public std::false_type {};
+
+	template<typename T>
+	struct is_future<Future<T>> : public std::true_type {};
+
 
 	// ------------------------------------------------------------------------------
 	//								General Factories
@@ -65,7 +93,6 @@ namespace core {
 				std::move(first), std::move(rest)...
 		);
 	}
-
 
 } // end namespace core
 } // end namespace api

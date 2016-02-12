@@ -16,7 +16,7 @@
 namespace allscale {
 namespace api {
 namespace core {
-inline namespace naive {
+inline namespace omp_cilk {
 
 	template<typename T>
 	using Task = std::function<T()>;
@@ -276,27 +276,6 @@ inline namespace naive {
 		Future<void> seq(Subs&& ...);
 
 	};
-
-
-	// ---------------------------------------------------------------------------------------------
-	//											Type Traits
-	// ---------------------------------------------------------------------------------------------
-
-	template<typename T>
-	struct to_future {
-		using type = Future<T>;
-	};
-
-	template<typename T>
-	struct to_future<Future<T>> {
-		using type = Future<T>;
-	};
-
-	template<typename T>
-	struct is_future : public std::false_type {};
-
-	template<typename T>
-	struct is_future<Future<T>> : public std::true_type {};
 
 
 	// ---------------------------------------------------------------------------------------------
