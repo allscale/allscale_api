@@ -356,7 +356,7 @@ namespace core {
 		if (begin + 1 == end) {
 			return spawn(
 					[=]{
-						std::cout << "Running element " << begin << "\n";
+//						std::cout << "Running element " << begin << "\n";
 						body(begin);
 					}
 			);
@@ -366,7 +366,7 @@ namespace core {
 		int mid = (begin + end) / 2;
 		return spawn(
 				[=]() {
-					std::cout << "Running range " << begin << " to " << end << "\n";
+//					std::cout << "Running range " << begin << " to " << end << "\n";
 					for(int i=begin; i<end; i++) body(i);
 				},
 				[=]() {
@@ -406,8 +406,8 @@ namespace core {
 		return fib(n-1) + fib(n-2);
 	}
 
-	const unsigned STRESS_N = 20;
-//	const unsigned STRESS_N = 43;
+//	const unsigned STRESS_N = 20;
+	const unsigned STRESS_N = 43;
 	const unsigned STRESS_RES = const_fib(STRESS_N);
 
 	TEST(Runtime, Fib) {

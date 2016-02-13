@@ -23,17 +23,16 @@ inline namespace simple {
 
 	// -- Declarations --
 
-	const bool DEBUG = true;
+	const bool DEBUG = false;
 
 	std::mutex g_log_mutex;
 
-	#define LOG(OP) \
+	#define LOG(MSG) \
 		{  \
 			if (DEBUG) { \
 				std::thread::id this_id = std::this_thread::get_id(); \
 				std::lock_guard<std::mutex> lock(g_log_mutex); \
-				std::cout << "Thread " << this_id << ": "; \
-				OP; \
+				std::cout << "Thread " << this_id << ": " << MSG << "\n"; \
 			} \
 		}
 
@@ -150,6 +149,13 @@ inline namespace simple {
 			friend class Worker;
 			friend class simple::FutureBase;
 
+
+			static unsigned getNextID() {
+				static std::atomic<int> counter(0);
+				return ++counter;
+			}
+
+
 		public:
 
 			// the state space of tasks
@@ -157,6 +163,7 @@ inline namespace simple {
 				New,			// < this task is new
 				Ready, 			// < this task may be processed
 				Split, 			// < this task has been split
+				Aggregating,	// < this split task is aggregating results
 				Running, 		// < this task is currently running
 				Done			// < this task is done
 
@@ -164,11 +171,12 @@ inline namespace simple {
 
 			friend std::ostream& operator<<(std::ostream& out, const State& state) {
 				switch(state) {
-					case State::New: 		return out << "New";
-					case State::Ready: 		return out << "Ready";
-					case State::Split: 		return out << "Split";
-					case State::Running: 	return out << "Running";
-					case State::Done: 		return out << "Done";
+					case State::New: 		   return out << "New";
+					case State::Ready: 		   return out << "Ready";
+					case State::Split: 		   return out << "Split";
+					case State::Aggregating:   return out << "Aggregating";
+					case State::Running: 	   return out << "Running";
+					case State::Done: 		   return out << "Done";
 				}
 				return out << "Invalid";
 			}
@@ -176,6 +184,9 @@ inline namespace simple {
 //			std::shared_ptr<RecursiveGroup> group;			// < the group this task belongs to
 
 		protected:
+
+			// for debugging -- give each task an ID
+			unsigned id;
 
 			// general state
 			Kind kind;										// < the type of this task
@@ -193,16 +204,16 @@ inline namespace simple {
 		protected:
 
 			TaskBase(bool splitable, State state = State::New)
-				: kind(Kind::Atomic), state(state), splitable(splitable),
+				: id(getNextID()), kind(Kind::Atomic), state(state), splitable(splitable),
 				  parent(nullptr), ref_counter(0) {
-				LOG( std::cout << "Created " << *this << "\n" );
+				LOG( "Created " << *this );
 			}
 
 			template<typename ... Subs>
 			TaskBase(Kind kind, Subs&& ... subs);
 
 			virtual ~TaskBase() {
-				LOG( std::cout << "Destroying Task " << *this << "\n" );
+				LOG( "Destroying Task " << *this );
 				assert_eq(State::Done, state);
 			};
 
@@ -215,7 +226,7 @@ inline namespace simple {
 			void decRef() {
 				auto precount = ref_counter.fetch_sub(1);
 				if (precount == 1) {
-					LOG( std::cout << "Last reference lost for " << this << "\n" );
+					LOG( "Last reference lost for " << *this );
 					delete this;
 				}
 			}
@@ -224,7 +235,7 @@ inline namespace simple {
 
 			void setState(State newState) {
 				state = newState;
-				LOG( std::cout << "Updated state: " << *this << "\n" );
+				LOG( "Updated state: " << *this );
 			}
 
 			// New -> Ready
@@ -257,18 +268,26 @@ inline namespace simple {
 
 			void wait();
 
-			void childDone() {
-				// this one must be a splitted task
+			void childDone(const TaskBase& child) {
+				LOG( "Child " << child << " of " << *this << " done" );
+
+				// this one must be a split task
 				assert_eq(State::Split, state) << *this;
 
 				// decrement active child count
 				unsigned old_child_count = alive_child_counter.fetch_sub(1);
+
+				// log alive counter
+				LOG( "Child " << child << " of " << *this << " -- alive left: " << (old_child_count - 1) );
 
 				// check whether this was the last child
 				if (old_child_count != 1) return;
 
 				// mark this task as done
 				setDone();
+
+				LOG( "Child " << child << " of " << *this << " done - processing complete" );
+
 			}
 
 			// Split -> Done or Running -> Done or Done -> Done
@@ -281,31 +300,33 @@ inline namespace simple {
 				assert_true(state == State::Split || state == State::Running)
 						<< "Actual State: " << state;
 
-				// if this is a split task
-				if (state == State::Split) {
-
-					for(const auto& cur : subtasks) {
-						assert_true(cur.isDone());
-					}
+				// if it is a split, let it be done
+				State should = State::Split;
+				if (state.compare_exchange_strong(should, State::Aggregating)) {
 
 					// log aggregation step
-					LOG( std::cout << "Aggregating task " << *this << "\n" );
+					LOG( "Aggregating task " << *this );
 
 					// aggregate result
 					aggregate();
 
 					// clear child list
 					subtasks.clear();
+
+					// log completion
+					LOG( "Aggregating task " << *this << " complete" );
+
+				}
+
+				// notify parent
+				if (parent) {
+					parent->childDone(*this);
+					parent = nullptr;
 				}
 
 				// job is done
 				setState(State::Done);
 
-				// notify parent
-				if (parent) {
-					parent->childDone();
-					parent = nullptr;
-				}
 			}
 
 			void moveStateFrom(TaskBase& task);
@@ -337,7 +358,7 @@ inline namespace simple {
 			}
 
 			friend std::ostream& operator<<(std::ostream& out, const TaskBase& task) {
-				return out << "Task(" << &task << "," << task.state << "," << task.subtasks << ")";;
+				return out << "Task(" << task.id << " @ " << &task << "," << task.state << "," << task.subtasks << ")";;
 			}
 
 		};
@@ -544,7 +565,7 @@ inline namespace simple {
 		}
 
 		~FutureBase() {
-			LOG( std::cout << "   Destroying future on " << task << "\n" );
+			LOG( "   Destroying future on " << task );
 			wait();
 		}
 
@@ -629,7 +650,8 @@ inline namespace simple {
 
 		template<typename ... Subs>
 		inline TaskBase::TaskBase(Kind kind, Subs&& ... subs)
-			: kind(kind), state(State::Split), splitable(false),
+			: id(getNextID()),
+			  kind(kind), state(State::Split), splitable(false),
 			  parent(nullptr),
 			  subtasks({TaskReference(std::move(subs))...}),
 			  alive_child_counter(sizeof...(Subs)),
@@ -642,7 +664,7 @@ inline namespace simple {
 				}
 			}
 
-			LOG( std::cout << "Created " << *this << "\n" );
+			LOG( "Created " << *this );
 		}
 
 		inline void TaskBase::moveStateFrom(TaskBase& task) {
@@ -654,7 +676,7 @@ inline namespace simple {
 			assert_true(task.isSplit() || task.isDone());
 
 			// print some debugging data
-			LOG( std::cout << "Moving state from " << task << " to \n\t\t" << *this << "\n" );
+			LOG( "Moving state from " << task << " to " << *this );
 
 			// update task state
 			kind = task.kind;
@@ -674,7 +696,7 @@ inline namespace simple {
 			alive_child_counter.store(task.alive_child_counter);
 
 			// print some debugging data
-			LOG( std::cout << "Moving of state from " << task << " to \n\t\t" << *this << " completed\n" );
+			LOG( "Moving state from " << task << " to " << *this << " completed" );
 
 		}
 
@@ -1013,6 +1035,7 @@ inline namespace simple {
 
 						// enqueue task
 						if (queue.push_back(tasks[i])) {
+							LOG( "Enqueued task " << task << " in task queue" );
 							if (DEBUG_SCHEDULE) std::cout << "   Added task\n";
 							// and remember a task has been enqueued
 							enqueuedTasks = true;
@@ -1044,7 +1067,7 @@ inline namespace simple {
 					// check state of task
 					assert_true(task.isNew() || task.isReady());
 
-					LOG( std::cout << "Running directly " << task << "\n" );
+					LOG( "Running directly " << task );
 
 					// if not already marked as ready => do it now
 					if (!task.isReady()) task.setReady();
@@ -1067,15 +1090,13 @@ inline namespace simple {
 			// process a task from the local queue
 			if (TaskReference t = queue.pop_back()) {
 
-				LOG( std::cout << "Processing " << t << "\n" );
+				LOG( "Processing " << t );
 
 				// if the queue is not full => create more tasks
 				if (!queue.full() && t.task->isSplitable()) {
 
 					// split task
-					LOG( std::cout << "Splitting " << *t.task << "\n" );
 					t.task->split();
-					LOG( std::cout << " resulting in " << *t.task << "\n" );
 
 					// process the split task
 					t.task->wait();		// process split task
@@ -1085,7 +1106,7 @@ inline namespace simple {
 				}
 
 				// if the queue is full => work on this task
-				LOG( std::cout << "Running " << *t.task << "\n" );
+				LOG( "Running " << *t.task );
 				t.getTask().run();		// triggers execution
 				return true;
 			}
@@ -1103,6 +1124,7 @@ inline namespace simple {
 			// try to steal a task from another queue
 			if (TaskReference t = other.queue.pop_front()) {
 				queue.push_back(t);		// add to local queue
+				LOG( "Stole " << *t.task << " from other worker" );
 				return schedule_step();	// continue scheduling
 			}
 
@@ -1118,11 +1140,11 @@ inline namespace simple {
 			TaskReference ref(this);
 
 			assert_true(state >= State::New && state <= State::Done);
-			LOG( std::cout << "Waiting for " << *this << "\n" );
+			LOG( "Waiting for " << *this );
 
 			// if this task is already done => done
 			if (state == State::Done) {
-				LOG( std::cout << "   - waiting for " << *this << " completed - quick\n" );
+				LOG( "   - waiting for " << *this << " completed - quick" );
 				return;
 			}
 
@@ -1163,6 +1185,7 @@ inline namespace simple {
 				}
 
 				// now this task is complete
+				LOG( "Waited for all subtasks of " << *this << " - finishing this task" );
 				setDone();
 
 			} else if (state == State::New) {
@@ -1179,7 +1202,7 @@ inline namespace simple {
 				}
 			}
 
-			LOG( std::cout << "   - waiting for " << *this << " completed\n" );
+			LOG( "   - waiting for " << *this << " completed" );
 
 		}
 
