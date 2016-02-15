@@ -1041,7 +1041,7 @@ inline namespace simple {
 					TaskBase& task = tasks[i].getTask();
 					if (!task.isDone()) {
 						// mark task as ready
-						task.setReady();
+						if (task.isNew()) task.setReady();
 
 						// enqueue task
 						if (queue.push_back(tasks[i])) {
@@ -1073,19 +1073,30 @@ inline namespace simple {
 					// process the task directly -- no queues, no split
 					TaskBase& task = tasks[i].getTask();
 
-					// check state of task
-					assert_true(task.isNew() || task.isReady());
+					// if it is a split task ..
+					if (task.isSplit()) {
 
-					LOG( "Running directly " << task );
+						// wait for fragments
+						task.wait();
 
-					// if not already marked as ready => do it now
-					if (!task.isReady()) task.setReady();
+					} else {
 
-					// run task
-					task.run();
+						// process this task
 
-					// make sure task is done
-					assert_true(task.isDone()) << "Actual state: " << task.getState();
+						// check state of task
+						assert_true(task.isNew() || task.isReady());
+
+						LOG( "Running directly " << task );
+
+						// if not already marked as ready => do it now
+						if (!task.isReady()) task.setReady();
+
+						// run task
+						task.run();
+
+						// make sure task is done
+						assert_true(task.isDone()) << "Actual state: " << task.getState();
+					}
 
 					// continue with next task
 					i++;
@@ -1111,6 +1122,16 @@ inline namespace simple {
 					t.task->split();
 
 					// process the split task
+					t.task->wait();		// process split task
+
+					// done
+					return true;
+				}
+
+				// process split task
+				if (t.task->isSplit()) {
+
+					// wait for the parts to finish
 					t.task->wait();		// process split task
 
 					// done

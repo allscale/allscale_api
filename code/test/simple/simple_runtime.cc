@@ -406,7 +406,6 @@ namespace core {
 		return fib(n-1) + fib(n-2);
 	}
 
-//	const unsigned STRESS_N = 20;
 	const unsigned STRESS_N = 43;
 	const unsigned STRESS_RES = const_fib(STRESS_N);
 
@@ -428,67 +427,50 @@ namespace core {
 
 	}
 
-//	Future<unsigned> naive_fib(unsigned n) {
-//		if (n <= 1) return done(n);
-//		return sum(naive_fib(n-1),naive_fib(n-2));
-//	}
-//
-//	TEST(Runtime, NaiveFib) {
-//
-//		EXPECT_EQ(0, naive_fib(0).get());
-//		EXPECT_EQ(1, naive_fib(1).get());
-//		EXPECT_EQ(1, naive_fib(2).get());
-//		EXPECT_EQ(2, naive_fib(3).get());
-//		EXPECT_EQ(3, naive_fib(4).get());
-//		EXPECT_EQ(5, naive_fib(5).get());
-//		EXPECT_EQ(8, naive_fib(6).get());
-//		EXPECT_EQ(13, naive_fib(7).get());
-//
-//		EXPECT_EQ(144, naive_fib(12).get());
-//		EXPECT_EQ(6765, naive_fib(20).get());
-//
-//		EXPECT_EQ(STRESS_RES, naive_fib(STRESS_N).get());
-//	}
+	Future<unsigned> naive_fib(unsigned n) {
+		if (n <= 1) return done(n);
+		return sum(naive_fib(n-1),naive_fib(n-2));
+	}
 
-	Future<unsigned> better_fib(unsigned n) {
+	TEST(Runtime, NaiveFib) {
+
+		EXPECT_EQ(0, naive_fib(0).get());
+		EXPECT_EQ(1, naive_fib(1).get());
+		EXPECT_EQ(1, naive_fib(2).get());
+		EXPECT_EQ(2, naive_fib(3).get());
+		EXPECT_EQ(3, naive_fib(4).get());
+		EXPECT_EQ(5, naive_fib(5).get());
+		EXPECT_EQ(8, naive_fib(6).get());
+		EXPECT_EQ(13, naive_fib(7).get());
+
+		EXPECT_EQ(144, naive_fib(12).get());
+		EXPECT_EQ(6765, naive_fib(20).get());
+
+		// EXPECT_EQ(STRESS_RES, naive_fib(STRESS_N).get());
+	}
+
+	Future<unsigned> split_fib(unsigned n) {
 		if (n <= 1) return done(n);
 		return spawn(
 				[=](){ return fib(n); },
-				[=](){ return sum(better_fib(n-1), better_fib(n-2)); }
+				[=](){ return sum(split_fib(n-1), split_fib(n-2)); }
 		);
-
-//		Future<unsigned> res;
-//		if (n <= 1) res = std::move(done(n));
-//		else res = std::move(
-//				spawn(
-//						[=](){ return fib(n); },
-//						[=](){
-//							auto res = sum(better_fib(n-1), better_fib(n-2));
-//							std::cout << "sum-task(" << n << ") = " << res << "\n";
-//							return std::move(res);
-//						}
-//				)
-//		);
-//
-//		std::cout << "fib(" << n << ") = " << res << "\n";
-//
-//		return std::move(res);
 	}
 
-	TEST(Runtime, BetterFib) {
-//		EXPECT_EQ(0, better_fib(0).get());
-//		EXPECT_EQ(1, better_fib(1).get());
-//		EXPECT_EQ(1, better_fib(2).get());
-//		EXPECT_EQ(2, better_fib(3).get());
-//		EXPECT_EQ(3, better_fib(4).get());
-//		EXPECT_EQ(5, better_fib(5).get());
-//		EXPECT_EQ(8, better_fib(6).get());
-//		EXPECT_EQ(13, better_fib(7).get());
-//
-//		EXPECT_EQ(144, better_fib(12).get());
-//		EXPECT_EQ(6765, better_fib(20).get());
+	TEST(Runtime, SplitFib) {
+		EXPECT_EQ(0, split_fib(0).get());
+		EXPECT_EQ(1, split_fib(1).get());
+		EXPECT_EQ(1, split_fib(2).get());
+		EXPECT_EQ(2, split_fib(3).get());
+		EXPECT_EQ(3, split_fib(4).get());
+		EXPECT_EQ(5, split_fib(5).get());
+		EXPECT_EQ(8, split_fib(6).get());
+		EXPECT_EQ(13, split_fib(7).get());
 
-		EXPECT_EQ(STRESS_RES, better_fib(STRESS_N).get());
+		EXPECT_EQ(144, split_fib(12).get());
+		EXPECT_EQ(6765, split_fib(20).get());
+
+		EXPECT_EQ(STRESS_RES, split_fib(STRESS_N).get());
 	}
 
 
