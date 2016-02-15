@@ -414,7 +414,7 @@ namespace core {
 	const unsigned STRESS_N = 43;
 	const unsigned STRESS_RES = const_fib(STRESS_N);
 
-	TEST(Runtime, Fib) {
+	TEST(Runtime, FibSeq) {
 
 		EXPECT_EQ(0, fib(0));
 		EXPECT_EQ(1, fib(1));
@@ -437,7 +437,7 @@ namespace core {
 		return sum(fib_naive(n-1),fib_naive(n-2));
 	}
 
-	TEST(Runtime, NaiveFib) {
+	TEST(Runtime, FibNaive) {
 
 		EXPECT_EQ(0, fib_naive(0).get());
 		EXPECT_EQ(1, fib_naive(1).get());
@@ -462,7 +462,7 @@ namespace core {
 		);
 	}
 
-	TEST(Runtime, SplitFib) {
+	TEST(Runtime, FibSplit) {
 		EXPECT_EQ(0, fib_split(0).get());
 		EXPECT_EQ(1, fib_split(1).get());
 		EXPECT_EQ(1, fib_split(2).get());
@@ -488,7 +488,7 @@ namespace core {
 		return a + b;
 	}
 
-	TEST(Runtime, CilkFib) {
+	TEST(Runtime, FibCilk) {
 		EXPECT_EQ(0, fib_cilk(0));
 		EXPECT_EQ(1, fib_cilk(1));
 		EXPECT_EQ(1, fib_cilk(2));
