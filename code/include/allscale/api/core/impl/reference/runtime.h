@@ -13,8 +13,7 @@
 #include "allscale/utils/printer/arrays.h"
 #include "allscale/utils/printer/vectors.h"
 
-#include "allscale/api/core/impl/simple/lock.h"
-
+#include "allscale/api/core/impl/reference/lock.h"
 
 namespace allscale {
 namespace api {

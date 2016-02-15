@@ -2,7 +2,12 @@
 
 #include <vector>
 
-#include "allscale/api/core/impl/simple/runtime.h"
+#include "allscale/api/core/impl/reference/runtime.h"
+
+#ifdef __cilk
+    #include <cilk/cilk.h>
+#endif
+
 
 namespace allscale {
 namespace api {
@@ -427,52 +432,79 @@ namespace core {
 
 	}
 
-	Future<unsigned> naive_fib(unsigned n) {
+	Future<unsigned> fib_naive(unsigned n) {
 		if (n <= 1) return done(n);
-		return sum(naive_fib(n-1),naive_fib(n-2));
+		return sum(fib_naive(n-1),fib_naive(n-2));
 	}
 
 	TEST(Runtime, NaiveFib) {
 
-		EXPECT_EQ(0, naive_fib(0).get());
-		EXPECT_EQ(1, naive_fib(1).get());
-		EXPECT_EQ(1, naive_fib(2).get());
-		EXPECT_EQ(2, naive_fib(3).get());
-		EXPECT_EQ(3, naive_fib(4).get());
-		EXPECT_EQ(5, naive_fib(5).get());
-		EXPECT_EQ(8, naive_fib(6).get());
-		EXPECT_EQ(13, naive_fib(7).get());
+		EXPECT_EQ(0, fib_naive(0).get());
+		EXPECT_EQ(1, fib_naive(1).get());
+		EXPECT_EQ(1, fib_naive(2).get());
+		EXPECT_EQ(2, fib_naive(3).get());
+		EXPECT_EQ(3, fib_naive(4).get());
+		EXPECT_EQ(5, fib_naive(5).get());
+		EXPECT_EQ(8, fib_naive(6).get());
+		EXPECT_EQ(13, fib_naive(7).get());
 
-		EXPECT_EQ(144, naive_fib(12).get());
-		EXPECT_EQ(6765, naive_fib(20).get());
+		EXPECT_EQ(144, fib_naive(12).get());
+		EXPECT_EQ(6765, fib_naive(20).get());
 
-		// EXPECT_EQ(STRESS_RES, naive_fib(STRESS_N).get());
+		// EXPECT_EQ(STRESS_RES, fib_naive(STRESS_N).get());
 	}
 
-	Future<unsigned> split_fib(unsigned n) {
+	Future<unsigned> fib_split(unsigned n) {
 		if (n <= 1) return done(n);
 		return spawn(
 				[=](){ return fib(n); },
-				[=](){ return sum(split_fib(n-1), split_fib(n-2)); }
+				[=](){ return sum(fib_split(n-1), fib_split(n-2)); }
 		);
 	}
 
 	TEST(Runtime, SplitFib) {
-		EXPECT_EQ(0, split_fib(0).get());
-		EXPECT_EQ(1, split_fib(1).get());
-		EXPECT_EQ(1, split_fib(2).get());
-		EXPECT_EQ(2, split_fib(3).get());
-		EXPECT_EQ(3, split_fib(4).get());
-		EXPECT_EQ(5, split_fib(5).get());
-		EXPECT_EQ(8, split_fib(6).get());
-		EXPECT_EQ(13, split_fib(7).get());
+		EXPECT_EQ(0, fib_split(0).get());
+		EXPECT_EQ(1, fib_split(1).get());
+		EXPECT_EQ(1, fib_split(2).get());
+		EXPECT_EQ(2, fib_split(3).get());
+		EXPECT_EQ(3, fib_split(4).get());
+		EXPECT_EQ(5, fib_split(5).get());
+		EXPECT_EQ(8, fib_split(6).get());
+		EXPECT_EQ(13, fib_split(7).get());
 
-		EXPECT_EQ(144, split_fib(12).get());
-		EXPECT_EQ(6765, split_fib(20).get());
+		EXPECT_EQ(144, fib_split(12).get());
+		EXPECT_EQ(6765, fib_split(20).get());
 
-		EXPECT_EQ(STRESS_RES, split_fib(STRESS_N).get());
+		EXPECT_EQ(STRESS_RES, fib_split(STRESS_N).get());
 	}
 
+#ifdef __cilk
+
+	unsigned fib_cilk(unsigned n) {
+		if (n <= 1) return n;
+		unsigned a = cilk_spawn fib_cilk(n-1);
+		unsigned b = cilk_spawn fib_cilk(n-2);
+		cilk_sync;
+		return a + b;
+	}
+
+	TEST(Runtime, CilkFib) {
+		EXPECT_EQ(0, fib_cilk(0));
+		EXPECT_EQ(1, fib_cilk(1));
+		EXPECT_EQ(1, fib_cilk(2));
+		EXPECT_EQ(2, fib_cilk(3));
+		EXPECT_EQ(3, fib_cilk(4));
+		EXPECT_EQ(5, fib_cilk(5));
+		EXPECT_EQ(8, fib_cilk(6));
+		EXPECT_EQ(13, fib_cilk(7));
+
+		EXPECT_EQ(144, fib_cilk(12));
+		EXPECT_EQ(6765, fib_cilk(20));
+
+		EXPECT_EQ(STRESS_RES, fib_cilk(STRESS_N));
+	}
+
+#endif
 
 } // end namespace core
 } // end namespace api

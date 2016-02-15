@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "allscale/api/core/impl/simple/runtime.h"
+#include "allscale/api/core/impl/reference/runtime.h"
 
 namespace allscale {
 namespace api {
