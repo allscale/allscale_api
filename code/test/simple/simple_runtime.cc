@@ -489,7 +489,6 @@ namespace core {
 //		EXPECT_EQ(6765, better_fib(20).get());
 
 		EXPECT_EQ(STRESS_RES, better_fib(STRESS_N).get());
-
 	}
 
 

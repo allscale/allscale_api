@@ -36,6 +36,17 @@ inline namespace simple {
 			} \
 		}
 
+	const bool DEBUG_SCHEDULE = false;
+
+	#define LOG_SCHEDULE(MSG) \
+		{  \
+			if (DEBUG_SCHEDULE) { \
+				std::thread::id this_id = std::this_thread::get_id(); \
+				std::lock_guard<std::mutex> lock(g_log_mutex); \
+				std::cout << "Thread " << this_id << ": " << MSG << "\n"; \
+			} \
+		}
+
 
 	// the base class of all futures
 	class FutureBase;
@@ -889,7 +900,7 @@ inline namespace simple {
 
 			void schedule(const std::vector<TaskReference>& tasks);
 
-			bool schedule_step();
+			bool schedule_step(bool steal = false);
 
 		};
 
@@ -965,7 +976,8 @@ inline namespace simple {
 			}
 
 			Worker& getWorker() {
-				return getWorker(rand() % workers.size());
+				return getWorker(0);
+//				return getWorker(rand() % workers.size());
 			}
 
 		protected:
@@ -999,7 +1011,7 @@ inline namespace simple {
 			// start processing loop
 			while(alive) {
 				// conduct a schedule step
-				if (!schedule_step()) {
+				if (!schedule_step(true)) {  	// only top-level conducts stealing
 					// there was nothing to do => go to sleep
 					pool.waitForWork();
 				}
@@ -1015,14 +1027,12 @@ inline namespace simple {
 
 		void Worker::schedule(const std::vector<TaskReference>& tasks) {
 
-			const bool DEBUG_SCHEDULE = false;
-
 			// add tasks to queue
 			unsigned i=0;
 			while(i < tasks.size()) {
 
-				if (DEBUG_SCHEDULE) std::cout << "Submitted tasks: " << tasks.size() << "\n";
-				if (DEBUG_SCHEDULE) std::cout << "Queue size before: " << queue.size() << "/" << queue.capacity << "\n";
+				LOG_SCHEDULE( "Submitted tasks: " << tasks.size() );
+				LOG_SCHEDULE( "Queue size before: " << queue.size() << "/" << queue.capacity );
 
 				// enqueue work as available
 				bool enqueuedTasks = false;
@@ -1036,22 +1046,21 @@ inline namespace simple {
 						// enqueue task
 						if (queue.push_back(tasks[i])) {
 							LOG( "Enqueued task " << task << " in task queue" );
-							if (DEBUG_SCHEDULE) std::cout << "   Added task\n";
+							LOG_SCHEDULE( "Enqueued task " << task << " - queue size: " << queue.size() );
 							// and remember a task has been enqueued
 							enqueuedTasks = true;
 						} else {
 							break;
 						}
 					} else {
-						if (DEBUG_SCHEDULE) std::cout << "   Encountered completed sub-task: " << task << "\n";
+						LOG_SCHEDULE( "Encountered completed sub-task: " << task );
 					}
 
 					// go to next
 					i++;
 				}
 
-				if (DEBUG_SCHEDULE) std::cout << "Queue size after: " << queue.size() << "/" << queue.capacity << "\n";
-				if (DEBUG_SCHEDULE) std::cout << "\n";
+				LOG_SCHEDULE( "Queue size after: " << queue.size() << "/" << queue.capacity );
 
 				// signal available work
 				if (enqueuedTasks && queue.size() > queue.capacity/2) {
@@ -1085,15 +1094,18 @@ inline namespace simple {
 		}
 
 
-		inline bool Worker::schedule_step() {
+		inline bool Worker::schedule_step(bool steal) {
 
 			// process a task from the local queue
-			if (TaskReference t = queue.pop_back()) {
+			if (TaskReference t = queue.pop_front()) {
 
-				LOG( "Processing " << t );
+				LOG( "Processing " << t.getTask() );
+				LOG_SCHEDULE( "Processing " << t.getTask() << " - queue size: " << queue.size() );
 
 				// if the queue is not full => create more tasks
-				if (!queue.full() && t.task->isSplitable()) {
+				if (queue.size() < (queue.capacity*3)/4 && t.task->isSplitable()) {
+
+					LOG_SCHEDULE( "Splitting " << t.getTask() << " - queue size: " << queue.size() );
 
 					// split task
 					t.task->split();
@@ -1106,10 +1118,15 @@ inline namespace simple {
 				}
 
 				// if the queue is full => work on this task
-				LOG( "Running " << *t.task );
+				LOG( "Running " << t.getTask() );
+				LOG_SCHEDULE( "Running " << t.getTask() );
+
 				t.getTask().run();		// triggers execution
 				return true;
 			}
+
+			// if no stealing should be conducted => we are done
+			if (!steal) return false;
 
 			// check that there are other workers
 			int numWorker = pool.getNumWorkers();
@@ -1118,14 +1135,14 @@ inline namespace simple {
 			// otherwise, steal a task from another worker
 			Worker& other = pool.getWorker(rand() % numWorker);
 			if (this == &other) {
-				return schedule_step();
+				return schedule_step(steal);
 			}
 
 			// try to steal a task from another queue
 			if (TaskReference t = other.queue.pop_front()) {
 				queue.push_back(t);		// add to local queue
 				LOG( "Stole " << *t.task << " from other worker" );
-				return schedule_step();	// continue scheduling
+				return schedule_step();	// continue scheduling - no stealing
 			}
 
 			// no task found => wait a moment
