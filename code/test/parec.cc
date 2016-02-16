@@ -59,6 +59,24 @@ namespace core {
 		EXPECT_TRUE(detail::is_fun_def<decltype(g)>::value);
 	}
 
+	TEST(RecOps, CallFunDef) {
+
+		auto a = [](){return false;};
+		EXPECT_FALSE(detail::is_fun_def<decltype(a)>::value);
+
+		auto f = fun(
+				[](int)->bool { return true; },
+				[=](int)->int { return 12; },
+				[](int, const parec_fun<int(int)>::type&)->Future<int> { return done(14); }
+		);
+
+		auto g = [=](int) {
+			return 0.0;
+		};
+
+		EXPECT_EQ(12, f(2,g).get());
+	}
+
 	TEST(RecOps, IsFunDefLazy) {
 
 		auto a = [](){return false;};
@@ -94,12 +112,17 @@ namespace core {
 		EXPECT_TRUE((detail::is_rec_def<const rec_defs<int,int>>::value));
 	}
 
+	int fib_seq(int x) {
+		if (x < 2) return x;
+		return fib_seq(x-1) + fib_seq(x-2);
+	}
+
 	TEST(RecOps, Fib) {
 
 		auto fib = parec(
 				fun(
 					[](int x)->bool { return x < 2; },
-					[](int x)->int { return x; },
+					[](int x)->int { return fib_seq(x); },
 					[](int x, const typename parec_fun<int(int)>::type& f)->int {
 						auto a = f(x-1);
 						auto b = f(x-2);
@@ -120,185 +143,185 @@ namespace core {
 		EXPECT_EQ(34,fib(9).get());
 
 	}
+
+	TEST(RecOps, FibLazy) {
+
+		auto fib = parec(
+				fun(
+					[](int x)->bool { return x < 2; },
+					[](int x)->int { return fib_seq(x); },
+					[](int x, const typename parec_fun<int(int)>::type& f)->Future<int> {
+						return add(f(x-1),f(x-2));
+					}
+				)
+		);
+
+		EXPECT_EQ( 0,fib(0).get());
+		EXPECT_EQ( 1,fib(1).get());
+		EXPECT_EQ( 1,fib(2).get());
+		EXPECT_EQ( 2,fib(3).get());
+		EXPECT_EQ( 3,fib(4).get());
+		EXPECT_EQ( 5,fib(5).get());
+		EXPECT_EQ( 8,fib(6).get());
+		EXPECT_EQ(13,fib(7).get());
+		EXPECT_EQ(21,fib(8).get());
+		EXPECT_EQ(34,fib(9).get());
+
+	}
 //
-//	TEST(RecOps, FibLazy) {
-//
-//		auto fib = parec(
-//				fun(
-//					[](int x)->bool { return x < 2; },
-//					[](int x)->int { return x; },
-//					[](int x, const typename parec_fun<int(int)>::type& f)->Future<int> {
-//						return add(f(x-1),f(x-2));
-//					}
-//				)
-//		);
-//
-//		EXPECT_EQ( 0,fib(0).get());
-//		EXPECT_EQ( 1,fib(1).get());
-//		EXPECT_EQ( 1,fib(2).get());
-//		EXPECT_EQ( 2,fib(3).get());
-//		EXPECT_EQ( 3,fib(4).get());
-//		EXPECT_EQ( 5,fib(5).get());
-//		EXPECT_EQ( 8,fib(6).get());
-//		EXPECT_EQ(13,fib(7).get());
-//		EXPECT_EQ(21,fib(8).get());
-//		EXPECT_EQ(34,fib(9).get());
-//
-//	}
-//
-//	TEST(RecOps, FibShort) {
-//
-//		auto fib = parec(
-//				[](int x)->bool { return x < 2; },
-//				[](int x)->int { return x; },
-//				[](int x, const typename parec_fun<int(int)>::type& f)->int {
-//					auto a = f(x-1);
-//					auto b = f(x-2);
-//					return a.get() + b.get();
-//				}
-//		);
-//
-//		EXPECT_EQ( 0,fib(0).get());
-//		EXPECT_EQ( 1,fib(1).get());
-//		EXPECT_EQ( 1,fib(2).get());
-//		EXPECT_EQ( 2,fib(3).get());
-//		EXPECT_EQ( 3,fib(4).get());
-//		EXPECT_EQ( 5,fib(5).get());
-//		EXPECT_EQ( 8,fib(6).get());
-//		EXPECT_EQ(13,fib(7).get());
-//		EXPECT_EQ(21,fib(8).get());
-//		EXPECT_EQ(34,fib(9).get());
-//
-//	}
-//
-//	TEST(RecOps, FibShortLazy) {
-//
-//		auto fib = parec(
-//				[](int x)->bool { return x < 2; },
-//				[](int x)->int { return x; },
-//				[](int x, const typename parec_fun<int(int)>::type& f)->Future<int> {
-//					return add( f(x-1), f(x-2) );
-//				}
-//		);
-//
-//		EXPECT_EQ( 0,fib(0).get());
-//		EXPECT_EQ( 1,fib(1).get());
-//		EXPECT_EQ( 1,fib(2).get());
-//		EXPECT_EQ( 2,fib(3).get());
-//		EXPECT_EQ( 3,fib(4).get());
-//		EXPECT_EQ( 5,fib(5).get());
-//		EXPECT_EQ( 8,fib(6).get());
-//		EXPECT_EQ(13,fib(7).get());
-//		EXPECT_EQ(21,fib(8).get());
-//		EXPECT_EQ(34,fib(9).get());
-//
-//	}
-//
-//
-//	TEST(RecOps, EvenOdd) {
-//
-//		typedef typename parec_fun<bool(int)>::type test;
-//
-//		auto def = group(
-//				// even
-//				fun(
-//						[](int x)->bool { return x == 0; },
-//						[](int)->bool { return true; },
-//						[](int x, const test& , const test& odd)->bool {
-//							return odd(x-1).get();
-//						}
-//				),
-//				// odd
-//				fun(
-//						[](int x)->bool { return x == 0; },
-//						[](int)->bool { return false; },
-//						[](int x, const test& even, const test& )->bool {
-//							return even(x-1).get();
-//						}
-//				)
-//		);
-//
-//		auto even = parec<0>(def);
-//		auto odd = parec<1>(def);
-//
-//		EXPECT_TRUE(even(0).get());
-//		EXPECT_TRUE(even(2).get());
-//		EXPECT_TRUE(even(4).get());
-//		EXPECT_TRUE(even(6).get());
-//		EXPECT_TRUE(even(8).get());
-//
-//		EXPECT_FALSE(even(1).get());
-//		EXPECT_FALSE(even(3).get());
-//		EXPECT_FALSE(even(5).get());
-//		EXPECT_FALSE(even(7).get());
-//		EXPECT_FALSE(even(9).get());
-//
-//		EXPECT_FALSE(odd(0).get());
-//		EXPECT_FALSE(odd(2).get());
-//		EXPECT_FALSE(odd(4).get());
-//		EXPECT_FALSE(odd(6).get());
-//		EXPECT_FALSE(odd(8).get());
-//
-//		EXPECT_TRUE(odd(1).get());
-//		EXPECT_TRUE(odd(3).get());
-//		EXPECT_TRUE(odd(5).get());
-//		EXPECT_TRUE(odd(7).get());
-//		EXPECT_TRUE(odd(9).get());
-//
-//	}
-//
-//	TEST(RecOps, EvenOddLazy) {
-//
-//		typedef typename parec_fun<bool(int)>::type test;
-//
-//		auto def = group(
-//				// even
-//				fun(
-//						[](int x)->bool { return x == 0; },
-//						[](int)->bool { return true; },
-//						[](int x, const test& , const test& odd)->Future<bool> {
-//							return odd(x-1);
-//						}
-//				),
-//				// odd
-//				fun(
-//						[](int x)->bool { return x == 0; },
-//						[](int)->bool { return false; },
-//						[](int x, const test& even, const test& )->Future<bool> {
-//							return even(x-1);
-//						}
-//				)
-//		);
-//
-//		auto even = parec<0>(def);
-//		auto odd = parec<1>(def);
-//
-//		EXPECT_TRUE(even(0).get());
-//		EXPECT_TRUE(even(2).get());
-//		EXPECT_TRUE(even(4).get());
-//		EXPECT_TRUE(even(6).get());
-//		EXPECT_TRUE(even(8).get());
-//
-//		EXPECT_FALSE(even(1).get());
-//		EXPECT_FALSE(even(3).get());
-//		EXPECT_FALSE(even(5).get());
-//		EXPECT_FALSE(even(7).get());
-//		EXPECT_FALSE(even(9).get());
-//
-//		EXPECT_FALSE(odd(0).get());
-//		EXPECT_FALSE(odd(2).get());
-//		EXPECT_FALSE(odd(4).get());
-//		EXPECT_FALSE(odd(6).get());
-//		EXPECT_FALSE(odd(8).get());
-//
-//		EXPECT_TRUE(odd(1).get());
-//		EXPECT_TRUE(odd(3).get());
-//		EXPECT_TRUE(odd(5).get());
-//		EXPECT_TRUE(odd(7).get());
-//		EXPECT_TRUE(odd(9).get());
-//
-//	}
-//
+	TEST(RecOps, FibShort) {
+
+		auto fib = parec(
+				[](int x)->bool { return x < 2; },
+				[](int x)->int { return fib_seq(x); },
+				[](int x, const typename parec_fun<int(int)>::type& f)->int {
+					auto a = f(x-1);
+					auto b = f(x-2);
+					return a.get() + b.get();
+				}
+		);
+
+		EXPECT_EQ( 0,fib(0).get());
+		EXPECT_EQ( 1,fib(1).get());
+		EXPECT_EQ( 1,fib(2).get());
+		EXPECT_EQ( 2,fib(3).get());
+		EXPECT_EQ( 3,fib(4).get());
+		EXPECT_EQ( 5,fib(5).get());
+		EXPECT_EQ( 8,fib(6).get());
+		EXPECT_EQ(13,fib(7).get());
+		EXPECT_EQ(21,fib(8).get());
+		EXPECT_EQ(34,fib(9).get());
+
+	}
+
+	TEST(RecOps, FibShortLazy) {
+
+		auto fib = parec(
+				[](int x)->bool { return x < 2; },
+				[](int x)->int { return fib_seq(x); },
+				[](int x, const typename parec_fun<int(int)>::type& f)->Future<int> {
+					return add( f(x-1), f(x-2) );
+				}
+		);
+
+		EXPECT_EQ( 0,fib(0).get());
+		EXPECT_EQ( 1,fib(1).get());
+		EXPECT_EQ( 1,fib(2).get());
+		EXPECT_EQ( 2,fib(3).get());
+		EXPECT_EQ( 3,fib(4).get());
+		EXPECT_EQ( 5,fib(5).get());
+		EXPECT_EQ( 8,fib(6).get());
+		EXPECT_EQ(13,fib(7).get());
+		EXPECT_EQ(21,fib(8).get());
+		EXPECT_EQ(34,fib(9).get());
+
+	}
+
+
+	TEST(RecOps, EvenOdd) {
+
+		typedef typename parec_fun<bool(int)>::type test;
+
+		auto def = group(
+				// even
+				fun(
+						[](int x)->bool { return x == 0; },
+						[](int)->bool { return true; },
+						[](int x, const test& , const test& odd)->bool {
+							return odd(x-1).get();
+						}
+				),
+				// odd
+				fun(
+						[](int x)->bool { return x == 0; },
+						[](int)->bool { return false; },
+						[](int x, const test& even, const test& )->bool {
+							return even(x-1).get();
+						}
+				)
+		);
+
+		auto even = parec<0>(def);
+		auto odd = parec<1>(def);
+
+		EXPECT_TRUE(even(0).get());
+		EXPECT_TRUE(even(2).get());
+		EXPECT_TRUE(even(4).get());
+		EXPECT_TRUE(even(6).get());
+		EXPECT_TRUE(even(8).get());
+
+		EXPECT_FALSE(even(1).get());
+		EXPECT_FALSE(even(3).get());
+		EXPECT_FALSE(even(5).get());
+		EXPECT_FALSE(even(7).get());
+		EXPECT_FALSE(even(9).get());
+
+		EXPECT_FALSE(odd(0).get());
+		EXPECT_FALSE(odd(2).get());
+		EXPECT_FALSE(odd(4).get());
+		EXPECT_FALSE(odd(6).get());
+		EXPECT_FALSE(odd(8).get());
+
+		EXPECT_TRUE(odd(1).get());
+		EXPECT_TRUE(odd(3).get());
+		EXPECT_TRUE(odd(5).get());
+		EXPECT_TRUE(odd(7).get());
+		EXPECT_TRUE(odd(9).get());
+
+	}
+
+	TEST(RecOps, EvenOddLazy) {
+
+		typedef typename parec_fun<bool(int)>::type test;
+
+		auto def = group(
+				// even
+				fun(
+						[](int x)->bool { return x == 0; },
+						[](int x)->bool { return x%2 == 0; },
+						[](int x, const test& , const test& odd)->Future<bool> {
+							return odd(x-1);
+						}
+				),
+				// odd
+				fun(
+						[](int x)->bool { return x == 0; },
+						[](int x)->bool { return x%2 == 1; },
+						[](int x, const test& even, const test& )->Future<bool> {
+							return even(x-1);
+						}
+				)
+		);
+
+		auto even = parec<0>(def);
+		auto odd = parec<1>(def);
+
+		EXPECT_TRUE(even(0).get());
+		EXPECT_TRUE(even(2).get());
+		EXPECT_TRUE(even(4).get());
+		EXPECT_TRUE(even(6).get());
+		EXPECT_TRUE(even(8).get());
+
+		EXPECT_FALSE(even(1).get());
+		EXPECT_FALSE(even(3).get());
+		EXPECT_FALSE(even(5).get());
+		EXPECT_FALSE(even(7).get());
+		EXPECT_FALSE(even(9).get());
+
+		EXPECT_FALSE(odd(0).get());
+		EXPECT_FALSE(odd(2).get());
+		EXPECT_FALSE(odd(4).get());
+		EXPECT_FALSE(odd(6).get());
+		EXPECT_FALSE(odd(8).get());
+
+		EXPECT_TRUE(odd(1).get());
+		EXPECT_TRUE(odd(3).get());
+		EXPECT_TRUE(odd(5).get());
+		EXPECT_TRUE(odd(7).get());
+		EXPECT_TRUE(odd(9).get());
+
+	}
+
 //
 //	TEST(RecOps, Even) {
 //

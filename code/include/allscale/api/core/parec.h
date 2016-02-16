@@ -120,8 +120,20 @@ namespace core {
 		) : bc_test(test), base(base), step(step) {}
 
 		out_type operator()(const I& in, const Funs& ... funs) const {
-			if (bc_test(in)) return detail::pickRandom(base)(in);
-			return detail::pickRandom(step)(in, funs...);
+
+			// to enable member-variable capturing, it seams like those have to be moved to a local copy first
+			auto base_cpy = base;
+			auto step_cpy = step;
+
+			return (bc_test(in))
+				? spawn(
+						[=]()->OB { return detail::pickRandom(base_cpy)(in); }
+					)
+				: spawn(
+						[=]()->OB { return detail::pickRandom(base_cpy)(in); },
+						[=]()->out_type { return detail::pickRandom(step_cpy)(in, funs...); }
+				  	)
+				;
 		}
 	};
 
@@ -295,7 +307,7 @@ namespace core {
 		>
 		O call(const I& in) const {
 			// get targeted function
-			auto x = std::get<i>(*this);
+			auto& x = std::get<i>(*this);
 
 			// call target function with an async
 			return detail::caller<sizeof...(Defs)-1>().template call<O>(x,in,*this);

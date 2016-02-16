@@ -13,6 +13,10 @@ namespace allscale {
 namespace api {
 namespace core {
 
+	TEST(Parec,ImplCheck) {
+		EXPECT_EQ("Reference SharedMemory", PAREC_IMPL);
+	}
+
 	TEST(TaskQueue, Basic) {
 
 		runtime::SimpleQueue<int,3> queue;
@@ -182,6 +186,16 @@ namespace core {
 		Future<int> future;
 		EXPECT_TRUE(future.isDone());
 		EXPECT_EQ(0,future.get());
+	}
+
+	TEST(Runtime, SimpleTask) {
+		Future<int> future = spawn([]{ return 12; });
+		EXPECT_EQ(12,future.get());
+	}
+
+	TEST(Runtime, ValueTask) {
+		Future<int> future(12);
+		EXPECT_EQ(12,future.get());
 	}
 
 	template<typename T>
@@ -361,7 +375,6 @@ namespace core {
 		if (begin + 1 == end) {
 			return spawn(
 					[=]{
-//						std::cout << "Running element " << begin << "\n";
 						body(begin);
 					}
 			);
@@ -371,7 +384,6 @@ namespace core {
 		int mid = (begin + end) / 2;
 		return spawn(
 				[=]() {
-//					std::cout << "Running range " << begin << " to " << end << "\n";
 					for(int i=begin; i<end; i++) body(i);
 				},
 				[=]() {
@@ -399,6 +411,112 @@ namespace core {
 			EXPECT_EQ(11, data[i]);
 		}
 
+	}
+
+	TEST(Runtime, ForEachSplitTest) {
+
+		const int N = 20000;
+
+		std::array<int,N> data;
+		data.fill(10);
+
+		auto As = forEach(0,N,[&](int i){
+			data[i]++;
+		});
+
+		for(int i=0; i<N; i++) {
+			EXPECT_EQ(10, data[i]);
+		}
+
+		// As should for sure be split into parallel jobs
+		EXPECT_TRUE(As.isParallel());
+
+		// wait for completion
+		As.wait();
+
+		// check result
+		for(int i=0; i<N; i++) {
+			EXPECT_EQ(11, data[i]);
+		}
+
+	}
+
+	template<typename Body>
+	Future<void> forEachAfter(int begin, int end, const Body& body) {
+
+		// handle empty case
+		if (begin >= end) {
+			return done();
+		}
+
+		// handle single step case
+		if (begin + 1 == end) {
+			return spawn(
+					[=]{
+						body(begin);
+					}
+			);
+		}
+
+		// handle rest
+		int mid = (begin + end) / 2;
+		return spawn(
+				[=]() {
+					for(int i=begin; i<end; i++) body(i);
+				},
+				[=]() {
+					return seq(
+							forEachAfter(begin,mid,body),
+							forEachAfter(mid,end,body)
+					);
+				}
+		);
+	}
+
+	TEST(Runtime, ForEachAfter) {
+
+		const int N = 20000;
+
+		std::array<int,N> data;
+		data.fill(0);
+
+		forEachAfter(1,N,[&](int i){
+			data[i] = data[i-1] + 1;
+		});
+
+		for(int i=0; i<N; i++) {
+			EXPECT_EQ(i, data[i]);
+		}
+
+	}
+
+	TEST(Runtime, ForEachAfterSplitTest) {
+
+		const int N = 20000;
+
+		std::array<int,N> data;
+		data.fill(0);
+
+		// create parallel task
+		auto As = forEachAfter(1,N,[&](int i){
+			data[i] = data[i-1] + 1;
+		});
+
+		// should not run yet
+		for(int i=0; i<N; i++) {
+			EXPECT_EQ(0, data[i]);
+		}
+
+		// As should for sure be split into parallel jobs
+		EXPECT_TRUE(As.isSequence());
+
+		// wait for completion
+		As.wait();
+
+		// check result
+		for(int i=0; i<N; i++) {
+			EXPECT_EQ(i, data[i]);
+		}
 	}
 
 
@@ -483,7 +601,7 @@ namespace core {
 	unsigned fib_cilk(unsigned n) {
 		if (n <= 1) return n;
 		unsigned a = cilk_spawn fib_cilk(n-1);
-		unsigned b = cilk_spawn fib_cilk(n-2);
+		unsigned b = fib_cilk(n-2);
 		cilk_sync;
 		return a + b;
 	}

@@ -13,6 +13,8 @@
     #define parallel_for for
 #endif
 
+#define PAREC_IMPL "OpenMP/Cilk"
+
 namespace allscale {
 namespace api {
 namespace core {
@@ -85,6 +87,10 @@ inline namespace omp_cilk {
 				return *new (this) FutureBase(std::move(other));
 			}
 
+			bool valid() const {
+				return true;
+			}
+
 			bool isDone() const {
 				if (done) return true;
 				if (isAtom()) return false;
@@ -124,7 +130,7 @@ inline namespace omp_cilk {
 				if (done) return;
 				if (kind == Kind::Atomic) {
 					if(!done) {
-						work();
+						static_cast<const Future&>(*this).process();
 					}
 				} else if (kind == Kind::Sequential) {
 					for(auto& cur : subTasks) {
@@ -140,6 +146,12 @@ inline namespace omp_cilk {
 				static_cast<const Future&>(*this).completed();
 
 				done = true;
+			}
+
+		protected:
+
+			const Task& getWork() const {
+				return work;
 			}
 
 		};
@@ -166,7 +178,7 @@ inline namespace omp_cilk {
 	private:
 
 		Future(const Task<T>& work)
-			: super(work) {}
+			: super(work), aggregator(nullptr) {}
 
 		template<typename ... Subs>
 		Future(internal::Kind kind, const aggregator_t& aggregator, Subs&& ... subs)
@@ -205,6 +217,10 @@ inline namespace omp_cilk {
 	private:
 
 		friend internal::FutureBase<Future,Task<T>>;
+
+		void process() const {
+			value = this->getWork()();
+		}
 
 		void completed() const {
 			if (aggregator) {
@@ -258,6 +274,10 @@ inline namespace omp_cilk {
 
 		friend internal::FutureBase<Future,Task<void>>;
 
+		void process() const {
+			this->getWork()();
+		}
+
 		void completed() const {
 			// nothing
 		}
@@ -308,6 +328,29 @@ inline namespace omp_cilk {
 	>
 	Future<R> atom(const T& task) {
 		return atom_internal<T,R>(task);
+	}
+
+	template<
+		typename T,
+		typename R = typename std::result_of<T()>::type
+	>
+	Future<R> spawn(const T& task) {
+		return atom(task);
+	}
+
+	template<
+		typename E,
+		typename S,
+		typename RE = typename std::result_of<E()>::type,
+		typename RS = typename std::result_of<S()>::type
+	>
+	typename std::enable_if<
+		std::is_same<Future<RE>,RS>::value,
+		Future<RE>
+	>::type
+	spawn(const E&, const S& split) {
+		// this implementation always splits directly
+		return split();
 	}
 
 

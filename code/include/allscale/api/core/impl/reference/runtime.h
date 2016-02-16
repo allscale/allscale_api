@@ -9,11 +9,12 @@
 #include <condition_variable>
 
 #include "allscale/utils/assert.h"
-#include "allscale/utils/functional_utils.h"
 #include "allscale/utils/printer/arrays.h"
 #include "allscale/utils/printer/vectors.h"
 
 #include "allscale/api/core/impl/reference/lock.h"
+
+#define PAREC_IMPL "Reference SharedMemory"
 
 namespace allscale {
 namespace api {
@@ -83,27 +84,19 @@ inline namespace simple {
 			Parallel			// < parallel processed sub-tasks
 		};
 
-//		struct RecursiveGroup {
-//
-//			// the state space of a recursive group
-//			enum class State {
-//				New,			// < this group is new and just spawning
-//				Stable,			// < initial spawning complete
-//				Processing,		// < all dependencies are covered, processing
-//				Done			// < computation complete
-//			};
-//
-//			State state;						// < the state of this group
-//			std::atomic<unsigned> numTasks;		// < the number of tasks created for this group
-//		};
-
+		inline std::ostream& operator<<(std::ostream& out, const Kind& kind) {
+			switch(kind) {
+				case Kind::Atomic:			return out << "Atomic";
+				case Kind::Sequential:		return out << "Sequential";
+				case Kind::Parallel: 		return out << "Parallel";
+			}
+			return out << "Invalid";
+		}
 
 		class TaskReference {
 
 			friend runtime::TaskBase;
 			friend runtime::Worker;
-
-		public:
 
 			// the task this future is referencing
 			runtime::TaskBase* task;
@@ -142,9 +135,28 @@ inline namespace simple {
 
 			bool isDone() const;
 
+			bool isAtom() const;
+
+			bool isSequence() const;
+
+			bool isParallel() const;
+
+			bool isComposed() const;
+
+			const std::vector<TaskReference>& getSubTasks() const;
+
+		protected:
+
 			TaskBase& getTask() const {
+				assert_true(task);
 				return *task;
 			}
+
+			TaskBase* getTaskPointer() const {
+				return task;
+			}
+
+		public:
 
 			friend std::ostream& operator<<(std::ostream& out, const TaskReference& task) {
 				return out << task.task;
@@ -162,7 +174,7 @@ inline namespace simple {
 
 			static unsigned getNextID() {
 				static std::atomic<int> counter(0);
-				return ++counter;
+				return (DEBUG || DEBUG_SCHEDULE) ? ++counter : 0;
 			}
 
 
@@ -190,8 +202,6 @@ inline namespace simple {
 				}
 				return out << "Invalid";
 			}
-
-//			std::shared_ptr<RecursiveGroup> group;			// < the group this task belongs to
 
 		protected:
 
@@ -367,6 +377,39 @@ inline namespace simple {
 				return splitable && (isNew() || isReady());
 			}
 
+			// -- kind inspection --
+
+			bool isSplitDecided() const {
+				return state >= State::Split;		// everything after split or running
+			}
+
+			void waitForSplitDecision() const;
+
+			bool isAtom() const {
+				waitForSplitDecision();
+				return kind == Kind::Atomic;
+			}
+
+			bool isSequence() const {
+				waitForSplitDecision();
+				return kind == Kind::Sequential;
+			}
+
+			bool isParallel() const {
+				waitForSplitDecision();
+				return kind == Kind::Parallel;
+			}
+
+			bool isComposed() const {
+				return !isAtom();
+			}
+
+			const std::vector<TaskReference>& getSubTasks() const {
+				return subtasks;
+			}
+
+			// -- support printing of tasks for debugging --
+
 			friend std::ostream& operator<<(std::ostream& out, const TaskBase& task) {
 				return out << "Task(" << task.id << " @ " << &task << "," << task.state << "," << task.subtasks << ")";;
 			}
@@ -422,7 +465,11 @@ inline namespace simple {
 				moveStateFrom(task);
 
 				// update local state
-				aggregator = task.aggregator;
+				if (isDone()) {
+					value = task.value;
+				} else {
+					aggregator = task.aggregator;
+				}
 
 			}
 
@@ -543,11 +590,32 @@ inline namespace simple {
 
 		void TaskReference::wait() const {
 			if (!valid()) return;
-			getTask().wait();
+			getTaskPointer()->wait();
 		}
 
 		bool TaskReference::isDone() const {
-			return !valid() || getTask().isDone();
+			return !valid() || getTaskPointer()->isDone();
+		}
+
+		bool TaskReference::isAtom() const {
+			return !task || task->isAtom();
+		}
+
+		bool TaskReference::isSequence() const {
+			return task && task->isSequence();
+		}
+
+		bool TaskReference::isParallel() const {
+			return task && task->isParallel();
+		}
+
+		bool TaskReference::isComposed() const {
+			return !isAtom();
+		}
+
+		const std::vector<TaskReference>& TaskReference::getSubTasks() const {
+			static const std::vector<TaskReference> empty = std::vector<TaskReference>();
+			return (task) ? task->getSubTasks() : empty;
 		}
 
 	}
@@ -575,7 +643,7 @@ inline namespace simple {
 		}
 
 		~FutureBase() {
-			LOG( "   Destroying future on " << task );
+			LOG( "   Destroying future on " << getTaskPointer() );
 			wait();
 		}
 
@@ -600,6 +668,10 @@ inline namespace simple {
 		Future(const Future&) = delete;
 		Future(Future&&) = default;
 
+		Future(const T& value) {
+			*this = (new runtime::Task<T>(value))->getFuture();
+		}
+
 	private:
 
 		Future(runtime::Task<T>* task)
@@ -616,6 +688,11 @@ inline namespace simple {
 			auto& task = getTask();
 			task.wait();
 			return task.getValue();
+		}
+
+		const std::vector<Future<T>>& getSubTasks() const {
+			const void* ptr = &FutureBase::getSubTasks();
+			return *static_cast<const std::vector<Future<T>>*>(ptr);
 		}
 
 	private:
@@ -647,6 +724,11 @@ inline namespace simple {
 		Future& operator=(const Future&) = delete;
 		Future& operator=(Future&&) = default;
 
+		const std::vector<Future<void>>& getSubTasks() const {
+			const void* ptr = &FutureBase::getSubTasks();
+			return *static_cast<const std::vector<Future<void>>*>(ptr);
+		}
+
 	private:
 
 		runtime::Task<void>& getTask() const {
@@ -667,6 +749,9 @@ inline namespace simple {
 			  alive_child_counter(sizeof...(Subs)),
 			  ref_counter(0) {
 
+			// check the kind
+			assert_true( kind == Kind::Sequential || kind == Kind::Parallel ) << kind;
+
 			// take over ownership
 			for(const auto& cur : subtasks) {
 				if (cur && !cur.isDone()) {
@@ -683,15 +768,15 @@ inline namespace simple {
 			assert_true(isSplitable());
 
 			// the given input task has to be split
-			assert_true(task.isSplit() || task.isDone());
+			assert_true(task.isNew() || task.isSplit() || task.isDone()) << task;
 
 			// print some debugging data
 			LOG( "Moving state from " << task << " to " << *this );
 
 			// update task state
 			kind = task.kind;
-			state.store(task.state.load());
-			splitable = task.splitable;
+			state.store(task.state);
+			splitable = task.splitable && !task.isNew();		// if there was not really a split, don't split again
 
 			// finish other task
 			task.state = State::Done;
@@ -776,7 +861,7 @@ inline namespace simple {
 
 			static const size_t buffer_size = capacity + 1;
 
-			SpinLock lock;
+			mutable SpinLock lock;
 
 			std::array<T,buffer_size> data;
 
@@ -845,7 +930,10 @@ inline namespace simple {
 			}
 
 			size_t size() const {
-				return (back >= front) ? (back - front) : (buffer_size - (front - back));
+				lock.lock();
+				size_t res = (back >= front) ? (back - front) : (buffer_size - (front - back));
+				lock.unlock();
+				return res;
 			}
 
 			friend std::ostream& operator<<(std::ostream& out, const SimpleQueue& queue) {
@@ -1243,6 +1331,25 @@ inline namespace simple {
 
 		}
 
+		inline void TaskBase::waitForSplitDecision() const {
+
+			// get current worker
+			Worker& worker = getCurrentWorker();
+
+			// schedule this task
+			if (isNew()) {
+				// since somebody is asking for its split state, the dependencies are fixed
+				worker.schedule(const_cast<TaskBase*>(this));
+			}
+
+			// if not yet decided ..
+			while(!isSplitDecided()) {
+				// .. do something else
+				worker.schedule_step(true);		// you may even steal
+			}
+		}
+
+
 	}
 
 
@@ -1257,17 +1364,25 @@ inline namespace simple {
 
 	template<
 		typename T,
-		typename R = typename utils::lambda_traits<T>::result_type
+		typename R = typename std::result_of<T()>::type
+	>
+	Future<R> atom(const T& task) {
+		return runtime::Task<R>::create(task);
+	}
+
+	template<
+		typename T,
+		typename R = typename std::result_of<T()>::type
 	>
 	Future<R> spawn(const T& task) {
-		return runtime::Task<R>::create(task);
+		return atom(task);
 	}
 
 	template<
 		typename E,
 		typename S,
-		typename RE = typename utils::lambda_traits<E>::result_type,
-		typename RS = typename utils::lambda_traits<S>::result_type
+		typename RE = typename std::result_of<E()>::type,
+		typename RS = typename std::result_of<S()>::type
 	>
 	typename std::enable_if<
 		std::is_same<Future<RE>,RS>::value,

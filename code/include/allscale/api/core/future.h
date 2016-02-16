@@ -11,8 +11,7 @@
 	#include "allscale/api/core/impl/omp_cilk/future.h"
 #else
 	// a Simple-Runtime based implementation
-	#include "allscale/api/core/impl/omp_cilk/future.h"
-	//#include "allscale/api/core/impl/simple/future.h"
+	#include "allscale/api/core/impl/reference/runtime.h"
 #endif
 
 namespace allscale {
