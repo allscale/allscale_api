@@ -19,7 +19,7 @@
 namespace allscale {
 namespace api {
 namespace core {
-inline namespace simple {
+inline namespace reference {
 
 	// -- Declarations --
 
@@ -169,7 +169,7 @@ inline namespace simple {
 
 			friend class TaskReference;
 			friend class Worker;
-			friend class simple::FutureBase;
+			friend class reference::FutureBase;
 
 
 			static unsigned getNextID() {
