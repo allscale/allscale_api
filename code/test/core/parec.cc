@@ -322,110 +322,110 @@ namespace core {
 
 	}
 
-//
-//	TEST(RecOps, Even) {
-//
-//		typedef typename parec_fun<bool(int)>::type test;
-//
-//		auto even = parec(
-//				// even
-//				fun(
-//						[](int x)->bool { return x == 0; },
-//						[](int)->bool { return true; },
-//						[](int x, const test& , const test& odd)->bool {
-//							return odd(x-1).get();
-//						}
-//				),
-//				// odd
-//				fun(
-//						[](int x)->bool { return x == 0; },
-//						[](int)->bool { return false; },
-//						[](int x, const test& even, const test& )->bool {
-//							return even(x-1).get();
-//						}
-//				)
-//		);
-//
-//		EXPECT_TRUE(even(0).get());
-//		EXPECT_TRUE(even(2).get());
-//		EXPECT_TRUE(even(4).get());
-//		EXPECT_TRUE(even(6).get());
-//		EXPECT_TRUE(even(8).get());
-//
-//		EXPECT_FALSE(even(1).get());
-//		EXPECT_FALSE(even(3).get());
-//		EXPECT_FALSE(even(5).get());
-//		EXPECT_FALSE(even(7).get());
-//		EXPECT_FALSE(even(9).get());
-//
-//	}
-//
-//
-//
-//	int fib(int x) {
-//		typedef typename std::function<Future<int>(int)> fun_type;
-//
-//		return parec(
-//				fun(
-//					[](int x) { return x < 2; },
-//					[](int x) { return x; },
-//					pick(
-//							[](int x, const fun_type& f) { return add(f(x-1), f(x-2)); },
-//							[](int x, const fun_type& f) { return add(f(x-2), f(x-1)); }
-//					)
-//				)
-//		)(x).get();
-//	}
-//
-//	int fac(int x) {
-//		typedef typename std::function<Future<int>(int)> fun_type;
-//
-//		return parec(
-//				fun(
-//					[](int x) { return x < 2; },
-//					[](int) { return 1; },
-//					[](int x, const fun_type& f) { return x * f(x-1).get(); }
-//				)
-//		)(x).get();
-//	}
-//
-//	TEST(RecOps, SimpleTest) {
-//
-//		EXPECT_EQ(0, fib(0));
-//		EXPECT_EQ(1, fib(1));
-//		EXPECT_EQ(1, fib(2));
-//		EXPECT_EQ(2, fib(3));
-//		EXPECT_EQ(3, fib(4));
-//		EXPECT_EQ(5, fib(5));
-//		EXPECT_EQ(8, fib(6));
-//
-//		EXPECT_EQ(1, fac(1));
-//		EXPECT_EQ(2, fac(2));
-//		EXPECT_EQ(6, fac(3));
-//		EXPECT_EQ(24, fac(4));
-//
-//	}
-//
-//	// ---- application tests --------
-//
-//	int pfib(int x) {
-//		return parec(
-//				fun(
-//					[](int x) { return x < 2; },
-//					[](int x) { return x; },
-//					[](int x, const typename parec_fun<int(int)>::type& f)->Future<int> {
-//						return add(f(x-1),f(x-2));
-//					}
-//				)
-//		)(x).get();
-//	}
-//
-//	TEST(RecOps, ParallelTest) {
-//
-//		EXPECT_EQ(6765, pfib(20));
-//		EXPECT_EQ(46368, pfib(24));
-//
-//	}
+
+	TEST(RecOps, Even) {
+
+		typedef typename parec_fun<bool(int)>::type test;
+
+		auto even = parec(
+				// even
+				fun(
+						[](int x)->bool { return x == 0; },
+						[](int)->bool { return true; },
+						[](int x, const test& , const test& odd)->bool {
+							return odd(x-1).get();
+						}
+				),
+				// odd
+				fun(
+						[](int x)->bool { return x == 0; },
+						[](int)->bool { return false; },
+						[](int x, const test& even, const test& )->bool {
+							return even(x-1).get();
+						}
+				)
+		);
+
+		EXPECT_TRUE(even(0).get());
+		EXPECT_TRUE(even(2).get());
+		EXPECT_TRUE(even(4).get());
+		EXPECT_TRUE(even(6).get());
+		EXPECT_TRUE(even(8).get());
+
+		EXPECT_FALSE(even(1).get());
+		EXPECT_FALSE(even(3).get());
+		EXPECT_FALSE(even(5).get());
+		EXPECT_FALSE(even(7).get());
+		EXPECT_FALSE(even(9).get());
+
+	}
+
+
+
+	int fib(int x) {
+		typedef typename std::function<Future<int>(int)> fun_type;
+
+		return parec(
+				fun(
+					[](int x) { return x < 2; },
+					[](int x) { return fib_seq(x); },
+					pick(
+							[](int x, const fun_type& f) { return add(f(x-1), f(x-2)); },
+							[](int x, const fun_type& f) { return add(f(x-2), f(x-1)); }
+					)
+				)
+		)(x).get();
+	}
+
+	int fac(int x) {
+		typedef typename std::function<Future<int>(int)> fun_type;
+
+		return parec(
+				fun(
+					[](int x) { return x < 2; },
+					[](int x) { return fib_seq(x); },
+					[](int x, const fun_type& f) { return x * f(x-1).get(); }
+				)
+		)(x).get();
+	}
+
+	TEST(RecOps, SimpleTest) {
+
+		EXPECT_EQ(0, fib(0));
+		EXPECT_EQ(1, fib(1));
+		EXPECT_EQ(1, fib(2));
+		EXPECT_EQ(2, fib(3));
+		EXPECT_EQ(3, fib(4));
+		EXPECT_EQ(5, fib(5));
+		EXPECT_EQ(8, fib(6));
+
+		EXPECT_EQ(1, fac(1));
+		EXPECT_EQ(2, fac(2));
+		EXPECT_EQ(6, fac(3));
+		EXPECT_EQ(24, fac(4));
+
+	}
+
+	// ---- application tests --------
+
+	int pfib(int x) {
+		return parec(
+				fun(
+					[](int x) { return x < 2; },
+					[](int x) { return fib_seq(x); },
+					[](int x, const typename parec_fun<int(int)>::type& f)->Future<int> {
+						return add(f(x-1),f(x-2));
+					}
+				)
+		)(x).get();
+	}
+
+	TEST(RecOps, ParallelTest) {
+
+		EXPECT_EQ(6765, pfib(20));
+		EXPECT_EQ(46368, pfib(24));
+
+	}
 
 } // end namespace core
 } // end namespace api
