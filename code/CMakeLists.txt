@@ -1,7 +1,7 @@
 #
 # Builds the insieme core library
 #
-project(AllScale_API_Core CXX)
+project(AllScale_API CXX)
 
 include(cmake/environment.cmake)
 
