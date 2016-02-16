@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <type_traits>
+#include <memory>
 #include <vector>
 
 #ifdef __cilk
@@ -20,8 +21,8 @@ namespace api {
 namespace core {
 inline namespace omp_cilk {
 
-	template<typename T>
-	using Task = std::function<T()>;
+	template<typename Result>
+	class Future;
 
 	namespace internal {
 
@@ -32,8 +33,18 @@ inline namespace omp_cilk {
 			Parallel
 		};
 
-		template<typename Future, typename Task>
-		class FutureBase {
+		template<typename Result>
+		class TaskReference;
+
+		template<typename Task, typename Result>
+		class TaskBase {
+
+		public:
+
+			using work_t = std::function<Result()>;
+			using aggregator_t = Result(*)(const std::vector<Future<Result>>&);
+
+		private:
 
 			// the kind of composed future represented
 			Kind kind;
@@ -42,54 +53,39 @@ inline namespace omp_cilk {
 			mutable bool done;
 
 			// for atomic tasks: the associated task
-			Task work;
+			work_t work;
 
 			// for composed tasks: the list of sub-tasks
-			std::vector<Future> subTasks;
+			std::vector<TaskReference<Result>> subTasks;
 
 		protected:
 
-			FutureBase(const Task& work)
+			TaskBase(const work_t& work)
 				: kind(Kind::Atomic), done(false), work(work) {}
 
 			template<typename ... Subs>
-			FutureBase(Kind kind, Subs&& ... subs)
+			TaskBase(Kind kind, Subs&& ... subs)
 				: kind(kind), done(false), subTasks(sizeof...(subs)) {
 				fill(0,std::move(subs)...);
 			}
 
 			void fill(unsigned) {}
 
-			template<typename ... Subs>
-			void fill(unsigned i, Future&& first, Subs&&  ... rest) {
+			template<typename First, typename ... Subs>
+			void fill(unsigned i, First&& first, Subs&&  ... rest) {
 				subTasks[i] = std::move(first);
 				fill(i+1,std::move(rest)...);
 			}
 
 		public:
 
-			FutureBase() : kind(Kind::Atomic), done(true) {}
+			TaskBase() : kind(Kind::Atomic), done(true) {}
 
-			FutureBase(const FutureBase&) = delete;
+			TaskBase(const TaskBase&) = delete;
+			TaskBase(TaskBase&&) = delete;
 
-			FutureBase(FutureBase&& other)
-				: kind(other.kind), done(other.done), work(std::move(other.work)), subTasks(std::move(other.subTasks)) {
-				other.done = true;
-			}
-
-			~FutureBase() {
-				wait();
-			}
-
-			FutureBase& operator=(const FutureBase& other) = delete;
-
-			FutureBase& operator=(FutureBase&& other) {
-				return *new (this) FutureBase(std::move(other));
-			}
-
-			bool valid() const {
-				return true;
-			}
+			TaskBase& operator=(const TaskBase& other) = delete;
+			TaskBase& operator=(TaskBase&& other) = delete;
 
 			bool isDone() const {
 				if (done) return true;
@@ -99,7 +95,7 @@ inline namespace omp_cilk {
 				}
 
 				// notify implementation on completion
-				static_cast<const Future&>(*this).completed();
+				static_cast<const Task&>(*this).completed();
 
 				// done
 				done = true;
@@ -122,7 +118,7 @@ inline namespace omp_cilk {
 				return !isAtom();
 			}
 
-			const std::vector<Future>& getSubTasks() const {
+			const std::vector<TaskReference<Result>>& getSubTasks() const {
 				return subTasks;
 			}
 
@@ -130,7 +126,7 @@ inline namespace omp_cilk {
 				if (done) return;
 				if (kind == Kind::Atomic) {
 					if(!done) {
-						static_cast<const Future&>(*this).process();
+						static_cast<const Task&>(*this).process();
 					}
 				} else if (kind == Kind::Sequential) {
 					for(auto& cur : subTasks) {
@@ -143,16 +139,349 @@ inline namespace omp_cilk {
 				}
 
 				// notify implementation on completion
-				static_cast<const Future&>(*this).completed();
+				static_cast<const Task&>(*this).completed();
 
 				done = true;
 			}
 
 		protected:
 
-			const Task& getWork() const {
+			const work_t& getWork() const {
 				return work;
 			}
+
+		};
+
+		template<typename Result>
+		class Task : public TaskBase<Task<Result>,Result> {
+
+			using super = TaskBase<Task,Result>;
+
+		public:
+
+			using work_t = typename super::work_t;
+			using aggregator_t = typename super::aggregator_t;
+
+		private:
+
+			friend TaskBase<Task,Result>;
+
+			mutable Result value;
+
+			aggregator_t aggregator;
+
+		public:
+
+			Task(const Result& result)
+				: super(), value(result), aggregator(nullptr) {}
+
+			Task(const work_t& work)
+				: super(work), aggregator(nullptr) {}
+
+			template<typename ... Subs>
+			Task(Kind kind, const aggregator_t& aggregator, Subs&& ... subs)
+				: super(kind, std::move(subs)...), aggregator(aggregator) {}
+
+			~Task() {
+				aggregator = nullptr;
+			}
+
+			const Result& getValue() const {
+				return value;
+			}
+
+		private:
+
+			void process() const {
+				value = this->getWork()();
+			}
+
+			void completed() const {
+				if (aggregator) {
+					value = aggregator(reinterpret_cast<const std::vector<Future<Result>>&>(this->getSubTasks()));
+				}
+			}
+
+		};
+
+		template<>
+		class Task<void> : public TaskBase<Task<void>,void> {
+
+			friend TaskBase<Task,void>;
+
+		public:
+
+			using super = TaskBase<Task,void>;
+			using work_t = std::function<void()>;
+
+			Task(const work_t& work)
+				: super(work) {}
+
+			template<typename ... Subs>
+			Task(Kind kind, Subs&& ... subs)
+				: super(kind, std::move(subs)...) {}
+
+		private:
+
+			void process() const {
+				this->getWork()();
+			}
+
+			void completed() const {
+				// nothing to do
+			}
+		};
+
+		template<typename Result>
+		class TaskReference {
+
+		protected:
+
+			using work_t = typename Task<Result>::work_t;
+			using aggregator_t = typename Task<Result>::aggregator_t;
+
+		private:
+
+			std::shared_ptr<Task<Result>> task;
+
+		protected:
+
+			TaskReference(const Result& result)
+				: task(std::make_shared<Task<Result>>(result)) {}
+
+			TaskReference(const work_t& work)
+				: task(std::make_shared<Task<Result>>(work)) {}
+
+			template<typename ... Subs>
+			TaskReference(Kind kind, Subs&& ... subs)
+				: task(std::make_shared<Task<Result>>(kind, std::move(subs)...)) {}
+
+			template<typename ... Subs>
+			TaskReference(Kind kind, const aggregator_t& aggregator, Subs&& ... subs)
+				: task(std::make_shared<Task<Result>>(kind, aggregator, std::move(subs)...)) {}
+
+		public:
+
+			TaskReference() : task() {}
+
+			TaskReference(const TaskReference& other) {
+				task = other.task;
+			}
+
+			TaskReference(TaskReference&& other) {
+				task.swap(other.task);
+			}
+
+			TaskReference& operator=(const TaskReference& other) {
+				task = other.task;
+				return *this;
+			}
+
+			TaskReference& operator=(TaskReference&& other) {
+				task.swap(other.task);
+				return *this;
+			}
+
+			bool valid() const {
+				return (bool)task;
+			}
+
+			bool isDone() const {
+				return !task || task->isDone();
+			}
+
+			bool isAtom() const {
+				return !task || task->isAtom();
+			}
+
+			bool isSequence() const {
+				return task && task->isSequence();
+			}
+
+			bool isParallel() const {
+				return task && task->isParallel();
+			}
+
+			bool isComposed() const {
+				return !isAtom();
+			}
+
+			const std::vector<TaskReference>& getSubTasks() const {
+				static const std::vector<TaskReference> empty;
+				return (task) ? task->getSubTasks() : empty;
+			}
+
+			void wait() const {
+				if (!task) return;
+				task->wait();
+			}
+
+			const Result& get() const {
+				static const Result default_value = Result();
+				wait();
+				return (task) ? task->getValue() : default_value;
+			}
+
+		};
+
+		template<>
+		class TaskReference<void> {
+
+		protected:
+
+			using work_t = typename Task<void>::work_t;
+			using aggregator_t = typename Task<void>::aggregator_t;
+
+		private:
+
+			std::shared_ptr<Task<void>> task;
+
+		protected:
+
+			TaskReference(const work_t& work)
+				: task(std::make_shared<Task<void>>(work)) {}
+
+			template<typename ... Subs>
+			TaskReference(Kind kind, Subs&& ... subs)
+				: task(std::make_shared<Task<void>>(kind, std::move(subs)...)) {}
+
+		public:
+
+			TaskReference() : task() {}
+
+			TaskReference(const TaskReference& other) {
+				task = other.task;
+			}
+
+			TaskReference(TaskReference&& other) {
+				task.swap(other.task);
+			}
+
+			TaskReference& operator=(const TaskReference& other) {
+				task = other.task;
+				return *this;
+			}
+
+			TaskReference& operator=(TaskReference&& other) {
+				task.swap(other.task);
+				return *this;
+			}
+
+			bool valid() const {
+				return (bool)task;
+			}
+
+			bool isDone() const {
+				return !task || task->isDone();
+			}
+
+			bool isAtom() const {
+				return !task || task->isAtom();
+			}
+
+			bool isSequence() const {
+				return task && task->isSequence();
+			}
+
+			bool isParallel() const {
+				return task && task->isParallel();
+			}
+
+			bool isComposed() const {
+				return !isAtom();
+			}
+
+			const std::vector<TaskReference>& getSubTasks() const {
+				static const std::vector<TaskReference> empty;
+				return (task) ? task->getSubTasks() : empty;
+			}
+
+			void wait() const {
+				if (!task) return;
+				task->wait();
+			}
+
+			void get() const {
+				wait();
+			}
+
+		};
+
+
+		template<typename Result>
+		class FutureBase : public TaskReference<Result> {
+
+			using super = TaskReference<Result>;
+
+		public:
+
+			using task_reference = TaskReference<Result>;
+
+		protected:
+
+			using work_t = typename super::work_t;
+			using aggregator_t = typename super::aggregator_t;
+
+			FutureBase(const Result& result)
+				: super(result) {}
+
+			FutureBase(const work_t& work)
+				: super(work) {}
+
+			template<typename ... Subs>
+			FutureBase(Kind kind, const aggregator_t& aggregator, Subs&& ... subs)
+				: super(kind,aggregator,std::move(subs)...) {}
+
+		public:
+
+			FutureBase() : super() {}
+
+			FutureBase(const FutureBase&) = delete;
+			FutureBase(FutureBase&& other) = default;
+
+			~FutureBase() {
+				this->wait();
+			}
+
+			FutureBase& operator=(const FutureBase& other) = delete;
+			FutureBase& operator=(FutureBase&& other) = default;
+
+			const task_reference& getTaskReference() const {
+				return *this;
+			}
+
+		};
+
+		template<>
+		class FutureBase<void> : public TaskReference<void> {
+
+			using super = TaskReference<void>;
+
+		protected:
+
+			using work_t = typename super::work_t;
+			using aggregator_t = typename super::aggregator_t;
+
+			FutureBase(const work_t& work)
+				: super(work) {}
+
+			template<typename ... Subs>
+			FutureBase(Kind kind, Subs&& ... subs)
+				: super(kind,std::move(subs)...) {}
+
+		public:
+
+			FutureBase() : super() {}
+
+			FutureBase(const FutureBase&) = delete;
+			FutureBase(FutureBase&& other) = default;
+
+			~FutureBase() {
+				this->wait();
+			}
+
+			FutureBase& operator=(const FutureBase& other) = delete;
+			FutureBase& operator=(FutureBase&& other) = default;
 
 		};
 
@@ -166,66 +495,35 @@ inline namespace omp_cilk {
 	 * The general future implementation.
 	 */
 	template<typename T>
-	class Future : public internal::FutureBase<Future<T>,Task<T>> {
+	class Future : public internal::FutureBase<T> {
 
-		using super = internal::FutureBase<Future<T>,Task<T>>;
-		using aggregator_t = T(*)(const std::vector<Future<T>>&);
-
-		mutable T value;
-
-		aggregator_t aggregator;
+		using super = internal::FutureBase<T>;
+		using work_t = typename super::work_t;
+		using aggregator_t = typename super::aggregator_t;
 
 	private:
 
-		Future(const Task<T>& work)
-			: super(work), aggregator(nullptr) {}
+		Future(const work_t& work)
+			: super(work) {}
 
 		template<typename ... Subs>
 		Future(internal::Kind kind, const aggregator_t& aggregator, Subs&& ... subs)
-			: super(kind, subs...), aggregator(aggregator) {}
+			: super(kind, aggregator, std::move(subs)...) {}
 
 	public:
 
-		Future(const T& value = T()) : super() {
-			this->value = value;
-		}
+		Future(const T& value = T())
+			: super(value) {}
 
 		Future(const Future&) = delete;
 
 		Future(Future&& other)
-			: super(std::move(other)) {
-			// TODO: fix this race condition
-			value = other.value;
-			aggregator = other.aggregator;
-		}
-
-		~Future() {
-			aggregator = nullptr;
-		}
+			: super(std::move(other)) {}
 
 		Future& operator=(const Future& other) = delete;
 
 		Future& operator=(Future&& other) {
 			return *new (this) Future(std::move(other));
-		}
-
-		const T& get() const {
-			this->wait();
-			return value;
-		}
-
-	private:
-
-		friend internal::FutureBase<Future,Task<T>>;
-
-		void process() const {
-			value = this->getWork()();
-		}
-
-		void completed() const {
-			if (aggregator) {
-				value = aggregator(this->getSubTasks());
-			}
 		}
 
 	public:
@@ -244,16 +542,17 @@ inline namespace omp_cilk {
 	 * A specialized implementation of a void future.
 	 */
 	template<>
-	class Future<void> : public internal::FutureBase<Future<void>,Task<void>> {
+	class Future<void> : public internal::FutureBase<void> {
 
-		using super = internal::FutureBase<Future<void>,Task<void>>;
+		using super = internal::FutureBase<void>;
+		using work_t = typename super::work_t;
 
-		Future(const Task<void>& work)
+		Future(const work_t& work)
 			: super(work) {}
 
 		template<typename ... Subs>
 		Future(internal::Kind kind, Subs&& ... subs)
-			: super(kind, subs...) {}
+			: super(kind, std::move(subs)...) {}
 
 	public:
 
@@ -268,18 +567,6 @@ inline namespace omp_cilk {
 
 		Future& operator=(Future&& other) {
 			return *new (this) Future(std::move(other));
-		}
-
-	private:
-
-		friend internal::FutureBase<Future,Task<void>>;
-
-		void process() const {
-			this->getWork()();
-		}
-
-		void completed() const {
-			// nothing
 		}
 
 	public:
