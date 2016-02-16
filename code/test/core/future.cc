@@ -94,6 +94,35 @@ namespace core {
 
 	}
 
+	TEST(Future, TaskReferences) {
+
+		using Ref = typename Future<int>::task_reference;
+
+		Ref t;
+		EXPECT_FALSE(t.valid());
+
+		{
+			Future<int> f = spawn([]() { return 12; });
+
+			// obtain task reference of future
+			t = f.getTaskReference();
+
+			EXPECT_TRUE(t.valid());
+
+			EXPECT_FALSE(f.isDone());
+			EXPECT_FALSE(t.isDone());
+
+			t.wait();
+			EXPECT_TRUE(f.isDone());
+			EXPECT_TRUE(t.isDone());
+		}
+
+		// task reference has to survive the future if necessary
+		EXPECT_TRUE(t.valid());
+		EXPECT_TRUE(t.isDone());
+
+	}
+
 } // end namespace core
 } // end namespace api
 } // end namespace allscale

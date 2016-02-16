@@ -627,6 +627,10 @@ inline namespace reference {
 		friend runtime::TaskBase;
 		friend runtime::Worker;
 
+	public:
+
+		using task_reference = runtime::TaskReference;
+
 	protected:
 
 		FutureBase(runtime::TaskBase* task)
@@ -655,6 +659,13 @@ inline namespace reference {
 			return static_cast<const Future<T>&>(*this);
 		}
 
+		const task_reference& getTaskReference() const {
+			return *this;
+		}
+
+		task_reference& getTaskReference() {
+			return *this;
+		}
 	};
 
 	template<typename T>
