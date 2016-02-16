@@ -77,7 +77,78 @@ namespace user {
 			scanner<dims>()(range, cur, op);
 
 		}
+
+		// -- Adaptive Loop Dependencies --
+
+		class Dependencies {
+
+		public:
+
+			using task_ref = typename core::Future<void>::task_reference;
+
+		private:
+
+			std::vector<task_ref> dependencies;
+
+		public:
+
+			Dependencies() {}
+
+			Dependencies(const core::Future<void>& future)
+				: dependencies({ future.getTaskReference() }) {}
+
+			Dependencies(const task_ref& ref)
+				: dependencies({ ref }) {}
+
+			Dependencies(std::vector<task_ref>&& refs)
+				: dependencies(refs) {}
+
+			Dependencies(const Dependencies&) = default;
+			Dependencies(Dependencies&&) = default;
+
+			Dependencies& operator=(const Dependencies&) = default;
+			Dependencies& operator=(Dependencies&&) = default;
+
+			bool isSingle() const {
+				return dependencies.size() == 1;
+			}
+
+			const task_ref& getDependency() const {
+				assert_true(isSingle());
+				return dependencies[0];
+			}
+
+			const std::vector<task_ref>& getDependencies() const {
+				return dependencies;
+			}
+
+			void wait() const {
+				for(const auto& cur : dependencies) {
+					cur.wait();
+				}
+			}
+
+		};
+
+		struct SubDependencies {
+			Dependencies left;
+			Dependencies right;
+		};
+
 	}
+
+	struct no_dependencies {
+
+		const detail::Dependencies& getInitial() const {
+			static const detail::Dependencies none = detail::Dependencies();
+			return none;
+		}
+
+		static detail::SubDependencies split(const detail::Dependencies&) {
+			return detail::SubDependencies();
+		}
+
+	};
 
 
 	template<typename Iter, size_t dims, typename Body>
@@ -141,26 +212,41 @@ namespace user {
 	/**
 	 * A parallel for-each implementation iterating over the given range of elements.
 	 */
-	template<typename Iter, typename Body>
-	core::Future<void> pfor(const Iter& a, const Iter& b, const Body& body) {
+	template<typename Iter, typename Body, typename Dependency>
+	core::Future<void> pfor(const Iter& a, const Iter& b, const Body& body, const Dependency& dependency) {
 		// implements a binary splitting policy for iterating over the given iterator range
-		typedef std::pair<Iter,Iter> range;
+
+		// the iterator range and the local dependency
+		struct range {
+			Iter begin;
+			Iter end;
+			detail::Dependencies dependencies;
+		};
+
+		// the parallel execution
 		return core::parec(
 			[](const range& r) {
-				return detail::distance(r.first,r.second) <= 1;
+				return detail::distance(r.begin,r.end) <= 1;
 			},
 			[body](const range& r) {
-				for(auto it = r.first; it != r.second; ++it) body(detail::access(it));
+				r.dependencies.wait();
+				for(auto it = r.begin; it != r.end; ++it) body(detail::access(it));
 			},
 			[](const range& r, const typename core::parec_fun<void(range)>::type& nested) {
 				// here we have the binary splitting
-				auto mid = r.first + (r.second - r.first)/2;
-				return par(
-						nested(range(r.first,mid)),
-						nested(range(mid,r.second))
+				auto mid = r.begin + (r.end - r.begin)/2;
+				auto dep = Dependency::split(r.dependencies);
+				return core::par(
+						nested(range{r.begin,mid,dep.left}),
+						nested(range{mid,r.end,dep.right})
 				);
 			}
-		)(range(a,b));
+		)(range{a,b,dependency.getInitial()});
+	}
+
+	template<typename Iter, typename Body>
+	core::Future<void> pfor(const Iter& a, const Iter& b, const Body& body) {
+		return pfor(a,b,body,no_dependencies());
 	}
 
 	// ---- container support ----
@@ -205,6 +291,121 @@ namespace user {
 	core::Future<void> pfor(const data::Vector<Elem,Dims>& a, const Body& body) {
 		return pfor(data::Vector<Elem,Dims>(0),a,body);
 	}
+
+
+	// -------------------------------------------------------------------------------------------
+	//								Adaptive Synchronization
+	// -------------------------------------------------------------------------------------------
+
+	class dependency {
+
+		detail::Dependencies initial;
+
+	public:
+
+		dependency(const core::Future<void>& loop)
+			: initial(loop) {}
+
+		const detail::Dependencies& getInitial() const {
+			return initial;
+		}
+
+	};
+
+	struct one_on_one : public dependency {
+
+		one_on_one(const core::Future<void>& loop)
+			: dependency(loop) {}
+
+		static detail::SubDependencies split(const detail::Dependencies& dep) {
+
+			// extract the full dependency
+			assert(dep.isSingle());
+			const auto& task = dep.getDependency();
+
+			// try to split the dependency
+			const auto& subTasks = task.getSubTasks();
+			if (task.isParallel() && subTasks.size() == 2) {
+				return { subTasks[0], subTasks[1] };
+			}
+
+			// fall-back: no splitting
+			return { task, task };
+		}
+
+	};
+
+	struct neighborhood_sync : public dependency {
+
+		neighborhood_sync(const core::Future<void>& loop)
+			: dependency(loop) {}
+
+		static detail::SubDependencies split(const detail::Dependencies& dep) {
+			using TaskRef = typename detail::Dependencies::task_ref;
+
+			TaskRef done;
+
+			// check for the root case
+			if (dep.isSingle()) {
+				const TaskRef& task = dep.getDependency();
+
+				// try to split the dependency
+				auto& subTasks = task.getSubTasks();
+				if (task.isParallel() && subTasks.size() == 2) {
+
+					const TaskRef& left = subTasks[0];
+					const TaskRef& right = subTasks[1];
+
+					return {
+						detail::Dependencies({done,left,right}),
+						detail::Dependencies({left,right,done})
+					};
+				}
+
+				// fall-back: full range
+				return { dep, dep };
+			}
+
+			// split up input dependencies
+			const auto& dependencies = dep.getDependencies();
+			if (dependencies.size() == 3) {
+
+				auto getLeft = [&](const TaskRef& s)->const TaskRef {
+					if (s.isDone()) return done;
+					if (!s.isParallel()) return s;
+					const auto& subTasks = s.getSubTasks();
+					if (subTasks.size() != 2) return s;
+					return subTasks[0];
+				};
+
+				auto getRight = [&](const TaskRef& s)->const TaskRef {
+					if (s.isDone()) return done;
+					if (!s.isParallel()) return s;
+					const auto& subTasks = s.getSubTasks();
+					if (subTasks.size() != 2) return s;
+					return subTasks[1];
+				};
+
+				// split each of those
+				TaskRef a = getRight(dependencies[0]);
+				TaskRef b = getLeft(dependencies[1]);
+				TaskRef c = getRight(dependencies[1]);
+				TaskRef d = getLeft(dependencies[2]);
+
+				// and pack accordingly
+				return {
+					detail::Dependencies({a,b,c}),
+					detail::Dependencies({b,c,d})
+				};
+
+			}
+
+			// fall-back: no splitting
+			return { dep, dep };
+		}
+
+	};
+
 
 
 } // end namespace user
