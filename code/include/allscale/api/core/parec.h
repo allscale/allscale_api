@@ -121,9 +121,9 @@ namespace core {
 
 		out_type operator()(const I& in, const Funs& ... funs) const {
 
-			// to enable member-variable capturing, it seams like those have to be moved to a local copy first
-			auto base_cpy = base;
-			auto step_cpy = step;
+			// to enable member-variable capturing, it seams like those have to be addressed by a local reference first
+			auto& base_cpy = base;
+			auto& step_cpy = step;
 
 			return (bc_test(in))
 				? spawn(

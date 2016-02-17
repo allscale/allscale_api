@@ -67,6 +67,7 @@ if (CMAKE_COMPILER_IS_GNUCXX)
 	add_definitions( -Werror )
 	add_definitions( -pedantic )
 	add_definitions( -fcilkplus )
+	add_definitions( -fmax-errors=5 )
 
 	# add flag allowing arbitrary library ordering (not default in newer distributions)
 	set (CMAKE_CXX_FLAGS "-Wl,--no-as-needed ${CMAKE_CXX_FLAGS}")
