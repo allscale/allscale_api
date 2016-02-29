@@ -12,11 +12,47 @@ This project requires C++14 features as offered by e.g. GCC >= 4.9 (GCC 5.2.1 is
 For the build process, `cmake` (Version >=2.6) is required.
 
 
-## How to Build
 
+## Getting the Sources
+Change to a working directory on your system and clone the repository using
 ```
-mkdir build
-cd build
-cmake <path to local repo>
-make -j && make test && make valgrind
+git clone git@goedis.dps.uibk.ac.at:herbert.jordan/allscale_api.git allscale_api
 ```
+The command creates a sub-directory `allscale_api`.
+
+## Build and Run
+Change to your local `allscale_api` directory and create a debug build as follows:
+```
+mkdir build_debug
+cd build_debug
+. ../createDebug.sh
+make -j8
+```
+The script `createDebug.sh` utilizes cmake to create a build environment. It uses `g++` as its default compiler and may be customized for other infastructures.
+
+To run the test cases and demos within the project, run 
+```
+make test ARGS=-j8
+```
+within the build directory or execute the individual unit tests `ut_*` for targeting specific test suites or demos.
+
+To build and run a release build, run the commands
+```
+mkdir build_release
+cd build_release
+. ../createRelease.sh
+make -j8
+```
+within your local `allscale_api` directory.
+
+
+## Prototype APIs
+
+The API prototypes can be found here:
+
+| Pilot | Prototype / Demonstrator |
+| -------- | -------- |
+| AMDADOS | [code/test/demos/amdados_demo.cc](code/test/demos/amdados_demo.cc) |
+| iPic3D | [code/test/demos/ipic3d_demo.cc](code/test/demos/ipic3d_demo.cc) |
+| Fine/Open | [code/test/demos/fine_open_demo.cc](code/test/demos/fine_open_demo.cc) |
+
