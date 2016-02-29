@@ -10,10 +10,10 @@ namespace allscale {
 namespace api {
 namespace core {
 
-	template<typename T> struct parec_fun;
+	template<typename T> struct prec_fun;
 
 	template<typename O, typename I>
-	struct parec_fun<O(I)> {
+	struct prec_fun<O(I)> {
 		typedef std::function<Future<O>(I)> type;
 	};
 
@@ -251,7 +251,7 @@ namespace core {
 		typename I = typename utils::type_at<i,utils::type_list<Defs...>>::type::in_type,
 		typename O = typename utils::type_at<i,utils::type_list<Defs...>>::type::out_type
 	>
-	std::function<O(I)> parec(const rec_defs<Defs...>& );
+	std::function<O(I)> prec(const rec_defs<Defs...>& );
 
 
 	namespace detail {
@@ -260,7 +260,7 @@ namespace core {
 		struct caller {
 			template<typename O, typename F, typename I, typename D, typename ... Args>
 			O call(const F& f, const I& i, const D& d, const Args& ... args) const {
-				return caller<n-1>().template call<O>(f,i,d,parec<n>(d),args...);
+				return caller<n-1>().template call<O>(f,i,d,prec<n>(d),args...);
 			}
 		};
 
@@ -269,12 +269,12 @@ namespace core {
 			template<typename O, typename F, typename I, typename D, typename ... Args>
 			typename std::enable_if<is_future<O>::value,O>::type
 			call(const F& f, const I& i, const D& d, const Args& ... args) const {
-				return f(i,parec<0>(d),args...);
+				return f(i,prec<0>(d),args...);
 			}
 			template<typename O, typename F, typename I, typename D, typename ... Args>
 			typename std::enable_if<!is_future<O>::value,O>::type
 			call(const F& f, const I& i, const D& d, const Args& ... args) const {
-				return atom([=]()->O { return f(i,parec<0>(d),args...); });
+				return atom([=]()->O { return f(i,prec<0>(d),args...); });
 			}
 		};
 
@@ -323,7 +323,7 @@ namespace core {
 		return rec_defs<Defs...>(defs...);
 	}
 
-	// --- parec operator ---
+	// --- prec operator ---
 
 
 	template<
@@ -332,7 +332,7 @@ namespace core {
 		typename I,
 		typename O
 	>
-	std::function<O(I)> parec(const rec_defs<Defs...>& defs) {
+	std::function<O(I)> prec(const rec_defs<Defs...>& defs) {
 		return [=](const I& in)->O {
 			return defs.template call<i,O,I>(in);
 		};
@@ -345,13 +345,13 @@ namespace core {
 		typename ... Rest,
 		typename dummy = typename std::enable_if<detail::is_fun_def<First>::value,int>::type
 	>
-	auto parec(const First& f, const Rest& ... r)->decltype(parec<i>(group(f,r...))) {
+	auto prec(const First& f, const Rest& ... r)->decltype(prec<i>(group(f,r...))) {
 
 		// This fix is required to circumvent a internal compiler error in GCC getting troubles with
 		// the template instantiation. Thus, it has to be done manually (also inlining the call)
 		#ifndef __GNUC__
 			// works e.g. for clang
-			return parec<i>(group(f,r...));
+			return prec<i>(group(f,r...));
 		#else
 			// required to circumvent GCC bug
 			using I = typename utils::type_at<i,utils::type_list<First,Rest...>>::type::in_type;
@@ -368,8 +368,8 @@ namespace core {
 		typename BT, typename BC, typename SC,
 		typename dummy = typename std::enable_if<!detail::is_fun_def<BT>::value,int>::type
 	>
-	auto parec(const BT& t, const BC& b, const SC& s)->decltype(parec<0>(fun(t,b,s))) {
-		return parec<0>(fun(t,b,s));
+	auto prec(const BT& t, const BC& b, const SC& s)->decltype(prec<0>(fun(t,b,s))) {
+		return prec<0>(fun(t,b,s));
 	}
 
 

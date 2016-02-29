@@ -2,7 +2,7 @@
 
 #include <utility>
 
-#include "allscale/api/core/parec.h"
+#include "allscale/api/core/prec.h"
 #include "allscale/api/user/data/vector.h"
 
 namespace allscale {
@@ -167,7 +167,7 @@ namespace user {
 		}
 
 		// trigger parallel processing
-		return core::parec(
+		return core::prec(
 			[](const range& r) {
 				// if there is only one element left, we reached the base case
 				return detail::area(r) <= 1;
@@ -176,7 +176,7 @@ namespace user {
 				if (detail::area(r) < 1) return;
 				detail::for_each(r,body);
 			},
-			[](const range& r, const typename core::parec_fun<void(range)>::type& nested) {
+			[](const range& r, const typename core::prec_fun<void(range)>::type& nested) {
 				// here we have the binary splitting
 
 				// TODO: think about splitting all dimensions
@@ -224,7 +224,7 @@ namespace user {
 		};
 
 		// the parallel execution
-		return core::parec(
+		return core::prec(
 			[](const range& r) {
 				return detail::distance(r.begin,r.end) <= 1;
 			},
@@ -232,7 +232,7 @@ namespace user {
 				r.dependencies.wait();
 				for(auto it = r.begin; it != r.end; ++it) body(detail::access(it));
 			},
-			[](const range& r, const typename core::parec_fun<void(range)>::type& nested) {
+			[](const range& r, const typename core::prec_fun<void(range)>::type& nested) {
 				// here we have the binary splitting
 				auto mid = r.begin + (r.end - r.begin)/2;
 				auto dep = Dependency::split(r.dependencies);

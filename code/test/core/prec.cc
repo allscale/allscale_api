@@ -4,7 +4,7 @@
 #include <sstream>
 #include <string>
 
-#include "allscale/api/core/parec.h"
+#include "allscale/api/core/prec.h"
 
 namespace allscale {
 namespace api {
@@ -39,7 +39,7 @@ namespace core {
 		auto f = fun(
 				[](int)->bool { return true; },
 				[=](int)->float { return 0.0; },
-				[](int, const parec_fun<float(int)>::type&)->float { return 1.0; }
+				[](int, const prec_fun<float(int)>::type&)->float { return 1.0; }
 		);
 
 		EXPECT_TRUE(detail::is_fun_def<decltype(f)>::value);
@@ -48,7 +48,7 @@ namespace core {
 
 		EXPECT_FALSE(utils::is_vector<empty>::value);
 
-		typedef const parec_fun<float(empty)>::type& fun_type;
+		typedef const prec_fun<float(empty)>::type& fun_type;
 
 		auto g = fun(
 				[](empty)->bool { return true; },
@@ -67,7 +67,7 @@ namespace core {
 		auto f = fun(
 				[](int)->bool { return true; },
 				[=](int)->int { return 12; },
-				[](int, const parec_fun<int(int)>::type&)->Future<int> { return done(14); }
+				[](int, const prec_fun<int(int)>::type&)->Future<int> { return done(14); }
 		);
 
 		auto g = [=](int) {
@@ -85,7 +85,7 @@ namespace core {
 		auto f = fun(
 				[](int)->bool { return true; },
 				[=](int)->float { return 0.0; },
-				[](int, const parec_fun<float(int)>::type&)->Future<float> { return 1.0; }
+				[](int, const prec_fun<float(int)>::type&)->Future<float> { return 1.0; }
 		);
 
 		EXPECT_TRUE(detail::is_fun_def<decltype(f)>::value);
@@ -94,7 +94,7 @@ namespace core {
 
 		EXPECT_FALSE(utils::is_vector<empty>::value);
 
-		typedef parec_fun<float(empty)>::type& fun_type;
+		typedef prec_fun<float(empty)>::type& fun_type;
 
 		auto g = fun(
 				[](empty)->bool { return true; },
@@ -119,11 +119,11 @@ namespace core {
 
 	TEST(RecOps, Fib) {
 
-		auto fib = parec(
+		auto fib = prec(
 				fun(
 					[](int x)->bool { return x < 2; },
 					[](int x)->int { return fib_seq(x); },
-					[](int x, const typename parec_fun<int(int)>::type& f)->int {
+					[](int x, const typename prec_fun<int(int)>::type& f)->int {
 						auto a = f(x-1);
 						auto b = f(x-2);
 						return a.get() + b.get();
@@ -146,11 +146,11 @@ namespace core {
 
 	TEST(RecOps, FibLazy) {
 
-		auto fib = parec(
+		auto fib = prec(
 				fun(
 					[](int x)->bool { return x < 2; },
 					[](int x)->int { return fib_seq(x); },
-					[](int x, const typename parec_fun<int(int)>::type& f)->Future<int> {
+					[](int x, const typename prec_fun<int(int)>::type& f)->Future<int> {
 						return add(f(x-1),f(x-2));
 					}
 				)
@@ -171,10 +171,10 @@ namespace core {
 //
 	TEST(RecOps, FibShort) {
 
-		auto fib = parec(
+		auto fib = prec(
 				[](int x)->bool { return x < 2; },
 				[](int x)->int { return fib_seq(x); },
-				[](int x, const typename parec_fun<int(int)>::type& f)->int {
+				[](int x, const typename prec_fun<int(int)>::type& f)->int {
 					auto a = f(x-1);
 					auto b = f(x-2);
 					return a.get() + b.get();
@@ -196,10 +196,10 @@ namespace core {
 
 	TEST(RecOps, FibShortLazy) {
 
-		auto fib = parec(
+		auto fib = prec(
 				[](int x)->bool { return x < 2; },
 				[](int x)->int { return fib_seq(x); },
-				[](int x, const typename parec_fun<int(int)>::type& f)->Future<int> {
+				[](int x, const typename prec_fun<int(int)>::type& f)->Future<int> {
 					return add( f(x-1), f(x-2) );
 				}
 		);
@@ -220,7 +220,7 @@ namespace core {
 
 	TEST(RecOps, EvenOdd) {
 
-		typedef typename parec_fun<bool(int)>::type test;
+		typedef typename prec_fun<bool(int)>::type test;
 
 		auto def = group(
 				// even
@@ -241,8 +241,8 @@ namespace core {
 				)
 		);
 
-		auto even = parec<0>(def);
-		auto odd = parec<1>(def);
+		auto even = prec<0>(def);
+		auto odd = prec<1>(def);
 
 		EXPECT_TRUE(even(0).get());
 		EXPECT_TRUE(even(2).get());
@@ -272,7 +272,7 @@ namespace core {
 
 	TEST(RecOps, EvenOddLazy) {
 
-		typedef typename parec_fun<bool(int)>::type test;
+		typedef typename prec_fun<bool(int)>::type test;
 
 		auto def = group(
 				// even
@@ -293,8 +293,8 @@ namespace core {
 				)
 		);
 
-		auto even = parec<0>(def);
-		auto odd = parec<1>(def);
+		auto even = prec<0>(def);
+		auto odd = prec<1>(def);
 
 		EXPECT_TRUE(even(0).get());
 		EXPECT_TRUE(even(2).get());
@@ -325,9 +325,9 @@ namespace core {
 
 	TEST(RecOps, Even) {
 
-		typedef typename parec_fun<bool(int)>::type test;
+		typedef typename prec_fun<bool(int)>::type test;
 
-		auto even = parec(
+		auto even = prec(
 				// even
 				fun(
 						[](int x)->bool { return x == 0; },
@@ -365,7 +365,7 @@ namespace core {
 	int fib(int x) {
 		typedef typename std::function<Future<int>(int)> fun_type;
 
-		return parec(
+		return prec(
 				fun(
 					[](int x) { return x < 2; },
 					[](int x) { return fib_seq(x); },
@@ -380,7 +380,7 @@ namespace core {
 	int fac(int x) {
 		typedef typename std::function<Future<int>(int)> fun_type;
 
-		return parec(
+		return prec(
 				fun(
 					[](int x) { return x < 2; },
 					[](int x) { return fib_seq(x); },
@@ -409,11 +409,11 @@ namespace core {
 	// ---- application tests --------
 
 	int pfib(int x) {
-		return parec(
+		return prec(
 				fun(
 					[](int x) { return x < 2; },
 					[](int x) { return fib_seq(x); },
-					[](int x, const typename parec_fun<int(int)>::type& f)->Future<int> {
+					[](int x, const typename prec_fun<int(int)>::type& f)->Future<int> {
 						return add(f(x-1),f(x-2));
 					}
 				)
