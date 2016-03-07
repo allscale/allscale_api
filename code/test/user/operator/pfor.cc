@@ -3,7 +3,7 @@
 #include <array>
 #include <vector>
 
-#include "allscale/api/user/pfor.h"
+#include "allscale/api/user/operator/pfor.h"
 #include "allscale/api/user/data/vector.h"
 
 namespace allscale {
