@@ -88,8 +88,39 @@ namespace data {
 			return Vector(*this) /= divisor;
 		}
 
+		bool dominatedBy(const Vector& other) const {
+			for(size_t i=0; i<Dims; i++) {
+				if (other[i] < (*this)[i]) return false;
+			}
+			return true;
+		}
+
+		bool strictlyDominatedBy(const Vector& other) const {
+			for(size_t i=0; i<Dims; i++) {
+				if (other[i] <= (*this)[i]) return false;
+			}
+			return true;
+		}
 	};
 
+	template<typename T, unsigned Dims, typename Lambda>
+	Vector<T,Dims> pointwise(const Vector<T,Dims>& a, const Vector<T,Dims>& b, const Lambda& op) {
+		Vector<T,Dims> res;
+		for(unsigned i=0; i<Dims; i++) {
+			res[i] = op(a[i],b[i]);
+		}
+		return res;
+	}
+
+	template<typename T, unsigned Dims>
+	Vector<T,Dims> pointwiseMin(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
+		return pointwise(a,b,(T(T,T))std::min);
+	}
+
+	template<typename T, unsigned Dims>
+	Vector<T,Dims> pointwiseMax(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
+		return pointwise(a,b,(T(T,T))std::max);
+	}
 
 } // end namespace data
 } // end namespace user
