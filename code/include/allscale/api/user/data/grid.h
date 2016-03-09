@@ -50,17 +50,45 @@ namespace data {
 			void collectDifferences(const GridBox<Dims>& a, const GridBox<Dims>& b, GridBox<Dims>& cur, std::vector<GridBox<Dims>>& res) {
 				unsigned i = I-1;
 
-				// cover left part
-				cur.min[i] = a.min[i]; cur.max[i] = b.min[i];
-				if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+				// if b is within a
+				if (a.min[i] <= b.min[i] && b.max[i] <= a.max[i]) {
 
-				// cover center part
-				cur.min[i] = b.min[i]; cur.max[i] = b.max[i];
-				if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+					// cover left part
+					cur.min[i] = a.min[i]; cur.max[i] = b.min[i];
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
 
-				// cover right part
-				cur.min[i] = b.max[i]; cur.max[i] = a.max[i];
-				if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+					// cover center part
+					cur.min[i] = b.min[i]; cur.max[i] = b.max[i];
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+
+					// cover right part
+					cur.min[i] = b.max[i]; cur.max[i] = a.max[i];
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+
+				// if a is on the left
+				} else if (a.min[i] <= b.min[i]) {
+
+					// cover left part
+					cur.min[i] = a.min[i]; cur.max[i] = b.min[i];
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+
+					// cover right part
+					cur.min[i] = b.min[i]; cur.max[i] = a.max[i];
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+
+				// otherwise a is on the right
+				} else {
+
+					// cover left part
+					cur.min[i] = a.min[i]; cur.max[i] = b.max[i];
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+
+					// cover right part
+					cur.min[i] = b.max[i]; cur.max[i] = a.max[i];
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+
+				}
+
 			}
 
 		};
@@ -70,7 +98,7 @@ namespace data {
 
 			template<unsigned Dims>
 			void collectDifferences(const GridBox<Dims>&, const GridBox<Dims>& b, GridBox<Dims>& cur, std::vector<GridBox<Dims>>& res) {
-				if(cur != b && !cur.empty()) res.push_back(cur);
+				if(!b.covers(cur) && !cur.empty()) res.push_back(cur);
 			}
 		};
 

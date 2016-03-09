@@ -290,17 +290,17 @@ namespace data {
 		Box d(14,15);
 
 		EXPECT_EQ("[]",toString(Box::difference(a,a)));
-		EXPECT_EQ("[[[3,3] - [4,4]],[[4,3] - [14,4]],[[3,4] - [4,14]]]",toString(Box::difference(a,b)));
+		EXPECT_EQ("[[[3,3] - [4,4]],[[4,3] - [8,4]],[[3,4] - [4,8]]]",toString(Box::difference(a,b)));
 		EXPECT_EQ("[[[3,3] - [8,8]]]",toString(Box::difference(a,c)));
 		EXPECT_EQ("[[[3,3] - [8,8]]]",toString(Box::difference(a,d)));
 
-		EXPECT_EQ("[[[8,3] - [14,8]],[[3,8] - [8,14]],[[8,8] - [14,14]]]",toString(Box::difference(b,a)));
+		EXPECT_EQ("[[[8,4] - [14,8]],[[4,8] - [8,14]],[[8,8] - [14,14]]]",toString(Box::difference(b,a)));
 		EXPECT_EQ("[]",toString(Box::difference(b,b)));
-		EXPECT_EQ("[[[4,4] - [12,12]],[[12,4] - [18,12]],[[4,12] - [12,18]]]",toString(Box::difference(b,c)));
+		EXPECT_EQ("[[[4,4] - [12,12]],[[12,4] - [14,12]],[[4,12] - [12,14]]]",toString(Box::difference(b,c)));
 		EXPECT_EQ("[[[4,4] - [14,14]]]",toString(Box::difference(b,d)));
 
 		EXPECT_EQ("[[[12,12] - [18,18]]]",toString(Box::difference(c,a)));
-		EXPECT_EQ("[[[14,4] - [18,14]],[[4,14] - [14,18]],[[14,14] - [18,18]]]",toString(Box::difference(c,b)));
+		EXPECT_EQ("[[[14,12] - [18,14]],[[12,14] - [14,18]],[[14,14] - [18,18]]]",toString(Box::difference(c,b)));
 		EXPECT_EQ("[]",toString(Box::difference(c,c)));
 		EXPECT_EQ("[[[12,12] - [14,14]],[[14,12] - [15,14]],[[15,12] - [18,14]],[[12,14] - [14,15]],[[15,14] - [18,15]],[[12,15] - [14,18]],[[14,15] - [15,18]],[[15,15] - [18,18]]]",toString(Box::difference(c,d)));
 
@@ -321,17 +321,17 @@ namespace data {
 		Box d(14,15);
 
 		EXPECT_EQ("[[[3,3] - [8,8]]]",toString(Box::merge(a,a)));
-		EXPECT_EQ("[[[3,3] - [4,4]],[[4,3] - [14,4]],[[3,4] - [4,14]],[[4,4] - [14,14]]]",toString(Box::merge(a,b)));
+		EXPECT_EQ("[[[3,3] - [4,4]],[[4,3] - [8,4]],[[3,4] - [4,8]],[[4,4] - [14,14]]]",toString(Box::merge(a,b)));
 		EXPECT_EQ("[[[3,3] - [8,8]],[[12,12] - [18,18]]]",toString(Box::merge(a,c)));
 		EXPECT_EQ("[[[3,3] - [8,8]],[[14,14] - [15,15]]]",toString(Box::merge(a,d)));
 
-		EXPECT_EQ("[[[8,3] - [14,8]],[[3,8] - [8,14]],[[8,8] - [14,14]],[[3,3] - [8,8]]]",toString(Box::merge(b,a)));
+		EXPECT_EQ("[[[8,4] - [14,8]],[[4,8] - [8,14]],[[8,8] - [14,14]],[[3,3] - [8,8]]]",toString(Box::merge(b,a)));
 		EXPECT_EQ("[[[4,4] - [14,14]]]",toString(Box::merge(b,b)));
-		EXPECT_EQ("[[[4,4] - [12,12]],[[12,4] - [18,12]],[[4,12] - [12,18]],[[12,12] - [18,18]]]",toString(Box::merge(b,c)));
+		EXPECT_EQ("[[[4,4] - [12,12]],[[12,4] - [14,12]],[[4,12] - [12,14]],[[12,12] - [18,18]]]",toString(Box::merge(b,c)));
 		EXPECT_EQ("[[[4,4] - [14,14]],[[14,14] - [15,15]]]",toString(Box::merge(b,d)));
 
 		EXPECT_EQ("[[[12,12] - [18,18]],[[3,3] - [8,8]]]",toString(Box::merge(c,a)));
-		EXPECT_EQ("[[[14,4] - [18,14]],[[4,14] - [14,18]],[[14,14] - [18,18]],[[4,4] - [14,14]]]",toString(Box::merge(c,b)));
+		EXPECT_EQ("[[[14,12] - [18,14]],[[12,14] - [14,18]],[[14,14] - [18,18]],[[4,4] - [14,14]]]",toString(Box::merge(c,b)));
 		EXPECT_EQ("[[[12,12] - [18,18]]]",toString(Box::merge(c,c)));
 		EXPECT_EQ("[[[12,12] - [14,14]],[[14,12] - [15,14]],[[15,12] - [18,14]],[[12,14] - [14,15]],[[15,14] - [18,15]],[[12,15] - [14,18]],[[14,15] - [15,18]],[[15,15] - [18,18]],[[14,14] - [15,15]]]",toString(Box::merge(c,d)));
 
@@ -371,10 +371,7 @@ namespace data {
 	}
 
 
-	TEST(GridRegion,RegionTest) {
-
-		GridRegion<1> a(5,10);
-		GridRegion<1> b(8,14);
+	TEST(GridRegion,RegionTestBasic) {
 
 		EXPECT_TRUE(utils::is_value<GridRegion<0>>::value);
 		EXPECT_TRUE(utils::is_serializable<GridRegion<0>>::value);
@@ -387,9 +384,28 @@ namespace data {
 		EXPECT_TRUE(core::is_region<GridRegion<2>>::value);
 		EXPECT_TRUE(core::is_region<GridRegion<3>>::value);
 
+	}
+
+	TEST(GridRegion1D,RegionTestBasic) {
+
+		GridRegion<1> a(5,10);
+		GridRegion<1> b(8,14);
 		testRegion(a,b);
 	}
 
+	TEST(GridRegion2D,RegionTestBasic) {
+
+		GridRegion<2> a(5,10);
+		GridRegion<2> b(8,14);
+		testRegion(a,b);
+	}
+
+	TEST(GridRegion3D,RegionTestBasic) {
+
+		GridRegion<3> a(5,10);
+		GridRegion<3> b(8,14);
+		testRegion(a,b);
+	}
 
 } // end namespace data
 } // end namespace user

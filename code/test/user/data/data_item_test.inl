@@ -84,6 +84,7 @@ void testRegion(const Region& a, const Region& b) {
 	EXPECT_EQ(e, Region::difference(b,d));
 	
 	EXPECT_EQ(Region::difference(b,a), Region::difference(b,c));
+	EXPECT_EQ(Region::difference(a,b), Region::difference(a,c));
 		
 }
 
