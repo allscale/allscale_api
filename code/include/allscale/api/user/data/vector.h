@@ -40,6 +40,13 @@ namespace data {
 		Vector& operator=(const Vector& other) = default;
 		Vector& operator=(Vector&& other) = default;
 
+		bool operator==(const T& other) const {
+			for(unsigned i = 0; i<Dims; i++) {
+				if ((*this)[i] != other) return false;
+			}
+			return true;
+		}
+
 		Vector& operator+=(const Vector& other) {
 			for(size_t i = 0; i<Dims; i++) {
 				(*this)[i] += other[i];
@@ -103,7 +110,7 @@ namespace data {
 		}
 	};
 
-	template<typename T, unsigned Dims, typename Lambda>
+	template<typename T, std::size_t Dims, typename Lambda>
 	Vector<T,Dims> pointwise(const Vector<T,Dims>& a, const Vector<T,Dims>& b, const Lambda& op) {
 		Vector<T,Dims> res;
 		for(unsigned i=0; i<Dims; i++) {
@@ -112,14 +119,14 @@ namespace data {
 		return res;
 	}
 
-	template<typename T, unsigned Dims>
+	template<typename T, std::size_t Dims>
 	Vector<T,Dims> pointwiseMin(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
-		return pointwise(a,b,(T(T,T))std::min);
+		return pointwise(a,b,&std::min<T>);
 	}
 
-	template<typename T, unsigned Dims>
+	template<typename T, std::size_t Dims>
 	Vector<T,Dims> pointwiseMax(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
-		return pointwise(a,b,(T(T,T))std::max);
+		return pointwise(a,b,&std::max<T>);
 	}
 
 } // end namespace data

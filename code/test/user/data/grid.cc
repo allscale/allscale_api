@@ -4,6 +4,7 @@
 #include "allscale/utils/string_utils.h"
 
 #include "allscale/utils/printer/vectors.h"
+#include "allscale/utils/printer/pairs.h"
 
 namespace allscale {
 namespace api {
@@ -342,34 +343,197 @@ namespace data {
 
 	}
 
+	TEST(GridBox1D, Area) {
+
+		using Box = GridBox<1>;
+
+		EXPECT_EQ(5,Box(7,12).area());
+		EXPECT_EQ(0,Box(7,7).area());
+		EXPECT_EQ(0,Box(7,0).area());
+
+	}
+
+	TEST(GridBox2D, Area) {
+
+		using Box = GridBox<2>;
+
+		EXPECT_EQ(25,Box(7,12).area());
+		EXPECT_EQ(10,Box({7,9},{12,11}).area());
+		EXPECT_EQ(0,Box(7,7).area());
+		EXPECT_EQ(0,Box(7,0).area());
+
+	}
+
+
+	TEST(GridBox1D, Fuse) {
+
+		using Box = GridBox<1>;
+
+		EXPECT_TRUE(Box::areFusable<0>(Box(3,5),Box(5,8)));
+		EXPECT_TRUE(Box::areFusable<0>(Box(3,7),Box(7,8)));
+		EXPECT_TRUE(Box::areFusable<0>(Box(3,8),Box(8,8)));
+		EXPECT_TRUE(Box::areFusable<0>(Box(5,8),Box(3,5)));
+
+		EXPECT_FALSE(Box::areFusable<0>(Box(3,7),Box(8,8)));
+		EXPECT_FALSE(Box::areFusable<0>(Box(3,6),Box(7,8)));
+		EXPECT_FALSE(Box::areFusable<0>(Box(7,8),Box(3,6)));
+
+		EXPECT_EQ(Box(3,8), Box::fuse<0>(Box(3,5),Box(5,8)));
+		EXPECT_EQ(Box(3,8), Box::fuse<0>(Box(5,8),Box(3,5)));
+
+	}
+
+	TEST(GridBox2D, Fuse) {
+
+		using Box = GridBox<2>;
+
+		// test first dimension
+		EXPECT_TRUE(Box::areFusable<0>(Box({3,3},{5,5}),Box({5,3},{8,5})));
+		EXPECT_TRUE(Box::areFusable<0>(Box({5,3},{8,5}),Box({3,3},{5,5})));
+
+		EXPECT_EQ(Box({3,3},{8,5}), Box::fuse<0>(Box({3,3},{5,5}),Box({5,3},{8,5})));
+		EXPECT_EQ(Box({3,3},{8,5}), Box::fuse<0>(Box({5,3},{8,5}),Box({3,3},{5,5})));
+
+		EXPECT_FALSE(Box::areFusable<1>(Box({3,3},{5,5}),Box({5,3},{8,5})));
+		EXPECT_FALSE(Box::areFusable<1>(Box({5,3},{8,5}),Box({3,3},{5,5})));
+
+
+		// test second dimension
+		EXPECT_TRUE(Box::areFusable<1>(Box({3,3},{5,5}),Box({3,5},{5,8})));
+		EXPECT_TRUE(Box::areFusable<1>(Box({3,5},{5,8}),Box({3,3},{5,5})));
+
+		EXPECT_EQ(Box({3,3},{5,8}), Box::fuse<1>(Box({3,3},{5,5}),Box({3,5},{5,8})));
+		EXPECT_EQ(Box({3,3},{5,8}), Box::fuse<1>(Box({3,5},{5,8}),Box({3,3},{5,5})));
+
+		EXPECT_FALSE(Box::areFusable<0>(Box({3,3},{5,5}),Box({3,5},{5,8})));
+		EXPECT_FALSE(Box::areFusable<0>(Box({3,5},{5,8}),Box({3,3},{5,5})));
+
+	}
+
+	TEST(GridBox1D, ScanByLine) {
+
+		using Point = GridPoint<1>;
+		using Box = GridBox<1>;
+
+		std::vector<std::pair<Point,Point>> points;
+		Box(5,10).scanByLines([&](const Point& a, const Point& b){
+			points.push_back({a,b});
+		});
+
+		EXPECT_EQ("[[[5],[10]]]",toString(points));
+
+	}
+
+	TEST(GridBox2D, ScanByLine) {
+
+		using Point = GridPoint<2>;
+		using Box = GridBox<2>;
+
+		std::vector<std::pair<Point,Point>> points;
+		Box({5,10},{8,40}).scanByLines([&](const Point& a, const Point& b){
+			points.push_back({a,b});
+		});
+
+		EXPECT_EQ("[[[5,10],[5,40]],[[6,10],[6,40]],[[7,10],[7,40]]]",toString(points));
+
+	}
+
+	TEST(GridBox3D, ScanByLine) {
+
+		using Point = GridPoint<3>;
+		using Box = GridBox<3>;
+
+		std::vector<std::pair<Point,Point>> points;
+		Box({2,5,10},{4,8,40}).scanByLines([&](const Point& a, const Point& b){
+			points.push_back({a,b});
+		});
+
+		EXPECT_EQ("[[[2,5,10],[2,5,40]],[[2,6,10],[2,6,40]],[[2,7,10],[2,7,40]],[[3,5,10],[3,5,40]],[[3,6,10],[3,6,40]],[[3,7,10],[3,7,40]]]",toString(points));
+
+	}
+
 	TEST(GridRegion,Basic) {
+
+		GridPoint<2> size = 50;
 
 		GridRegion<2> region;
 		EXPECT_TRUE(region.empty());
 		EXPECT_EQ("{}", toString(region));
 
-		GridRegion<2> cube(10);
+		GridRegion<2> empty(size);
+		EXPECT_TRUE(empty.empty());
+		EXPECT_EQ("{}", toString(empty));
+
+		GridRegion<2> cube(size,10);
 		EXPECT_FALSE(cube.empty());
 		EXPECT_EQ("{[[0,0] - [10,10]]}", toString(cube));
 
-		GridRegion<2> box(GridPoint<2>{10,20});
+		GridRegion<2> box(size,GridPoint<2>{10,20});
 		EXPECT_FALSE(box.empty());
 		EXPECT_EQ("{[[0,0] - [10,20]]}", toString(box));
 
-		GridRegion<2> box2(GridPoint<2>{5,8},GridPoint<2>{10,20});
+		GridRegion<2> box2(size,GridPoint<2>{5,8},GridPoint<2>{10,20});
 		EXPECT_FALSE(box2.empty());
 		EXPECT_EQ("{[[5,8] - [10,20]]}", toString(box2));
 
-		GridRegion<2> e1(0);
+		GridRegion<2> e1(size,0);
 		EXPECT_TRUE(e1.empty());
 		EXPECT_EQ("{}", toString(e1));
 
-		GridRegion<2> e2(2,2);
+		GridRegion<2> e2(size,2,2);
 		EXPECT_TRUE(e2.empty());
 		EXPECT_EQ("{}", toString(e2));
 
 	}
 
+	TEST(GridRegion,Compress) {
+
+		using Region = GridRegion<2>;
+
+		GridPoint<2> size = 50;
+
+		Region a(size,{3,3},{5,5});
+		Region b(size,{5,5},{8,8});
+		Region c(size,{3,5},{5,8});
+		Region d(size,{5,3},{8,5});
+
+		Region ab = Region::merge(a,b);
+		Region cd = Region::merge(c,d);
+
+		EXPECT_EQ("{[[3,3] - [5,5]],[[5,5] - [8,8]]}",toString(ab));
+		EXPECT_EQ("{[[3,5] - [5,8]],[[5,3] - [8,5]]}",toString(cd));
+
+
+		Region abc = Region::merge(ab,c);
+		Region abd = Region::merge(ab,d);
+
+		EXPECT_EQ("{[[3,3] - [5,8]],[[5,5] - [8,8]]}",toString(abc));
+		EXPECT_EQ("{[[3,3] - [5,5]],[[5,3] - [8,8]]}",toString(abd));
+
+		EXPECT_EQ("{[[3,3] - [8,8]]}",toString(Region::merge(ab,cd)));
+		EXPECT_EQ("{[[3,3] - [8,8]]}",toString(Region::merge(abc,d)));
+
+	}
+
+	TEST(GridRegion,BoundingBox) {
+
+		using Region = GridRegion<2>;
+
+		GridPoint<2> size = 50;
+
+		Region a(size,{3,3},{5,5});
+		Region b(size,{5,5},{8,8});
+		Region c(size,{3,5},{5,8});
+		Region d(size,{5,3},{8,5});
+
+		Region ab = Region::merge(a,b);
+		Region cd = Region::merge(c,d);
+
+		Region f = Region::merge(ab,cd);
+
+		EXPECT_EQ(f.boundingBox(),ab.boundingBox());
+		EXPECT_EQ(f.boundingBox(),cd.boundingBox());
+	}
 
 	TEST(GridRegion,RegionTestBasic) {
 
@@ -388,24 +552,228 @@ namespace data {
 
 	TEST(GridRegion1D,RegionTestBasic) {
 
-		GridRegion<1> a(5,10);
-		GridRegion<1> b(8,14);
+		GridPoint<1> size = 50;
+
+		GridRegion<1> a(size,5,10);
+		GridRegion<1> b(size,8,14);
+		testRegion(a,b);
+
+		a = GridRegion<1>(size,7,10);
+		b = GridRegion<1>(size,6,8);
 		testRegion(a,b);
 	}
 
 	TEST(GridRegion2D,RegionTestBasic) {
 
-		GridRegion<2> a(5,10);
-		GridRegion<2> b(8,14);
+		GridPoint<2> size = 50;
+
+		GridRegion<2> a(size,5,10);
+		GridRegion<2> b(size,8,14);
 		testRegion(a,b);
+
+		// mirrored
+		a = GridRegion<2>(size,8,14);
+		b = GridRegion<2>(size,5,10);
+		testRegion(a,b);
+
+		// rotated left
+		a = GridRegion<2>(size,5,10);
+		b = GridRegion<2>(size,{6,3},{12,8});
+		testRegion(a,b);
+
+		// rotated right
+		a = GridRegion<2>(size,{6,3},{12,8});
+		b = GridRegion<2>(size,5,10);
+		testRegion(a,b);
+
+		// the cross
+		a = GridRegion<2>(size,{4,2},{10,12});
+		b = GridRegion<2>(size,{2,4},{12,10});
+		testRegion(a,b);
+
 	}
 
 	TEST(GridRegion3D,RegionTestBasic) {
 
-		GridRegion<3> a(5,10);
-		GridRegion<3> b(8,14);
+		GridPoint<3> size = 50;
+
+		GridRegion<3> a(size,5,10);
+		GridRegion<3> b(size,8,14);
 		testRegion(a,b);
 	}
+
+	TEST(GridFragment,Basic) {
+
+		EXPECT_TRUE((core::is_fragment<GridFragment<double,2>>::value));
+
+		GridPoint<2> size = 50;
+
+		GridRegion<2> region(size,20,30);
+		GridFragment<int,2> fA(region);
+
+	}
+
+
+	TEST(Grid2D,ExampleManagement) {
+
+		using Point = GridPoint<2>;
+		using Region = GridRegion<2>;
+		using Fragment = GridFragment<int,2>;
+
+		// total size:
+		Point size = { 500, 1000 };
+
+		// upper half
+		Region partA(size, {0,0},{250,1000});
+
+		// lower half
+		Region partB(size, {250,0},{500,1000});
+
+		// check that the coordinates are coorect
+		Region full = Region::merge(partA,partB);
+		EXPECT_EQ("{[[0,0] - [500,1000]]}",toString(full));
+
+		// create fragments
+		Fragment fA(partA);
+		Fragment fB(partB);
+
+		// fill the data set
+		for(int t = 1; t<10; t++) {
+
+			auto a = fA.mask();
+			for(unsigned i=0; i<250; i++) {
+				for(unsigned j=0; j<1000; j++) {
+					EXPECT_EQ((i*j*(t-1)),(a[{i,j}]));
+					a[{i,j}] = i * j * t;
+				}
+			}
+
+			auto b = fB.mask();
+			for(unsigned i=250; i<500; i++) {
+				for(unsigned j=0; j<1000; j++) {
+					EXPECT_EQ((i*j*(t-1)),(b[{i,j}]));
+					b[{i,j}] = i * j * t;
+				}
+			}
+
+		}
+
+		// --- alter data distribution ---
+
+
+		Region newPartA = Region(size, {0,0}, {250,750});
+		Region newPartB = Region(size, {250,0}, {500,750});
+		Region newPartC = Region(size, {0,750}, {500,1000});
+		EXPECT_EQ(full,Region::merge(newPartA,newPartB,newPartC));
+
+		Fragment fC(newPartC);
+
+		// move data from A and B to C
+		fC.insert(fA,Region::intersect(newPartC,partA));
+		fC.insert(fB,Region::intersect(newPartC,partB));
+
+		// shrink A and B
+		fA.resize(newPartA);
+		fB.resize(newPartB);
+
+		for(int t = 10; t<20; t++) {
+
+			auto a = fA.mask();
+			for(unsigned i=0; i<250; i++) {
+				for(unsigned j=0; j<750; j++) {
+					EXPECT_EQ((i*j*(t-1)),(a[{i,j}]));
+					a[{i,j}] = i * j * t;
+				}
+			}
+
+			auto b = fB.mask();
+			for(unsigned i=250; i<500; i++) {
+				for(unsigned j=0; j<750; j++) {
+					EXPECT_EQ((i*j*(t-1)),(b[{i,j}]));
+					b[{i,j}] = i * j * t;
+				}
+			}
+
+			auto c = fC.mask();
+			for(unsigned i=0; i<500; i++) {
+				for(unsigned j=750; j<1000; j++) {
+					EXPECT_EQ((i*j*(t-1)),(c[{i,j}]));
+					c[{i,j}] = i * j * t;
+				}
+			}
+		}
+
+/*
+
+		EXPECT_TRUE(SetRegion<int>::intersect(a,b).empty());
+
+		// create fragments
+		MapFragment<int,int> fA(a);
+		MapFragment<int,int> fB(b);
+
+		// do some computation
+		for(int t = 0; t<10; t++) {
+
+			Map<int,int> a = fA.mask();
+			for(int i=0; i<5; i++) {
+				EXPECT_EQ(a[i],t);
+				a[i]++;
+			}
+
+			Map<int,int> b = fB.mask();
+			for(int i=5; i<10; i++) {
+				EXPECT_EQ(b[i],t);
+				b[i]++;
+			}
+
+		}
+
+		// ------------------------------------------------
+
+		// now re-balance fragments by introducing a new fragment C
+		SetRegion<int> c;
+		c.add(8,9);
+		MapFragment<int,int> fC(c);
+		fC.insert(fB,c);
+
+		SetRegion<int> nb;
+		nb.add(3,4,5,6,7);
+		fB.resize(nb);
+		fB.insert(fA,SetRegion<int>::intersect(a,nb));
+
+		SetRegion<int> na = SetRegion<int>::difference(a,nb);
+		fA.resize(na);
+
+		// ------------------------------------------------
+
+		// do some computation on the re-shaped distribution
+		for(int t = 10; t<20; t++) {
+
+			Map<int,int> a = fA.mask();
+			for(int i=0; i<3; i++) {
+				EXPECT_EQ(a[i],t);
+				a[i]++;
+			}
+
+			Map<int,int> b = fB.mask();
+			for(int i=3; i<8; i++) {
+				EXPECT_EQ(b[i],t);
+				b[i]++;
+			}
+
+			Map<int,int> c = fC.mask();
+			for(int i=8; i<10; i++) {
+				EXPECT_EQ(c[i],t);
+				c[i]++;
+			}
+
+		}
+
+*/
+
+	}
+
+
 
 } // end namespace data
 } // end namespace user
