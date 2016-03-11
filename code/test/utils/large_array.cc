@@ -6,42 +6,7 @@
 namespace allscale {
 namespace utils {
 
-
-//	TEST(MMap,Basic) {
-//
-//		uint64_t N = 2ll*1024*1024*1024;
-//
-//		int* data = (int*)mmap(nullptr,sizeof(int)*N,PROT_READ|PROT_WRITE,MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE,-1,0);
-//	//		int* data = (int*)malloc(sizeof(int)*N);
-//		if ((void*)-1 == (void*)data) {
-//			perror(nullptr);
-//		}
-//		EXPECT_NE((void*)-1,(void*)data);
-//
-//		// touch all the data
-//		memset(data, 0, sizeof(int) * N);
-//
-//		sleep(1);
-//
-//		// free the second half
-//	//		msync(&(data[N/2]), sizeof(int)*N/2, MS_SYNC);
-//
-//		// free the second half
-//		munmap(&(data[N/2]), sizeof(int)*N/2);
-//		auto res = mmap(&(data[N/2]), sizeof(int)*N/2,PROT_READ|PROT_WRITE,MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE,-1,0);
-//
-//		if ((void*)-1 == res) {
-//			perror(nullptr);
-//		}
-//
-//		sleep(1);
-//
-//		// touch all the data
-//		memset(data, 0, sizeof(int) * N);
-//
-//		sleep(1);
-//
-//	}
+	using namespace detail;
 
 	TEST(Intervals,Covered) {
 

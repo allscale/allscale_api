@@ -15,204 +15,246 @@ namespace allscale {
 namespace utils {
 
 
-	class Intervals {
+	namespace detail {
 
-		std::vector<std::size_t> data;
+		/**
+		 * Intervals are utilized by the LargeArray class to manage active intervals -- those intervals
+		 * for which the stored values need to be preserved.
+		 */
+		class Intervals {
 
-	public:
+			/**
+			 * A list of start/end values of the covered intervals.
+			 * For instance, the values [10,15,18,35] correspond to the
+			 * intervals [10,..,15) and [18,..,35). The intervals are sorted.
+			 * The lower boundary is included, the upper boundary not.
+			 */
+			std::vector<std::size_t> data;
 
-		void add(std::size_t from, std::size_t to) {
+		public:
 
-			// skip empty ranges
-			if (from >= to) return;
+			/**
+			 * Adds a new interval to the covered intervals.
+			 * @param from the start (inclusive) of the interval to be added
+			 * @param to the end (exclusive) of the interval to be added
+			 */
+			void add(std::size_t from, std::size_t to) {
 
-			// insert first element
-			if (data.empty()) {
-				data.push_back(from);
-				data.push_back(to);
+				// skip empty ranges
+				if (from >= to) return;
+
+				// insert first element
+				if (data.empty()) {
+					data.push_back(from);
+					data.push_back(to);
+				}
+
+				// find positions for from and to
+				auto it_begin = data.begin();
+				auto it_end = data.end();
+
+				auto it_from = std::upper_bound(it_begin, it_end, from);
+				auto it_to = std::upper_bound(it_begin, it_end, to-1);
+
+				std::size_t idx_from = std::distance(it_begin,it_from);
+				std::size_t idx_to = std::distance(it_begin,it_to);
+
+				// whether insertion is at a common place
+				if (it_from == it_to) {
+
+					// if it is between ranges ...
+					if (idx_to % 2 == 0) {
+
+						// check whether it is a gap closing a range
+						if (idx_to > 1 && idx_to < data.size() && data[idx_to-1] == from && data[idx_to] == to) {
+							data.erase(it_from-1,it_to+1);
+							return;
+						}
+
+						// check whether it is connecting to the one on the left
+						if (idx_to > 1 && data[idx_to-1] == from) {
+							data[idx_to-1] = to;
+							return;
+						}
+
+						// check whether it is connecting to the one on the right
+						if (idx_to < data.size() && data[idx_to] == to) {
+							data[idx_to] = from;
+							return;
+						}
+					}
+
+					// check whether it is the end
+					if (it_from == it_end) {
+						data.push_back(from);
+						data.push_back(to);
+						return;
+					}
+
+					// check whether it is within an interval
+					if ((idx_from % 2) == 1) {
+						return;		// nothing to add
+					}
+
+					// insert new pair at insertion position
+					data.insert(it_from,2,from);
+					data[idx_from+1] = to;
+
+					return;
+				}
+
+				// if from references an existing start value => correct it
+				if (idx_from % 2 == 0) {
+					data[idx_from] = from;
+					++it_from;
+				} else {
+					// all fine
+				}
+
+				// correct end of last closed interval
+				if (idx_to % 2 == 0) {
+					data[idx_to-1] = to;
+					it_to -= 1;
+				} else {
+					// nothing to do here
+				}
+
+				if (it_from < it_to) data.erase(it_from,it_to);
+
 			}
 
-			// find positions for from and to
-			auto it_begin = data.begin();
-			auto it_end = data.end();
+			/**
+			 * Removes the given interval from the covered range.
+			 * @param from the start (inclusive) of the interval to be removed
+			 * @param to the end (exclusive) of the interval to be removed
+			 */
+			void remove(std::size_t from, std::size_t to) {
 
-			auto it_from = std::upper_bound(it_begin, it_end, from);
-			auto it_to = std::upper_bound(it_begin, it_end, to-1);
+				// quick exits
+				if (from >= to) return;
+				if (data.empty()) return;
 
-			std::size_t idx_from = std::distance(it_begin,it_from);
-			std::size_t idx_to = std::distance(it_begin,it_to);
+				// find positions for from and to
+				auto it_begin = data.begin();
+				auto it_end = data.end();
 
-			// whether insertion is at a common place
-			if (it_from == it_to) {
+				auto it_from = std::upper_bound(it_begin, it_end, from);
+				auto it_to = std::upper_bound(it_begin, it_end, to-1);
 
-				// if it is between ranges ...
-				if (idx_to % 2 == 0) {
+				std::size_t idx_from = std::distance(it_begin,it_from);
+				std::size_t idx_to = std::distance(it_begin,it_to);
 
-					// check whether it is a gap closing a range
-					if (idx_to > 1 && idx_to < data.size() && data[idx_to-1] == from && data[idx_to] == to) {
+				// in case they are both at the same spot
+				if (idx_from == idx_to) {
+
+					// if it is between two intervals ..
+					if (idx_from % 2 == 0) return;		// .. there is nothing to delete
+
+					// it is within a single interval
+					assert_eq(1, idx_from % 2);
+
+					// check whether full interval is covered
+					if (data[idx_from-1] == from && data[idx_to] == to) {
 						data.erase(it_from-1,it_to+1);
 						return;
 					}
 
-					// check whether it is connecting to the one on the left
-					if (idx_to > 1 && data[idx_to-1] == from) {
-						data[idx_to-1] = to;
+					// check if lower boundary matches
+					if (data[idx_from-1] == from) {
+						data[idx_from-1] = to;
 						return;
 					}
 
-					// check whether it is connecting to the one on the right
-					if (idx_to < data.size() && data[idx_to] == to) {
+					// check if lower boundary matches
+					if (data[idx_to] == to) {
 						data[idx_to] = from;
 						return;
 					}
-				}
 
-				// check whether it is the end
-				if (it_from == it_end) {
-					data.push_back(from);
-					data.push_back(to);
+					data.insert(it_from,2,from);
+					data[idx_from+1] = to;
 					return;
+
 				}
 
-				// check whether it is within an interval
-				if ((idx_from % 2) == 1) {
-					return;		// nothing to add
+				if (idx_from % 2 == 1) {
+					data[idx_from] = from;
+					it_from++;
 				}
 
-				// insert new pair at insertion position
-				data.insert(it_from,2,from);
-				data[idx_from+1] = to;
-
-				return;
-			}
-
-			// if from references an existing start value => correct it
-			if (idx_from % 2 == 0) {
-				data[idx_from] = from;
-				++it_from;
-			} else {
-				// all fine
-			}
-
-			// correct end of last closed interval
-			if (idx_to % 2 == 0) {
-				data[idx_to-1] = to;
-				it_to -= 1;
-			} else {
-				// nothing to do here
-			}
-
-			if (it_from < it_to) data.erase(it_from,it_to);
-
-		}
-
-		void remove(std::size_t from, std::size_t to) {
-
-			// quick exits
-			if (from >= to) return;
-			if (data.empty()) return;
-
-			// find positions for from and to
-			auto it_begin = data.begin();
-			auto it_end = data.end();
-
-			auto it_from = std::upper_bound(it_begin, it_end, from);
-			auto it_to = std::upper_bound(it_begin, it_end, to-1);
-
-			std::size_t idx_from = std::distance(it_begin,it_from);
-			std::size_t idx_to = std::distance(it_begin,it_to);
-
-			// in case they are both at the same spot
-			if (idx_from == idx_to) {
-
-				// if it is between two intervals ..
-				if (idx_from % 2 == 0) return;		// .. there is nothing to delete
-
-				// it is within a single interval
-				assert_eq(1, idx_from % 2);
-
-				// check whether full interval is covered
-				if (data[idx_from-1] == from && data[idx_to] == to) {
-					data.erase(it_from-1,it_to+1);
-					return;
+				if (idx_to % 2 == 1) {
+					data[idx_to-1] = to;
+					it_to--;
 				}
 
-				// check if lower boundary matches
-				if (data[idx_from-1] == from) {
-					data[idx_from-1] = to;
-					return;
-				}
-
-				// check if lower boundary matches
-				if (data[idx_to] == to) {
-					data[idx_to] = from;
-					return;
-				}
-
-				data.insert(it_from,2,from);
-				data[idx_from+1] = to;
+				// delete nodes in-between
+				data.erase(it_from,it_to);
 				return;
 
 			}
 
-			if (idx_from % 2 == 1) {
-				data[idx_from] = from;
-				it_from++;
+			/**
+			 * Tests whether the given point is covered by this intervals.
+			 */
+			bool covers(std::size_t idx) const {
+				auto begin = data.begin();
+				auto end = data.end();
+				auto pos = std::upper_bound(begin, end, idx);
+				return pos != end && ((std::distance(begin,pos) % 2) == 1);
 			}
 
-			if (idx_to % 2 == 1) {
-				data[idx_to-1] = to;
-				it_to--;
+			/**
+			 * Tests whether all the points within the range [from,...,to) are covered by this intervals.
+			 */
+			bool coversAll(std::size_t from, std::size_t to) const {
+				if (from >= to) return true;
+				auto begin = data.begin();
+				auto end = data.end();
+				auto a = std::upper_bound(begin, end, from);
+				auto b = std::upper_bound(begin, end, to-1);
+				return a == b && a != end && ((std::distance(begin,a) % 2) == 1);
 			}
 
-			// delete nodes in-between
-			data.erase(it_from,it_to);
-			return;
-
-		}
-
-		bool covers(std::size_t idx) const {
-			auto begin = data.begin();
-			auto end = data.end();
-			auto pos = std::upper_bound(begin, end, idx);
-			return pos != end && ((std::distance(begin,pos) % 2) == 1);
-		}
-
-		bool coversAll(std::size_t from, std::size_t to) {
-			if (from >= to) return true;
-			auto begin = data.begin();
-			auto end = data.end();
-			auto a = std::upper_bound(begin, end, from);
-			auto b = std::upper_bound(begin, end, to-1);
-			return a == b && a != end && ((std::distance(begin,a) % 2) == 1);
-		}
-
-		bool coversAny(std::size_t from, std::size_t to) {
-			if (from >= to) return false;
-			auto begin = data.begin();
-			auto end = data.end();
-			auto a = std::upper_bound(begin, end, from);
-			auto b = std::upper_bound(begin, end, to-1);
-			return a < b || (a == b && a != end && ((std::distance(begin,a) % 2) == 1));
-		}
-
-		void swap(Intervals& other) {
-			data.swap(other.data);
-		}
-
-		friend std::ostream& operator<<(std::ostream& out, const Intervals& cur) {
-			out << "{";
-			for(unsigned i=0; i<cur.data.size(); i+=2) {
-				if (i != 0) out << ",";
-				out << "[" << cur.data[i] << "-" << cur.data[i+1] << "]";
+			/**
+			 * Tests whether any the points within the range [from,...,to) are covered by this intervals.
+			 */
+			bool coversAny(std::size_t from, std::size_t to) const {
+				if (from >= to) return false;
+				auto begin = data.begin();
+				auto end = data.end();
+				auto a = std::upper_bound(begin, end, from);
+				auto b = std::upper_bound(begin, end, to-1);
+				return a < b || (a == b && a != end && ((std::distance(begin,a) % 2) == 1));
 			}
-			return out << "}";
-		}
 
-	};
+			/**
+			 * Swaps the content of this interval with the given one.
+			 */
+			void swap(Intervals& other) {
+				data.swap(other.data);
+			}
+
+			/**
+			 * Enables the printing of the list of intervals.
+			 */
+			friend std::ostream& operator<<(std::ostream& out, const Intervals& cur) {
+				out << "{";
+				for(unsigned i=0; i<cur.data.size(); i+=2) {
+					if (i != 0) out << ",";
+					out << "[" << cur.data[i] << "-" << cur.data[i+1] << "]";
+				}
+				return out << "}";
+			}
+
+		};
+
+	} // end namespace detail
 
 
-
+	/**
+	 * A large array is an array of objects of type T which can be manually allocated or discarded. The memory
+	 * requirements of the array only covers those elements which have been marked active and have actually been used.
+	 */
 	template<typename T>
 	class LargeArray {
 
@@ -232,7 +274,7 @@ namespace utils {
 		/**
 		 * The list of active ranges in this large array (for which the memory is kept alive).
 		 */
-		Intervals active_ranges;
+		detail::Intervals active_ranges;
 
 	public:
 
@@ -347,28 +389,31 @@ namespace utils {
 			}
 		}
 
+		/**
+		 * Provides mutable access to the element at the given position.
+		 */
 		T& operator[](std::size_t pos) {
 			return data[pos];
 		}
 
+		/**
+		 * Provides read-only access to the element at the given position.
+		 */
 		const T& operator[](std::size_t pos) const {
 			return data[pos];
 		}
 
 	private:
 
+		/**
+		 * Determines the memory page size of the system.
+		 */
 		static long getPageSize() {
 			static const long PAGE_SIZE = sysconf(_SC_PAGESIZE);
 			return PAGE_SIZE;
 		}
 
-		bool isActiveIndex(std::size_t idx) const {
-			return active_ranges.covers(idx);
-		}
-
 	};
-
-
 
 
 } // end namespace utils
