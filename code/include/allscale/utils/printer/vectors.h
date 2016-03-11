@@ -1,13 +1,15 @@
 #pragma once
 
-#include <utility>
+#include <vector>
 #include <iostream>
+
+#include "allscale/utils/printer/join.h"
 
 namespace std {
 
-	template<typename A,typename B>
-	ostream& operator<<(ostream& out, const pair<A,B>& data) {
-		return out << "[" << data.first << "," << data.second << "]";
+	template<typename E,typename A>
+	ostream& operator<<(ostream& out, const vector<E,A>& data) {
+		return out << "[" << allscale::utils::join(",", data) << "]";
 	}
 
 }
