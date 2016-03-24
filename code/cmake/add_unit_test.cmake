@@ -27,7 +27,7 @@ macro ( add_unit_test case_name ut_prefix )
 			URL http://googletest.googlecode.com/files/gtest-${GTEST_VERSION}.zip
 			PREFIX ${GTEST_PREFIX} 
 			INSTALL_COMMAND "" #make gtest gtest_main
-			CMAKE_ARGS -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
+			CMAKE_ARGS -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
 			BUILD_BYPRODUCTS
 				${gtest_lib}
 				${gtest_main_lib}
