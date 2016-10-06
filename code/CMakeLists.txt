@@ -32,7 +32,6 @@ foreach ( exec_file ${executables})
         add_executable( ${exec_name} ${exec_file}  )
 
 	target_link_libraries(${case_name} parec_lib)
-	target_link_libraries(${case_name} ${pthread_lib})
 	
 endforeach(exec_file)
 
@@ -47,7 +46,6 @@ foreach ( case_file ${test_cases})
 	add_executable(${case_name} ${case_file})
 
 	target_link_libraries(${case_name} parec_lib)
-	target_link_libraries(${case_name} ${pthread_lib})
 	target_link_libraries(${case_name} gomp)
 	target_link_libraries(${case_name} cilkrts)
 
