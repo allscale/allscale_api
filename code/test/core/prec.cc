@@ -383,7 +383,7 @@ namespace core {
 		return prec(
 				fun(
 					[](int x) { return x < 2; },
-					[](int x) { return fib_seq(x); },
+					[](int x) { int res =1; for(int i=1; i<=x; ++i) { res*=i; }; return res; },
 					[](int x, const fun_type& f) { return x * f(x-1).get(); }
 				)
 		)(x).get();
