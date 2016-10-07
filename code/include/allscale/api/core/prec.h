@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <vector>
 
 #include "allscale/utils/functional_utils.h"
 #include "allscale/utils/vector_utils.h"

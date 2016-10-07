@@ -45,7 +45,7 @@ namespace user {
 			data[i]++;
 		});
 
-		// check that all have been updated
+		// check that non so far has been updated
 		for(const auto& cur : data) {
 			EXPECT_EQ(1,cur);
 		}
