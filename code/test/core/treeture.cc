@@ -44,42 +44,62 @@ namespace core {
 		EXPECT_EQ(x,y);
 	}
 
-	TEST(Treeture, Basic) {
+	TEST(Treeture, Immediates) {
 
-		// a simple done test
-		treeture test = done();
-		test.wait();
+		treeture<void> t1 = done();
+		t1.wait();
 
+		treeture<int> t2 = done(12);
+		EXPECT_EQ(12, t2.get());
+
+		treeture<std::string> t3 = done(std::string("Hello"));
+		EXPECT_EQ("Hello",t3.get());
+	}
+
+	TEST(Treeture, SimpleAction) {
+
+		// test a simple computation action
+		treeture<int> t1 = spawn([](){ return 12; });
+		EXPECT_EQ(12, t1.get());
+
+		// test a void action
 		int x = 0;
-		treeture job = spawn([&](){ x++; });
+		treeture<void> t2 = spawn([&](){ x = 1; });
 		EXPECT_EQ(0,x);
-		job.wait();
-		EXPECT_EQ(1,x);
-		job.wait();
+		t2.get();
 		EXPECT_EQ(1,x);
 
-		int y = 0;
-		treeture another = spawn(
-				[&](){ y++; },
-				[&](){ return spawn([&](){ y++; }); }
+	}
+
+	TEST(Treeture, SplitableAction) {
+
+		// test a simple computation action
+		treeture<int> t1 = spawn(
+				[](){ return 12; },
+				[](){ return spawn([](){ return 12; }); }
 		);
-		EXPECT_EQ(0,y);
-		another.wait();
-		EXPECT_EQ(1,y);
-		another.wait();
-		EXPECT_EQ(1,y);
+		EXPECT_EQ(12, t1.get());
 
+		// test a void action
+		int x = 0;
+		treeture<void> t2 = spawn(
+				[&](){ x = 1; },
+				[&](){ return spawn([&](){ x = 1; }); }
+		);
+		EXPECT_EQ(0,x);
+		t2.get();
+		EXPECT_EQ(1,x);
 	}
 
 
 	TEST(Treeture, Navigation) {
 
-		treeture test = done();
+		auto test = done();
 		test.descentLeft().descentRight();
 		test.wait();
 
 		int x = 0;
-		treeture job = spawn([&](){ x++; });
+		auto job = spawn([&](){ x++; });
 		EXPECT_EQ(0,x);
 		job.wait();
 		EXPECT_EQ(1,x);
@@ -151,94 +171,112 @@ namespace core {
 
 	}
 
-//	treeture<int> naive_fib(int x) {
-//		if (x <= 1) return done(x);
-//		return add(naive_fib(x-1),naive_fib(x-2));
-//	}
+	TEST(Treeture, Add) {
 
-//	TEST(Treeture, Fib) {
-//
-//		EXPECT_EQ(1, naive_fib(1).get());
-//		EXPECT_EQ(1, naive_fib(2).get());
-//		EXPECT_EQ(2, naive_fib(3).get());
-//		EXPECT_EQ(3, naive_fib(4).get());
-//		EXPECT_EQ(5, naive_fib(5).get());
-//		EXPECT_EQ(8, naive_fib(6).get());
-//		EXPECT_EQ(13, naive_fib(7).get());
-//		EXPECT_EQ(21, naive_fib(8).get());
-//
-//		EXPECT_EQ(832040, naive_fib(30).get());
-//
-//	}
+		auto t1 = add(
+			[](){ return 12; },
+			[](){ return 14; }
+		);
 
+		EXPECT_EQ(26,t1.get());
 
-//	TEST(Treeture, Ordering) {
-//
-//		std::vector<int> res;
-//
-//		auto w1 = [&](){
-//			res.push_back(1);
-//		};
-//		auto w2 = [&](){
-//			res.push_back(2);
-//		};
-//		auto w3 = [&](){
-//			res.push_back(3);
-//		};
-//
-//		// test an atomic step
-//		atom(w1);
-//		EXPECT_EQ(std::vector<int>({1}), res);
-//
-//		// test a sequence
-//		seq(
-//				atom(w2),
-//				atom(w3),
-//				atom(w1)
-//		);
-//		EXPECT_EQ(std::vector<int>({1,2,3,1}), res);
-//
-//		res.clear();
-//		res.resize(3);
-//
-//		// test a parallel
-//		par(
-//				atom([&](){ res[0] = 1; }),
-//				atom([&](){ res[1] = 2; }),
-//				atom([&](){ res[2] = 3; })
-//		);
-//		EXPECT_EQ(std::vector<int>({1,2,3}), res);
-//
-//	}
+		auto t2 = add(
+			[](){ return 1.2; },
+			[](){ return 4.3; }
+		);
 
-//	TEST(Treeture, TaskReferences) {
-//
-//		using Ref = typename treeture<int>::task_reference;
-//
-//		Ref t;
-//		EXPECT_FALSE(t.valid());
-//
-//		{
-//			treeture<int> f = spawn([]() { return 12; });
-//
-//			// obtain task reference of treeture
-//			t = f.getTaskReference();
-//
-//			EXPECT_TRUE(t.valid());
-//
-//			EXPECT_FALSE(f.isDone());
-//			EXPECT_FALSE(t.isDone());
-//
-//			t.wait();
-//			EXPECT_TRUE(f.isDone());
-//			EXPECT_TRUE(t.isDone());
-//		}
-//
-//		// task reference has to survive the treeture if necessary
-//		EXPECT_TRUE(t.valid());
-//		EXPECT_TRUE(t.isDone());
-//
-//	}
+		EXPECT_EQ(1.2+4.3,t2.get());
+
+	}
+
+	treeture<int> naive_fib(int x) {
+		if (x <= 1) return done(x);
+		return add(naive_fib(x-1),naive_fib(x-2));
+	}
+
+	TEST(Treeture, NaiveFib) {
+
+		EXPECT_EQ(1, naive_fib(1).get());
+		EXPECT_EQ(1, naive_fib(2).get());
+		EXPECT_EQ(2, naive_fib(3).get());
+		EXPECT_EQ(3, naive_fib(4).get());
+		EXPECT_EQ(5, naive_fib(5).get());
+		EXPECT_EQ(8, naive_fib(6).get());
+		EXPECT_EQ(13, naive_fib(7).get());
+		EXPECT_EQ(21, naive_fib(8).get());
+
+		EXPECT_EQ(832040, naive_fib(30).get());
+
+	}
+
+	int fib(int x) {
+		if (x<=1) return x;
+		return fib(x-1)+fib(x-2);
+	}
+
+	treeture<int> pfib(int x) {
+		if (x<=1) return done(x);
+		return spawn(
+				[=]() { return fib(x); },
+				[=]() {
+					return add(pfib(x-1),pfib(x-2));
+				}
+		);
+	}
+
+	TEST(Treeture, SplitFib) {
+
+		EXPECT_EQ(1, pfib(1).get());
+		EXPECT_EQ(1, pfib(2).get());
+		EXPECT_EQ(2, pfib(3).get());
+		EXPECT_EQ(3, pfib(4).get());
+		EXPECT_EQ(5, pfib(5).get());
+		EXPECT_EQ(8, pfib(6).get());
+		EXPECT_EQ(13, pfib(7).get());
+		EXPECT_EQ(21, pfib(8).get());
+
+		EXPECT_EQ(832040, pfib(30).get());
+
+	}
+
+	int N = 40;
+
+	TEST(Treeture, Bench_Seq) {
+		EXPECT_NE(0,fib(N));
+	}
+
+	TEST(Treeture, Bench_Par) {
+		EXPECT_NE(0,pfib(N).get());
+	}
+
+	TEST(Treeture, Ordering) {
+
+		std::vector<int> res;
+
+		// test an atomic step
+		spawn([&](){ res.push_back(1); }).get();
+		EXPECT_EQ(std::vector<int>({1}), res);
+
+		// test a sequence
+		sequence(
+			[&](){ res.push_back(2); },
+			[&](){ res.push_back(3); },
+			[&](){ res.push_back(1); }
+		).get();
+		EXPECT_EQ(std::vector<int>({1,2,3,1}), res);
+
+		res.clear();
+		res.resize(3);
+
+		// test a parallel
+		parallel(
+			[&](){ res[0] = 1; },
+			[&](){ res[1] = 2; },
+			[&](){ res[2] = 3; }
+		).get();
+		EXPECT_EQ(std::vector<int>({1,2,3}), res);
+
+	}
 
 } // end namespace core
 } // end namespace api

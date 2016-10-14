@@ -1,159 +1,260 @@
 #pragma once
 
+#include <array>
+#include <atomic>
 #include <bitset>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <type_traits>
 
-#ifdef __cilk
-    #include <cilk/cilk.h>
-#else
-	#define cilk_spawn
-	#define cilk_sync
-#endif
+#include "allscale/api/core/impl/reference/lock.h"
 
 namespace allscale {
 namespace api {
 namespace core {
+
 
 	// ---------------------------------------------------------------------------------------------
 	//											  Tasks
 	// ---------------------------------------------------------------------------------------------
 
 
+	class TaskBase;
+
+	using TaskBasePtr = std::shared_ptr<TaskBase>;
+
+	template<typename T>
 	class Task;
-	using TaskPtr = std::shared_ptr<Task>;
+
+	template<typename T>
+	using TaskPtr = std::shared_ptr<Task<T>>;
 
 
 	// the RT's interface to a task
-	class Task {
+	class TaskBase {
 
-		template<typename Process, typename Split>
-		friend class SplitableTask;
+		std::atomic<bool> done;
 
-		bool done;
-
-	protected:
-
-		TaskPtr left;
-		TaskPtr right;
-
-		bool parallel;
-
-		Task(bool done) : done(done), parallel(false) {};
-
-		Task(TaskPtr&& left, TaskPtr&& right, bool parallel)
-			: done(false), left(left), right(right), parallel(parallel) {}
+		TaskBasePtr left;
+		TaskBasePtr right;
 
 	public:
 
-		virtual ~Task(){};
+		TaskBase(bool done) : done(done) {}
+		TaskBase(TaskBasePtr&& left, TaskBasePtr&& right)
+			: done(false), left(std::move(left)), right(std::move(right)) {}
 
-		void process() {
+		virtual ~TaskBase() {}
+
+		virtual void process() {
 			if (done) return;
 			compute();
 			done = true;
-		}
-
-		virtual void compute() {
-
-			assert(left || right);
-
-			// if there is only one child => run this one
-			if (!right) {
-				left->process();
-				return;
-			}
-
-			// if there are more => run both -- TODO: if necessary, in parallel
-			if (parallel) {
-				cilk_spawn left->process();
-				right->process();
-				cilk_sync;
-			} else {
-				left->process();
-				right->process();
-			}
+			left.reset();
+			right.reset();
 		}
 
 		virtual void split() {}
 
-		TaskPtr getLeft() const {
+		void wait();
+
+		TaskBasePtr getLeft() const {
 			return left;
 		}
 
-		TaskPtr getRight() const {
+		TaskBasePtr getRight() const {
 			return right;
 		}
 
-		bool runsSubTasksParallel() const {
-			return parallel;
+	protected:
+
+		virtual void compute() =0;
+
+		void setLeft(const TaskBasePtr& left) {
+			this->left = left;
 		}
+
+		void setRight(const TaskBasePtr& right) {
+			this->right = right;
+		}
+
+		void processSubTasks(bool parallel);
 
 	};
 
 
-	template<typename Process>
-	class SimpleTask : public Task {
+	// a task computing a value of type T
+	template<typename T>
+	class Task : public TaskBase {
+
+		T value;
+
+	public:
+
+		Task() : TaskBase(false) {}
+
+		Task(const T& value)
+			: TaskBase(true), value(value) {}
+
+		Task(TaskBasePtr&& left, TaskBasePtr&& right)
+			: TaskBase(std::move(left),std::move(right)) {}
+
+
+		virtual ~Task(){};
+
+		const T& getValue() const {
+			return value;
+		}
+
+	protected:
+
+		void compute() override {
+			value = computeValue();
+		}
+
+		virtual T computeValue() {
+			return value;
+		};
+
+	};
+
+	template<>
+	class Task<void> : public TaskBase {
+	public:
+
+		Task() : TaskBase(false) {}
+
+		Task(TaskBasePtr&& left, TaskBasePtr&& right)
+			: TaskBase(std::move(left),std::move(right)) {}
+
+		virtual ~Task(){};
+
+		void getValue() const {
+			// nothing
+		}
+
+	protected:
+
+		void compute() override {
+			computeValue();
+		}
+
+		virtual void computeValue() {
+		};
+
+	};
+
+
+	template<
+		typename Process,
+		typename R = std::result_of_t<Process()>
+	>
+	class SimpleTask : public Task<R> {
 
 		Process task;
 
 	public:
 
-		SimpleTask() : Task(true) {}
+		SimpleTask(const Process& task) : task(task) {}
 
-		SimpleTask(Process c)
-			: Task(false), task(c) {}
-
-
-		void compute() override {
-			task();
+		R computeValue() override {
+			return task();
 		}
 
 	};
 
 
-	template<typename Process, typename Split>
-	class SplitableTask : public Task {
+	template<
+		typename Process,
+		typename Split,
+		typename R = std::result_of_t<Process()>
+	>
+	class SplitableTask : public Task<R> {
 
 		Process task;
 		Split decompose;
 
+		TaskPtr<R> subTask;
+
 	public:
 
-		SplitableTask() : Task(true) {}
+		SplitableTask(const Process& c, const Split& d)
+			: task(c), decompose(d) {}
 
-		SplitableTask(Process c, Split d)
-			: Task(false), task(c), decompose(d) {}
-
-		void compute() override {
-
-			// if not split
-			if (!left) {
-				task();
-				return;
+		R computeValue() override {
+			// if split
+			if (subTask) {
+				// compute sub-task
+				subTask->process();
+				return subTask->getValue();
 			}
-
-			// otherwise, run default
-			Task::compute();
+			return task();
 		}
-
 
 		void split() override;
 
 	};
 
-	class SplitTask : public Task {
+	template<typename R, typename A, typename B, typename C>
+	class SplitTask : public Task<R> {
+
+		Task<A>& left;
+		Task<B>& right;
+
+		C merge;
+
+		bool parallel;
 
 	public:
 
-		SplitTask(TaskPtr&& left, TaskPtr&& right, bool parallel)
-			: Task(std::move(left),std::move(right), parallel) {}
+		SplitTask(TaskPtr<A>&& left, TaskPtr<B>&& right, C&& merge, bool parallel)
+			: Task<R>(std::move(left),std::move(right)),
+			  left(static_cast<Task<A>&>(*this->getLeft())),
+			  right(static_cast<Task<B>&>(*this->getRight())),
+			  merge(merge),
+			  parallel(parallel) {}
+
+		R computeValue() override {
+			this->processSubTasks(parallel);
+			return merge(left.getValue(),right.getValue());
+		}
 
 		void split() override {
-			assert(false);		// should not be reached
+			// ignore
 		}
 
 	};
+
+	template<typename A, typename B>
+	class SplitTask<void,A,B,void> : public Task<void> {
+
+		bool parallel;
+
+	public:
+
+		SplitTask(TaskBasePtr&& left, TaskBasePtr&& right, bool parallel)
+			: Task<void>(std::move(left),std::move(right)), parallel(parallel) {}
+
+		void computeValue() override {
+			this->processSubTasks(parallel);
+		}
+
+		void split() override {
+			// ignore
+		}
+
+	};
+
+	template<typename A, typename B, typename C, typename R = std::result_of_t<C(A,B)>>
+	TaskPtr<R> make_split_task(TaskPtr<A>&& left, TaskPtr<B>&& right, C&& merge, bool parallel) {
+		return std::make_shared<SplitTask<R,A,B,C>>(std::move(left), std::move(right), std::move(merge), parallel);
+	}
+
+	inline TaskPtr<void> make_split_task(TaskBasePtr&& left, TaskBasePtr&& right, bool parallel) {
+		return std::make_shared<SplitTask<void,void,void,void>>(std::move(left), std::move(right), parallel);
+	}
+
 
 
 	// ---------------------------------------------------------------------------------------------
@@ -193,70 +294,102 @@ namespace core {
 
 	};
 
+	template<typename T>
+	class treeture;
 
-	class treeture {
 
-		TaskPtr task;
+	template<>
+	class treeture<void> {
+
+		template<typename Process, typename Split, typename R>
+		friend class SplitableTask;
+
+		TaskBasePtr task;
 
 		BitQueue queue;
 
+		treeture() {}
+
+		treeture(const TaskBasePtr& t) : task(t) {}
+		treeture(TaskBasePtr&& task) : task(std::move(task)) {}
+
 	public:
 
-		treeture() {}
+		using value_type = void;
+
 		treeture(const treeture&) = default;
 		treeture(treeture&& other) = default;
 
 		treeture& operator=(const treeture&) = default;
 		treeture& operator=(treeture&& other) = default;
 
-		void wait() {
-			narrow();	// see whether we can further descent
-			if (task) task->process();
+		// support implicit cast to void treeture
+		template<typename T>
+		treeture(const treeture<T>& t) : task(t.task) {}
+
+		// support implicit cast to void treeture
+		template<typename T>
+		treeture(treeture<T>&& t) : task(std::move(t.task)) {}
+
+		void wait();
+
+		void get() {
+			wait();
 		}
 
 		treeture& descentLeft() {
+			if (!task) return *this;
 			queue.put(0);
 			return *this;
 		}
 
 		treeture& descentRight() {
+			if (!task) return *this;
 			queue.put(1);
 			return *this;
 		}
 
 		treeture getLeft() const {
-			if (task) return *this;
 			return treeture(*this).descentLeft();
 		}
 
 		treeture getRight() const {
-			if (task) return *this;
 			return treeture(*this).descentRight();
+		}
+
+
+		// -- factories --
+
+		static treeture done() {
+			return treeture();
+		}
+
+		template<typename Action>
+		static treeture spawn(const Action& a) {
+			return treeture(TaskBasePtr(std::make_shared<SimpleTask<Action>>(a)));
+		}
+
+		template<typename Process, typename Split>
+		static treeture spawn(const Process& p, const Split& s) {
+			return treeture(TaskBasePtr(std::make_shared<SplitableTask<Process,Split>>(p,s)));
+		}
+
+		template<typename A, typename B>
+		static treeture parallel(treeture<A>&& a, treeture<B>&& b) {
+			return treeture(TaskBasePtr(make_split_task(std::move(a.task),std::move(b.task),true)));
+		}
+
+		template<typename A, typename B>
+		static treeture sequence(treeture<A>&& a, treeture<B>&& b) {
+			return treeture(TaskBasePtr(make_split_task(std::move(a.task),std::move(b.task),false)));
 		}
 
 	private:
 
-		template<typename Process, typename Split>
-		friend class SplitableTask;
-
-		template<typename Action>
-		friend treeture spawn(const Action&);
-
-		template<typename Process, typename Split>
-		friend treeture spawn(const Process&, const Split&);
-
-		template<typename A, typename B>
-		friend treeture sequence(A&&, B&&);
-
-		template<typename A, typename B>
-		friend treeture parallel(A&&, B&&);
-
-		treeture(TaskPtr&& task) : task(task) {}
-
 		void narrow() {
 			if (!task) return;
 			while(!queue.empty()) {
-				TaskPtr next = (queue.get()) ? task->getLeft() : task->getRight();
+				TaskBasePtr next = (queue.get()) ? task->getLeft() : task->getRight();
 				if (!next) return;
 				queue.pop();
 				task = next;
@@ -265,309 +398,599 @@ namespace core {
 
 	};
 
-	template<typename Process, typename Split>
-	void SplitableTask<Process,Split>::split() {
-		// split this task
-		const treeture& sub = decompose();
-		assert(sub.queue.empty());
+	template<typename T>
+	class treeture {
 
-		// check whether the split just produced a single task
-		if (!sub.task->left) {
-			// this becomes the only child
-			this->left = std::move(sub.task);
-		} else {
-			// register left and right
-			this->left = std::move(sub.task->left);
-			this->right = std::move(sub.task->right);
+		friend class treeture<void>;
 
-			// copy parallel flag
-			this->parallel = sub.task->runsSubTasksParallel();
+		template<typename Process, typename Split, typename R>
+		friend class SplitableTask;
+
+		TaskPtr<T> task;
+
+		treeture(const T& value) : task(std::make_shared<Task<T>>(value)) {}
+
+		treeture(TaskPtr<T>&& task) : task(std::move(task)) {}
+
+	public:
+
+		using value_type = T;
+
+		treeture(const treeture&) = delete;
+		treeture(treeture&& other) : task(std::move(other.task)) {}
+
+		treeture& operator=(const treeture&) = delete;
+		treeture& operator=(treeture&& other) {
+			task = std::move(other.task);
+			return *this;
 		}
-	}
 
+		void wait();
+
+		const T& get() {
+			wait();
+			return task->getValue();
+		}
+
+		treeture<void> getLeft() const {
+			return treeture<void>(*this).getLeft();
+		}
+
+		treeture<void> getRight() const {
+			return treeture<void>(*this).getRight();
+		}
+
+		// -- factories --
+
+		static treeture done(const T& value) {
+			return treeture(value);
+		}
+
+		template<typename Action>
+		static treeture spawn(const Action& a) {
+			return treeture(TaskPtr<T>(std::make_shared<SimpleTask<Action>>(a)));
+		}
+
+		template<typename Process, typename Split>
+		static treeture spawn(const Process& p, const Split& s) {
+			return treeture(TaskPtr<T>(std::make_shared<SplitableTask<Process,Split>>(p,s)));
+		}
+
+		template<typename A, typename B, typename C>
+		static treeture combine(treeture<A>&& a, treeture<B>&& b, C&& merge, bool parallel = true) {
+			return treeture(make_split_task(std::move(a.task),std::move(b.task),std::move(merge),parallel));
+		}
+
+	};
+
+	template<typename Process, typename Split, typename R>
+	void SplitableTask<Process,Split,R>::split() {
+		// decompose this task
+		subTask = std::static_pointer_cast<Task<R>>(decompose().task);
+
+		// mutate this task into a split task
+		this->setLeft(subTask->getLeft());
+		this->setRight(subTask->getRight());
+	}
 
 	// ---------------------------------------------------------------------------------------------
 	//											Operators
 	// ---------------------------------------------------------------------------------------------
 
 
-
-	inline treeture done() {
-		return treeture();
+	inline treeture<void> done() {
+		return treeture<void>::done();
 	}
 
-	template<typename Action>
-	treeture spawn(const Action& a) {
-		return TaskPtr(std::make_shared<SimpleTask<Action>>(a));
-	}
-
-	template<typename Process, typename Split>
-	treeture spawn(const Process& a, const Split& b) {
-		return TaskPtr(std::make_shared<SplitableTask<Process,Split>>(a,b));
-	}
-
-	inline treeture to_treeture(treeture&& a) {
-		return std::move(a);
-	}
-
-	template<typename A>
-	inline treeture to_treeture(A&& a) {
-		return spawn(a);
-	}
-
-	inline treeture parallel() {
-		return done();
-	}
-
-	template<typename A>
-	inline treeture parallel(A&& a) {
-		return to_treeture(a);
-	}
-
-	template<typename A, typename B>
-	inline treeture parallel(A&& a, B&& b) {
-		return treeture(std::make_shared<SplitTask>(std::move(to_treeture(std::move(a)).task),std::move(to_treeture(std::move(b)).task),true));
-	}
-
-	template<typename A, typename ... Rest>
-	inline treeture parallel(A&& first, Rest&& ... rest) {
-		return parallel(to_treeture(std::move(first)), parallel(rest...));
-	}
-
-	inline treeture sequence() {
-		return done();
-	}
-
-	template<typename A>
-	inline treeture sequence(A&& a) {
-		return a;
-	}
-
-	template<typename A, typename B>
-	inline treeture sequence(A&& a, B&& b) {
-		return treeture(std::make_shared<SplitTask>(std::move(to_treeture(std::move(a)).task),std::move(to_treeture(std::move(b)).task),false));
-	}
-
-	template<typename A, typename ... Rest>
-	inline treeture sequence(A&& first, Rest&& ... rest) {
-		return sequence(to_treeture(std::move(first)), sequence(rest...));
-	}
-/*
 	template<typename T>
-	class Task;
+	treeture<T> done(const T& value) {
+		return treeture<T>::done(value);
+	}
 
-	template<typename T, typename A = void, typename B = void>
-	class treeture;
+
+	template<
+		typename Action,
+		typename R = std::result_of_t<Action()>
+	>
+	treeture<R> spawn(const Action& a) {
+		return treeture<R>::spawn(a);
+	}
+
+	template<
+		typename Process,
+		typename Split,
+		typename R = std::result_of_t<Process()>
+	>
+	treeture<R> spawn(const Process& p, const Split& s) {
+		return treeture<R>::spawn(p,s);
+	}
+
+
 
 	namespace detail {
 
+		template<typename R>
+		treeture<R> to_treeture(treeture<R>&& a) {
+			return std::move(a);
+		}
+
+		template<typename A, typename R = std::result_of_t<A()>>
+		treeture<R> to_treeture(A&& a) {
+			return spawn(a);
+		}
+
 		template<typename T>
-		class TaskBase {
-		public:
-			void wait() const {}
+		struct value_type {
+			using type = typename std::result_of_t<T()>;
 		};
 
-		template<typename T, typename A, typename B>
-		class treeture_base {
+		template<typename T>
+		struct value_type<treeture<T>> {
+			using type = T;
+		};
 
-			enum class Kind {
-				Atomic,
-				Sequential,
-				Parallel
-			};
+		template<typename T>
+		using value_type_t = typename value_type<T>::type;
 
-			Kind kind;
+	}
 
-			mutable bool done;
 
-			// child tasks (potential)
-			std::unique_ptr<treeture<A>> left;
-			std::unique_ptr<treeture<B>> right;
+	inline treeture<void> parallel() {
+		return done();
+	}
 
-		protected:
+	template<typename A>
+	treeture<void> parallel(A&& a) {
+		return detail::to_treeture(std::move(a));
+	}
 
-			Task<T> task;
+	template<typename A, typename B>
+	treeture<void> parallel(A&& a, B&& b) {
+		return treeture<void>::parallel(detail::to_treeture(std::move(a)),detail::to_treeture(std::move(b)));
+	}
+
+	template<typename F, typename ... Rest>
+	treeture<void> parallel(F&& first, Rest&& ... rest) {
+		// TODO: balance this tree
+		return parallel(first, parallel(rest...));
+	}
+
+
+	inline treeture<void> sequence() {
+		return done();
+	}
+
+	template<typename A>
+	treeture<void> sequence(A&& a) {
+		return detail::to_treeture(std::move(a));
+	}
+
+	template<typename A, typename B>
+	treeture<void> sequence(A&& a, B&& b) {
+		return treeture<void>::sequence(detail::to_treeture(std::move(a)),detail::to_treeture(std::move(b)));
+	}
+
+	template<typename F, typename ... Rest>
+	treeture<void> sequence(F&& first, Rest&& ... rest) {
+		// TODO: balance this tree
+		return sequence(std::move(first), sequence(rest...));
+	}
+
+	template<typename A, typename B, typename R = detail::value_type_t<A>>
+	treeture<R> add(A&& a, B&& b) {
+		return treeture<R>::combine(detail::to_treeture(std::move(a)),detail::to_treeture(std::move(b)),[](R a, R b) { return a + b; });
+	}
+
+
+
+	// ---------------------------------------------------------------------------------------------
+	//											Runtime
+	// ---------------------------------------------------------------------------------------------
+
+	namespace runtime {
+
+		// -- Declarations --
+
+		const bool DEBUG = false;
+
+		std::mutex g_log_mutex;
+
+		#define LOG(MSG) \
+			{  \
+				if (DEBUG) { \
+					std::thread::id this_id = std::this_thread::get_id(); \
+					std::lock_guard<std::mutex> lock(g_log_mutex); \
+					std::cout << "Thread " << this_id << ": " << MSG << "\n"; \
+				} \
+			}
+
+		const bool DEBUG_SCHEDULE = false;
+
+		#define LOG_SCHEDULE(MSG) \
+			{  \
+				if (DEBUG_SCHEDULE) { \
+					std::thread::id this_id = std::this_thread::get_id(); \
+					std::lock_guard<std::mutex> lock(g_log_mutex); \
+					std::cout << "Thread " << this_id << ": " << MSG << "\n"; \
+				} \
+			}
+
+
+		// -----------------------------------------------------------------
+		//						    Worker Pool
+		// -----------------------------------------------------------------
+
+		struct Worker;
+
+		thread_local static Worker* tl_worker = nullptr;
+
+		static void setCurrentWorker(Worker& worker) {
+			tl_worker = &worker;
+		}
+
+		static Worker& getCurrentWorker();
+
+
+		template<typename T, size_t Capacity>
+		class SimpleQueue {
 
 		public:
 
-			void wait() const {
-				task.wait();
+			static const size_t capacity = Capacity;
+
+		private:
+
+			static const size_t buffer_size = capacity + 1;
+
+			mutable SpinLock lock;
+
+			std::array<T,buffer_size> data;
+
+			size_t front;
+			size_t back;
+
+		public:
+
+			SimpleQueue() : lock(), front(0), back(0) {
+				for(auto& cur : data) cur = T();
+			}
+
+			bool empty() const {
+				return front == back;
+			}
+			bool full() const {
+				return ((back + 1) % buffer_size) == front;
+			}
+
+			bool push_front(const T& t) {
+				lock.lock();
+				if (full()) {
+					lock.unlock();
+					return false;
+				}
+				front = (front - 1 + buffer_size) % buffer_size;
+				data[front] = t;
+				lock.unlock();
+				return true;
+			}
+
+			bool push_back(const T& t) {
+				lock.lock();
+				if (full()) {
+					lock.unlock();
+					return false;
+				}
+				data[back] = t;
+				back = (back + 1) % buffer_size;
+				lock.unlock();
+				return true;
+			}
+
+			T pop_front() {
+				lock.lock();
+				if (empty()) {
+					lock.unlock();
+					return T();
+				}
+				T res(std::move(data[front]));
+				front = (front + 1) % buffer_size;
+				lock.unlock();
+				return res;
+			}
+
+			T pop_back() {
+				lock.lock();
+				if (empty()) {
+					lock.unlock();
+					return T();
+				}
+				back = (back - 1 + buffer_size) % buffer_size;
+				T res(std::move(data[back]));
+				lock.unlock();
+				return res;
+			}
+
+			size_t size() const {
+				lock.lock();
+				size_t res = (back >= front) ? (back - front) : (buffer_size - (front - back));
+				lock.unlock();
+				return res;
+			}
+
+			friend std::ostream& operator<<(std::ostream& out, const SimpleQueue& queue) {
+				return out << "[" << queue.data << "," << queue.front << " - " << queue.back << "]";
 			}
 
 		};
 
-	}
+		class WorkerPool;
 
-	template<typename T>
-	class Task : public detail::TaskBase<T> {
-		T value;
-	public:
-		T getResult() {
-			return value;
+		struct Worker {
+
+			WorkerPool& pool;
+
+			volatile bool alive;
+
+			SimpleQueue<TaskBasePtr,32> queue;
+
+			std::thread thread;
+
+		public:
+
+			Worker(WorkerPool& pool)
+				: pool(pool), alive(true) { }
+
+			Worker(const Worker&) = delete;
+			Worker(Worker&&) = delete;
+
+			Worker& operator=(const Worker&) = delete;
+			Worker& operator=(Worker&&) = delete;
+
+			void start() {
+				thread = std::thread([&](){ run(); });
+			}
+
+			void poison() {
+				alive = false;
+			}
+
+			void join() {
+				thread.join();
+			}
+
+		private:
+
+			void run();
+
+		public:
+
+			void schedule(const TaskBasePtr& task);
+
+			bool schedule_step(bool steal = false);
+
+		};
+
+
+
+
+		class WorkerPool {
+
+			std::vector<Worker*> workers;
+
+			// tools for managing idle threads
+			std::mutex m;
+			std::condition_variable cv;
+
+			WorkerPool() {
+
+				int numWorkers = std::thread::hardware_concurrency();
+
+				// parse environment variable
+				if (char* val = std::getenv("NUM_WORKERS")) {
+					auto userDef = std::atoi(val);
+					if (userDef != 0) numWorkers = userDef;
+				}
+
+				// must be at least one
+				if (numWorkers < 1) numWorkers = 1;
+
+				// create workers
+				for(int i=0; i<numWorkers; ++i) {
+					workers.push_back(new Worker(*this));
+				}
+
+				// start workers
+				for(auto& cur : workers) cur->start();
+			}
+
+			~WorkerPool() {
+				// shutdown threads
+
+				// poison all workers
+				for(auto& cur : workers) {
+					cur->poison();
+				}
+
+				// make work available
+				workAvailable();
+
+				// wait for their death
+				for(auto& cur : workers) {
+					cur->join();
+				}
+
+				// free resources
+				for(auto& cur : workers) {
+					delete cur;
+				}
+
+			}
+
+		public:
+
+			static WorkerPool& getInstance() {
+				static WorkerPool pool;
+				return pool;
+			}
+
+			int getNumWorkers() const {
+				return workers.size();
+			}
+
+			Worker& getWorker(int i) {
+				return *workers[i];
+			}
+
+			Worker& getWorker() {
+				return getWorker(0);
+			}
+
+		protected:
+
+			friend Worker;
+
+			void waitForWork() {
+				std::unique_lock<std::mutex> lk(m);
+				cv.wait(lk);
+			}
+
+			void workAvailable() {
+				// wake up all workers
+				cv.notify_all();
+			}
+
+		};
+
+		static Worker& getCurrentWorker() {
+			if (tl_worker) return *tl_worker;
+			return WorkerPool::getInstance().getWorker();
 		}
-	};
 
-	template<>
-	class Task<void> : public detail::TaskBase<void> {
-	};
+		inline void Worker::run() {
+
+			// register worker
+			setCurrentWorker(*this);
+
+			// start processing loop
+			while(alive) {
+				// conduct a schedule step
+				if (!schedule_step(true)) {  	// only top-level conducts stealing
+					// there was nothing to do => go to sleep
+					pool.waitForWork();
+				}
+			}
+
+			// done
+
+		}
+
+		void Worker::schedule(const TaskBasePtr& task) {
+
+			// add task to queue
+			LOG_SCHEDULE( "Queue size before: " << queue.size() << "/" << queue.capacity );
+
+			// enqueue task into work queue
+			if (queue.push_back(task)) {
+				// signal available work
+				if (queue.size() > queue.capacity/2) {
+					pool.workAvailable();
+				}
+
+				// that's it
+				return;
+			}
+
+			// log new queue length
+			LOG_SCHEDULE( "Queue size after: " << queue.size() << "/" << queue.capacity );
 
 
-	template<typename T, typename A, typename B>
-	class treeture : public detail::treeture_base<T,A,B> {
-
-	public:
-
-		// --- Constructors ---
-
-		treeture() {}
-
-		treeture(const treeture&) = delete;
-
-		treeture(treeture&&) {}
-
-
-		// --- Operators ---
-
-		treeture& operator=(const treeture&) = delete;
-
-		treeture& operator=(treeture&&) {
-			return *this;
+			// since queue is full, process directly
+			task->process();
 		}
 
 
-		// --- treeture Operators ---
+		inline bool Worker::schedule_step(bool steal) {
 
-		T get() {
-			this->wait();
-			return this->task.getResult();
+			// process a task from the local queue
+			if (TaskBasePtr t = queue.pop_front()) {
+
+				// if the queue is not full => create more tasks
+				if (queue.size() < (queue.capacity*3)/4) {
+
+					LOG_SCHEDULE( "Splitting tasks @ queue size: " << queue.size() << "/" << queue.capacity );
+
+					// split task
+					t->split();
+				}
+
+				// process this task
+				t->process();
+				return true;
+			}
+
+			// if no stealing should be conducted => we are done
+			if (!steal) return false;
+
+			// check that there are other workers
+			int numWorker = pool.getNumWorkers();
+			if (numWorker <= 1) return false;
+
+			// otherwise, steal a task from another worker
+			Worker& other = pool.getWorker(rand() % numWorker);
+			if (this == &other) {
+				return schedule_step(steal);
+			}
+
+			// try to steal a task from another queue
+			if (TaskBasePtr t = other.queue.pop_front()) {
+				queue.push_back(t);		// add to local queue
+				return schedule_step();	// continue scheduling - no stealing
+			}
+
+			// no task found => wait a moment
+			cpu_relax();
+			return false;
 		}
 
-	};
+	}
 
-	template<typename A, typename B>
-	class treeture<void,A,B> : public detail::treeture_base<void,A,B> {
-
-	public:
-
-		// --- Constructors ---
-
-		treeture() {}
-
-		treeture(const treeture&) = delete;
-
-		treeture(treeture&&) {}
-
-
-		// --- Operators ---
-
-		treeture& operator=(const treeture&) = delete;
-
-		treeture& operator=(treeture&&) {
-			return *this;
+	inline void TaskBase::processSubTasks(bool parallel) {
+		if (!parallel) {
+			// run sequentially
+			if (left) left->process();
+			if (right) right->process();
+			return;
 		}
 
+		// run in parallel
+		if (left)  runtime::getCurrentWorker().schedule(left);
+		if (right) runtime::getCurrentWorker().schedule(right);
 
-		// --- treeture Operators ---
+		// wait for them to finish
+		if (left)  left->wait();
+		if (right) right->wait();
+	}
 
-		void get() {
-			this->wait();
+	inline void TaskBase::wait() {
+		while(!done) {
+			// make some progress
+			runtime::getCurrentWorker().schedule_step();
 		}
-
-	};
-
-
-	// --- template utilities ---
-
-	template<typename T>
-	struct remove_treeture {
-		using type = T;
-	};
-
-	template<typename T>
-	struct remove_treeture<treeture<T>> {
-		using type = T;
-	};
-
-	template<typename T>
-	using remove_treeture_t = typename remove_treeture<T>::type;
-
-
-	// --- factories ---
-
-	static treeture<void> done() { return treeture<void>(); }
-
-	template<typename T>
-	treeture<T> done(const T& t) {
-		return treeture<T>();
 	}
 
 	template<typename T>
-	treeture<T> done(T&& t) {
-		return treeture<T>();
+	void treeture<T>::wait() {
+		if (!task) return;
+		runtime::getCurrentWorker().schedule(task);
+		task->wait();
 	}
 
-
-	template<
-		typename Progress,
-		typename Split,
-		typename R = typename std::enable_if_t<
-				std::is_same<
-					std::result_of_t<Progress()>,
-					remove_treeture_t<std::result_of_t<Split()>>
-				>::value,
-				std::result_of_t<Progress()>
-			>
-	>
-	treeture<R> spawn(const Progress& progress, const Split& split) {
-		return treeture<R>();
+	void treeture<void>::wait() {
+		if(!task) return;
+		narrow();					// narrow scope
+		runtime::getCurrentWorker().schedule(task);
+		task->wait();
 	}
-
-	template<
-		typename Action,
-		typename R = std::result_of_t<Action>
-	>
-	treeture<R> spawn(const Action& action) {
-		return spawn(action,action);
-	}
-
-	template<typename A, typename B, typename C, typename R = std::result_of_t<C(A,B)>>
-	static treeture<R,A,B> parallel(treeture<A>&& a, treeture<B>&& b, const C& c) { return treeture<void>(); }
-
-	template<typename A, typename B, typename C, typename R = std::result_of_t<C(A,B)>>
-	static treeture<R> sequential(treeture<A>&& a, treeture<B>&& b, const C& c) { return treeture<void>(); }
-
-
-
-	// --- more utilities ---
-
-	treeture<void> parallel() {
-		return done();
-	}
-
-	template<typename R, typename A, typename B>
-	treeture<void> parallel(treeture<R,A,B>&& single) {
-		return std::move(single);
-	}
-
-	template<typename R, typename A, typename B, typename ... Rest>
-	treeture<void> parallel(treeture<R,A,B>&& first, Rest&& ... rest) {
-		return parallel(first,parallel(rest...), [](auto,auto){});
-	}
-
-	treeture<void> sequential() {
-		return done();
-	}
-
-	template<typename A>
-	treeture<void> sequential(treeture<A>&& single) {
-		return std::move(single);
-	}
-
-	template<typename A, typename ... Rest>
-	treeture<void> sequential(treeture<A>&& first, Rest&& ... rest) {
-		return sequential(first,sequential(rest...), [](auto,auto){});
-	}
-*/
 
 } // end namespace core
 } // end namespace api
