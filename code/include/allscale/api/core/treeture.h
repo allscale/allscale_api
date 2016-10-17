@@ -24,17 +24,139 @@ namespace core {
 
 	class TaskBase;
 
-	using TaskBasePtr = std::shared_ptr<TaskBase>;
+//	using TaskBasePtr = std::shared_ptr<TaskBase>;
 
 	template<typename T>
 	class Task;
 
-	template<typename T>
-	using TaskPtr = std::shared_ptr<Task<T>>;
+//	template<typename T>
+//	using TaskPtr = std::shared_ptr<Task<T>>;
 
+
+	class RefCounted {
+
+		std::atomic<int> references;
+
+	public:
+		RefCounted() : references(0) {}
+
+		virtual ~RefCounted() {}
+
+		void incRefs() {
+			++references;
+		}
+
+		void decRefs() {
+			if (--references == 0) delete this;
+		} 
+			
+	};
+
+	template<typename T>
+	class RefCountedPtr {
+
+		template<typename D>
+		friend class RefCountedPtr;
+
+		T* target;
+	public:
+		RefCountedPtr() : target(nullptr) {}
+
+		template<typename D, typename filter = std::enable_if_t<std::is_base_of<T,D>::value,int>>
+		RefCountedPtr(D* target) : target(target) {
+			inc();
+		}
+
+
+		RefCountedPtr(RefCountedPtr&& other) : target(other.target) {
+			other.target = nullptr;
+		}
+
+		template<typename D, typename filter = std::enable_if_t<std::is_base_of<T,D>::value,int>>
+		RefCountedPtr(RefCountedPtr<D>&& other) : target(other.target) {
+			other.target = nullptr;
+		}
+
+		RefCountedPtr(const RefCountedPtr& other) : target(other.target) {
+			inc();
+		}
+
+		template<typename D, typename filter = std::enable_if_t<std::is_base_of<T,D>::value,int>>
+		RefCountedPtr(const RefCountedPtr<D>& other) : target(other.target) {
+			inc();
+		}
+
+		~RefCountedPtr() {
+			dec();
+		}
+
+		RefCountedPtr& operator=(RefCountedPtr&& other) {
+			if (target == other.target) return *this;
+			dec();
+			target = other.target;
+			other.target = nullptr;
+			return *this;
+		}
+
+		RefCountedPtr& operator=(const RefCountedPtr& other) {
+			if (target == other.target) return *this;
+			dec();
+			target = other.target;
+			inc();
+			return *this;
+		}
+
+		T& operator*() const {
+			return *target;
+		}
+
+		T* operator->() const {
+			return target;
+		}
+
+		operator bool() {
+			return target;
+		}
+
+		void reset() {
+			dec();
+			target = nullptr;
+		}
+
+	private:
+
+		void inc() {
+			if(target) target->incRefs();
+		}
+
+		void dec() {
+			if(target) target->decRefs();
+		}
+		
+	};
+
+	template<typename T, typename ... Args>
+	RefCountedPtr<T> make_ptr(Args&& ... args) {
+		return RefCountedPtr<T>(new T(std::move(args)...));
+	}
+
+	template<typename D, typename T, typename filter = std::enable_if<std::is_base_of<T,D>::value,int>>
+	RefCountedPtr<D> static_pointer_cast(RefCountedPtr<T>&& other) {
+		return reinterpret_cast<RefCountedPtr<D>&>(other);
+	}
+
+	template<typename D, typename T, typename filter = std::enable_if<std::is_base_of<T,D>::value,int>>
+	RefCountedPtr<D> static_pointer_cast(const RefCountedPtr<T>& other) {
+		return reinterpret_cast<const RefCountedPtr<D>&>(other);
+	}
+
+	using TaskBasePtr = RefCountedPtr<TaskBase>;
+
+	template<typename T>
+	using TaskPtr = RefCountedPtr<Task<T>>;
 
 	// the RT's interface to a task
-	class TaskBase {
+	class TaskBase : public RefCounted {
 
 		std::atomic<bool> done;
 
@@ -250,11 +372,11 @@ namespace core {
 
 	template<typename A, typename B, typename C, typename R = std::result_of_t<C(A,B)>>
 	TaskPtr<R> make_split_task(TaskPtr<A>&& left, TaskPtr<B>&& right, C&& merge, bool parallel) {
-		return std::make_shared<SplitTask<R,A,B,C>>(std::move(left), std::move(right), std::move(merge), parallel);
+		return make_ptr<SplitTask<R,A,B,C>>(std::move(left), std::move(right), std::move(merge), parallel);
 	}
 
 	inline TaskPtr<void> make_split_task(TaskBasePtr&& left, TaskBasePtr&& right, bool parallel) {
-		return std::make_shared<SplitTask<void,void,void,void>>(std::move(left), std::move(right), parallel);
+		return make_ptr<SplitTask<void,void,void,void>>(std::move(left), std::move(right), parallel);
 	}
 
 
@@ -368,12 +490,12 @@ namespace core {
 
 		template<typename Action>
 		static treeture spawn(const Action& a) {
-			return treeture(TaskBasePtr(std::make_shared<SimpleTask<Action>>(a)));
+			return treeture(TaskBasePtr(make_ptr<SimpleTask<Action>>(a)));
 		}
 
 		template<typename Process, typename Split>
 		static treeture spawn(const Process& p, const Split& s) {
-			return treeture(TaskBasePtr(std::make_shared<SplitableTask<Process,Split>>(p,s)));
+			return treeture(TaskBasePtr(make_ptr<SplitableTask<Process,Split>>(p,s)));
 		}
 
 		template<typename A, typename B>
@@ -410,7 +532,7 @@ namespace core {
 
 		TaskPtr<T> task;
 
-		treeture(const T& value) : task(std::make_shared<Task<T>>(value)) {}
+		treeture(const T& value) : task(make_ptr<Task<T>>(value)) {}
 
 		treeture(TaskPtr<T>&& task) : task(std::move(task)) {}
 
@@ -450,12 +572,12 @@ namespace core {
 
 		template<typename Action>
 		static treeture spawn(const Action& a) {
-			return treeture(TaskPtr<T>(std::make_shared<SimpleTask<Action>>(a)));
+			return treeture(TaskPtr<T>(make_ptr<SimpleTask<Action>>(a)));
 		}
 
 		template<typename Process, typename Split>
 		static treeture spawn(const Process& p, const Split& s) {
-			return treeture(TaskPtr<T>(std::make_shared<SplitableTask<Process,Split>>(p,s)));
+			return treeture(TaskPtr<T>(make_ptr<SplitableTask<Process,Split>>(p,s)));
 		}
 
 		template<typename A, typename B, typename C>
@@ -468,7 +590,7 @@ namespace core {
 	template<typename Process, typename Split, typename R>
 	void SplitableTask<Process,Split,R>::split() {
 		// decompose this task
-		subTask = std::static_pointer_cast<Task<R>>(decompose().task);
+		subTask = static_pointer_cast<Task<R>>(decompose().task);
 
 		// mutate this task into a split task
 		this->setLeft(subTask->getLeft());
@@ -986,7 +1108,9 @@ namespace core {
 
 			// try to steal a task from another queue
 			if (TaskBasePtr t = other.queue.pop_front()) {
-				queue.push_back(t);		// add to local queue
+				t->split();
+				t->process();
+				// queue.push_back(t);		// add to local queue
 				return schedule_step();	// continue scheduling - no stealing
 			}
 
