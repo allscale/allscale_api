@@ -8,6 +8,8 @@
 #include <mutex>
 #include <type_traits>
 
+#include <pthread.h>
+
 #include "allscale/api/core/impl/reference/lock.h"
 
 namespace allscale {
@@ -723,6 +725,21 @@ namespace core {
 
 		};
 
+		namespace detail {
+
+			/**
+			 * A utility to fix the affinity of the current thread to the given core.
+			 */
+			void fixAffinity(int core) {
+				static const int num_cores = std::thread::hardware_concurrency();
+				cpu_set_t mask;
+				CPU_ZERO(&mask);
+				CPU_SET(core % num_cores, &mask);
+				pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mask);
+			}
+
+		}
+
 		class WorkerPool;
 
 		struct Worker {
@@ -731,14 +748,18 @@ namespace core {
 
 			volatile bool alive;
 
-			SimpleQueue<TaskBasePtr,32> queue;
+			SimpleQueue<TaskBasePtr,8> queue;
 
 			std::thread thread;
 
+			unsigned id;
+
+			unsigned random_seed;
+
 		public:
 
-			Worker(WorkerPool& pool)
-				: pool(pool), alive(true) { }
+			Worker(WorkerPool& pool, unsigned id)
+				: pool(pool), alive(true), id(id), random_seed(id) { }
 
 			Worker(const Worker&) = delete;
 			Worker(Worker&&) = delete;
@@ -766,7 +787,7 @@ namespace core {
 
 			void schedule(const TaskBasePtr& task);
 
-			bool schedule_step(bool steal = false);
+			bool schedule_step();
 
 		};
 
@@ -791,16 +812,22 @@ namespace core {
 					if (userDef != 0) numWorkers = userDef;
 				}
 
-				// must be at least one
+				// reduce by one, since main thread also counts
+				numWorkers--;
+
+				// must be at least one worker
 				if (numWorkers < 1) numWorkers = 1;
 
 				// create workers
 				for(int i=0; i<numWorkers; ++i) {
-					workers.push_back(new Worker(*this));
+					workers.push_back(new Worker(*this,i+1));
 				}
 
 				// start workers
 				for(auto& cur : workers) cur->start();
+
+				// fix affinity of main thread
+				detail::fixAffinity(0);
 			}
 
 			~WorkerPool() {
@@ -868,15 +895,34 @@ namespace core {
 
 		inline void Worker::run() {
 
+			// fix affinity
+			detail::fixAffinity(id);
+
 			// register worker
 			setCurrentWorker(*this);
 
 			// start processing loop
 			while(alive) {
+
+				// count number of idle cylces
+				int idle_cycles = 0;
+
 				// conduct a schedule step
-				if (!schedule_step(true)) {  	// only top-level conducts stealing
-					// there was nothing to do => go to sleep
-					pool.waitForWork();
+				while(alive && !schedule_step()) {
+					// increment idle counter
+					++idle_cycles;
+
+					// wait a moment
+					cpu_relax();
+
+					// if there was no work for quite some time
+					if(idle_cycles > 100000) {
+						// wait for work
+						pool.waitForWork();
+				
+						// reset cycles counter
+						idle_cycles = 0;
+					}
 				}
 			}
 
@@ -909,7 +955,7 @@ namespace core {
 		}
 
 
-		inline bool Worker::schedule_step(bool steal) {
+		inline bool Worker::schedule_step() {
 
 			// process a task from the local queue
 			if (TaskBasePtr t = queue.pop_front()) {
@@ -928,17 +974,14 @@ namespace core {
 				return true;
 			}
 
-			// if no stealing should be conducted => we are done
-			if (!steal) return false;
-
 			// check that there are other workers
 			int numWorker = pool.getNumWorkers();
 			if (numWorker <= 1) return false;
 
 			// otherwise, steal a task from another worker
-			Worker& other = pool.getWorker(rand() % numWorker);
+			Worker& other = pool.getWorker(rand_r(&random_seed) % numWorker);
 			if (this == &other) {
-				return schedule_step(steal);
+				return schedule_step();
 			}
 
 			// try to steal a task from another queue
