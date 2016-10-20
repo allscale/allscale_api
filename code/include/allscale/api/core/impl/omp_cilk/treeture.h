@@ -315,7 +315,7 @@ namespace omp_cilk {
 		template<typename T>
 		treeture(treeture<T>&& t) : task(std::move(t.task)) {}
 
-		void wait() {
+		void wait() const {
 			if(task) task->wait();
 		}
 
@@ -372,6 +372,8 @@ namespace omp_cilk {
 
 	protected:
 
+		treeture() {}
+
 		treeture(const T& value) : task(std::make_shared<Task<T>>(value)) {}
 
 		treeture(TaskPtr<T>&& task) : task(std::move(task)) {}
@@ -389,7 +391,7 @@ namespace omp_cilk {
 			return *this;
 		}
 
-		void wait() {
+		void wait() const {
 			task->wait();
 		}
 

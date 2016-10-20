@@ -67,11 +67,11 @@ namespace core {
 		auto f = fun(
 				[](int)->bool { return true; },
 				[=](int)->int { return 12; },
-				[](int, const prec_fun<int(int)>::type&)->Future<int> { return done(14); }
+				[](int, const prec_fun<int(int)>::type&)->treeture<int> { return done(14); }
 		);
 
-		auto g = [=](int) {
-			return 0.0;
+		auto g = [](int) {
+			return done(0);
 		};
 
 		EXPECT_EQ(12, f(2,g).get());
@@ -85,7 +85,7 @@ namespace core {
 		auto f = fun(
 				[](int)->bool { return true; },
 				[=](int)->float { return 0.0; },
-				[](int, const prec_fun<float(int)>::type&)->Future<float> { return 1.0; }
+				[](int, const prec_fun<float(int)>::type&)->treeture<float> { return 1.0f; }
 		);
 
 		EXPECT_TRUE(detail::is_fun_def<decltype(f)>::value);
@@ -98,8 +98,8 @@ namespace core {
 
 		auto g = fun(
 				[](empty)->bool { return true; },
-				[=](empty)->Future<float> { return 0.0; },
-				[](empty, fun_type&)->Future<float> { return 1.0; }
+				[=](empty)->treeture<float> { return 0.0f; },
+				[](empty, fun_type&)->treeture<float> { return 1.0f; }
 		);
 
 		EXPECT_TRUE(detail::is_fun_def<decltype(g)>::value);
@@ -150,7 +150,7 @@ namespace core {
 				fun(
 					[](int x)->bool { return x < 2; },
 					[](int x)->int { return fib_seq(x); },
-					[](int x, const typename prec_fun<int(int)>::type& f)->Future<int> {
+					[](int x, const typename prec_fun<int(int)>::type& f)->treeture<int> {
 						return add(f(x-1),f(x-2));
 					}
 				)
@@ -199,7 +199,7 @@ namespace core {
 		auto fib = prec(
 				[](int x)->bool { return x < 2; },
 				[](int x)->int { return fib_seq(x); },
-				[](int x, const typename prec_fun<int(int)>::type& f)->Future<int> {
+				[](int x, const typename prec_fun<int(int)>::type& f)->treeture<int> {
 					return add( f(x-1), f(x-2) );
 				}
 		);
@@ -279,7 +279,7 @@ namespace core {
 				fun(
 						[](int x)->bool { return x == 0; },
 						[](int x)->bool { return x%2 == 0; },
-						[](int x, const test& , const test& odd)->Future<bool> {
+						[](int x, const test& , const test& odd)->treeture<bool> {
 							return odd(x-1);
 						}
 				),
@@ -287,7 +287,7 @@ namespace core {
 				fun(
 						[](int x)->bool { return x == 0; },
 						[](int x)->bool { return x%2 == 1; },
-						[](int x, const test& even, const test& )->Future<bool> {
+						[](int x, const test& even, const test& )->treeture<bool> {
 							return even(x-1);
 						}
 				)
@@ -363,7 +363,7 @@ namespace core {
 
 
 	int fib(int x) {
-		typedef typename std::function<Future<int>(int)> fun_type;
+		typedef typename std::function<treeture<int>(int)> fun_type;
 
 		return prec(
 				fun(
@@ -378,7 +378,7 @@ namespace core {
 	}
 
 	int fac(int x) {
-		typedef typename std::function<Future<int>(int)> fun_type;
+		typedef typename std::function<treeture<int>(int)> fun_type;
 
 		return prec(
 				fun(
@@ -413,7 +413,7 @@ namespace core {
 				fun(
 					[](int x) { return x < 2; },
 					[](int x) { return fib_seq(x); },
-					[](int x, const typename prec_fun<int(int)>::type& f)->Future<int> {
+					[](int x, const typename prec_fun<int(int)>::type& f)->treeture<int> {
 						return add(f(x-1),f(x-2));
 					}
 				)

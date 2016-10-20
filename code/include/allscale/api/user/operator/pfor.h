@@ -5,6 +5,8 @@
 #include "allscale/api/core/prec.h"
 #include "allscale/api/user/data/vector.h"
 
+#include "allscale/utils/assert.h"
+
 namespace allscale {
 namespace api {
 namespace user {
@@ -84,7 +86,7 @@ namespace user {
 
 		public:
 
-			using task_ref = typename core::Future<void>::task_reference;
+			using task_ref = typename core::treeture<void>;
 
 		private:
 
@@ -94,14 +96,9 @@ namespace user {
 
 			Dependencies() {}
 
-			Dependencies(const core::Future<void>& future)
-				: dependencies({ future.getTaskReference() }) {}
-
-			Dependencies(const task_ref& ref)
-				: dependencies({ ref }) {}
-
-			Dependencies(std::vector<task_ref>&& refs)
-				: dependencies(refs) {}
+			template<typename ... Refs>
+			Dependencies(const Refs& ... refs)
+				: dependencies({ refs... }) {}
 
 			Dependencies(const Dependencies&) = default;
 			Dependencies(Dependencies&&) = default;
@@ -152,7 +149,7 @@ namespace user {
 
 
 	template<typename Iter, size_t dims, typename Body>
-	core::Future<void> pfor(const std::array<Iter,dims>& a, const std::array<Iter,dims>& b, const Body& body) {
+	core::treeture<void> pfor(const std::array<Iter,dims>& a, const std::array<Iter,dims>& b, const Body& body) {
 
 		// process 0-dimensional case
 		if (dims == 0) return core::done(); // no iterations required
@@ -201,7 +198,7 @@ namespace user {
 				b[maxDim].first = mid;
 
 				// process branches in parallel
-				return par(
+				return parallel(
 					nested(a),
 					nested(b)
 				);
@@ -213,7 +210,7 @@ namespace user {
 	 * A parallel for-each implementation iterating over the given range of elements.
 	 */
 	template<typename Iter, typename Body, typename Dependency>
-	core::Future<void> pfor(const Iter& a, const Iter& b, const Body& body, const Dependency& dependency) {
+	core::treeture<void> pfor(const Iter& a, const Iter& b, const Body& body, const Dependency& dependency) {
 		// implements a binary splitting policy for iterating over the given iterator range
 
 		// the iterator range and the local dependency
@@ -236,7 +233,7 @@ namespace user {
 				// here we have the binary splitting
 				auto mid = r.begin + (r.end - r.begin)/2;
 				auto dep = Dependency::split(r.dependencies);
-				return core::par(
+				return core::parallel(
 						nested(range{r.begin,mid,dep.left}),
 						nested(range{mid,r.end,dep.right})
 				);
@@ -245,7 +242,7 @@ namespace user {
 	}
 
 	template<typename Iter, typename Body>
-	core::Future<void> pfor(const Iter& a, const Iter& b, const Body& body) {
+	core::treeture<void> pfor(const Iter& a, const Iter& b, const Body& body) {
 		return pfor(a,b,body,no_dependencies());
 	}
 
@@ -255,7 +252,7 @@ namespace user {
 	 * A parallel for-each implementation iterating over the elements of the given container.
 	 */
 	template<typename Container, typename Op>
-	core::Future<void> pfor(Container& c, const Op& op) {
+	core::treeture<void> pfor(Container& c, const Op& op) {
 		return pfor(c.begin(), c.end(), op);
 	}
 
@@ -263,7 +260,7 @@ namespace user {
 	 * A parallel for-each implementation iterating over the elements of the given container.
 	 */
 	template<typename Container, typename Op>
-	core::Future<void> pfor(const Container& c, const Op& op) {
+	core::treeture<void> pfor(const Container& c, const Op& op) {
 		return pfor(c.begin(), c.end(), op);
 	}
 
@@ -275,7 +272,7 @@ namespace user {
 	 * the hyper-box limited by the given vectors.
 	 */
 	template<typename Elem, size_t Dims, typename Body>
-	core::Future<void> pfor(const data::Vector<Elem,Dims>& a, const data::Vector<Elem,Dims>& b, const Body& body) {
+	core::treeture<void> pfor(const data::Vector<Elem,Dims>& a, const data::Vector<Elem,Dims>& b, const Body& body) {
 		const std::array<Elem,Dims>& x = a;
 		const std::array<Elem,Dims>& y = b;
 		return pfor(x,y,[&](const std::array<Elem,Dims>& pos) {
@@ -288,7 +285,7 @@ namespace user {
 	 * the hyper-box limited by the given vector.
 	 */
 	template<typename Elem, size_t Dims, typename Body>
-	core::Future<void> pfor(const data::Vector<Elem,Dims>& a, const Body& body) {
+	core::treeture<void> pfor(const data::Vector<Elem,Dims>& a, const Body& body) {
 		return pfor(data::Vector<Elem,Dims>(0),a,body);
 	}
 
@@ -303,7 +300,7 @@ namespace user {
 
 	public:
 
-		dependency(const core::Future<void>& loop)
+		dependency(const core::treeture<void>& loop)
 			: initial(loop) {}
 
 		const detail::Dependencies& getInitial() const {
@@ -314,7 +311,7 @@ namespace user {
 
 	struct one_on_one : public dependency {
 
-		one_on_one(const core::Future<void>& loop)
+		one_on_one(const core::treeture<void>& loop)
 			: dependency(loop) {}
 
 		static detail::SubDependencies split(const detail::Dependencies& dep) {
@@ -323,21 +320,17 @@ namespace user {
 			assert(dep.isSingle());
 			const auto& task = dep.getDependency();
 
-			// try to split the dependency
-			const auto& subTasks = task.getSubTasks();
-			if (task.isParallel() && subTasks.size() == 2) {
-				return { subTasks[0], subTasks[1] };
-			}
-
-			// fall-back: no splitting
-			return { task, task };
+			// split the dependencies
+			return {
+				task.getLeft(), task.getRight()
+			};
 		}
 
 	};
 
 	struct neighborhood_sync : public dependency {
 
-		neighborhood_sync(const core::Future<void>& loop)
+		neighborhood_sync(const core::treeture<void>& loop)
 			: dependency(loop) {}
 
 		static detail::SubDependencies split(const detail::Dependencies& dep) {
@@ -349,53 +342,30 @@ namespace user {
 			if (dep.isSingle()) {
 				const TaskRef& task = dep.getDependency();
 
-				// try to split the dependency
-				auto& subTasks = task.getSubTasks();
-				if (task.isParallel() && subTasks.size() == 2) {
+				// split the dependency
+				const TaskRef& left = task.getLeft();
+				const TaskRef& right = task.getRight();
 
-					const TaskRef& left = subTasks[0];
-					const TaskRef& right = subTasks[1];
-
-					return {
-						detail::Dependencies({done,left,right}),
-						detail::Dependencies({left,right,done})
-					};
-				}
-
-				// fall-back: full range
-				return { dep, dep };
+				return {
+					detail::Dependencies( done,left,right ),
+					detail::Dependencies( left,right,done )
+				};
 			}
 
 			// split up input dependencies
 			const auto& dependencies = dep.getDependencies();
 			if (dependencies.size() == 3) {
 
-				auto getLeft = [&](const TaskRef& s)->const TaskRef {
-					if (s.isDone()) return done;
-					if (!s.isParallel()) return s;
-					const auto& subTasks = s.getSubTasks();
-					if (subTasks.size() != 2) return s;
-					return subTasks[0];
-				};
-
-				auto getRight = [&](const TaskRef& s)->const TaskRef {
-					if (s.isDone()) return done;
-					if (!s.isParallel()) return s;
-					const auto& subTasks = s.getSubTasks();
-					if (subTasks.size() != 2) return s;
-					return subTasks[1];
-				};
-
 				// split each of those
-				TaskRef a = getRight(dependencies[0]);
-				TaskRef b = getLeft(dependencies[1]);
-				TaskRef c = getRight(dependencies[1]);
-				TaskRef d = getLeft(dependencies[2]);
+				TaskRef a = dependencies[0].getRight();
+				TaskRef b = dependencies[1].getLeft();
+				TaskRef c = dependencies[1].getRight();
+				TaskRef d = dependencies[2].getLeft();
 
 				// and pack accordingly
 				return {
-					detail::Dependencies({a,b,c}),
-					detail::Dependencies({b,c,d})
+					detail::Dependencies( a,b,c ),
+					detail::Dependencies( b,c,d )
 				};
 
 			}

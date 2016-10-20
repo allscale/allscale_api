@@ -47,14 +47,14 @@ namespace core {
 
 		using impl = detail::treeture_impl<void>;
 		
-		treeture() {}
-
 		template<typename ... Args>
 		treeture(Args&& ... args) : impl(std::move(args)...) {}
 
 	public:
 
 		using value_type = void;
+
+		treeture() {}
 
 		treeture(const treeture&) = default;
 		treeture(treeture&& other) = default;
@@ -70,7 +70,7 @@ namespace core {
 		template<typename T>
 		treeture(treeture<T>&& t) : impl(std::move(t)) {}
 
-		void wait() { impl::wait(); }
+		void wait() const { impl::wait(); }
 
 		void get() { impl::get(); }
 
@@ -128,13 +128,16 @@ namespace core {
 
 		using value_type = T;
 
+		treeture(const T& value) : impl(value) {}
+		treeture(T&& value) : impl(std::move(value)) {}
+
 		treeture(const treeture&) = delete;
 		treeture(treeture&& other) = default;
 
 		treeture& operator=(const treeture&) = delete;
 		treeture& operator=(treeture&& other) = default;
 
-		void wait() { impl::wait(); }
+		void wait() const { impl::wait(); }
 
 		const T& get() { return impl::get(); }
 
@@ -168,6 +171,29 @@ namespace core {
 		}
 
 	};
+
+
+
+	// ---------------------------------------------------------------------------------------------
+	//											Type Traits
+	// ---------------------------------------------------------------------------------------------
+
+	template<typename T>
+	struct to_treeture {
+		using type = treeture<T>;
+	};
+
+	template<typename T>
+	struct to_treeture<treeture<T>> {
+		using type = treeture<T>;
+	};
+
+	template<typename T>
+	struct is_treeture : public std::false_type {};
+
+	template<typename T>
+	struct is_treeture<treeture<T>> : public std::true_type {};
+
 
 
 

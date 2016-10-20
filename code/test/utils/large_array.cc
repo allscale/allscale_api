@@ -357,7 +357,7 @@ namespace utils {
 
 	}
 
-	TEST(LargeArray, MemoryManagement) {
+	TEST(DISABLED_LargeArray, MemoryManagement) {
 
 		using value_t = uint64_t;
 

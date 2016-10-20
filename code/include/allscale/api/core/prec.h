@@ -5,7 +5,7 @@
 
 #include "allscale/utils/functional_utils.h"
 #include "allscale/utils/vector_utils.h"
-#include "allscale/api/core/future.h"
+#include "allscale/api/core/treeture.h"
 
 namespace allscale {
 namespace api {
@@ -15,7 +15,7 @@ namespace core {
 
 	template<typename O, typename I>
 	struct prec_fun<O(I)> {
-		typedef std::function<Future<O>(I)> type;
+		typedef std::function<treeture<O>(I)> type;
 	};
 
 	namespace detail {
@@ -108,7 +108,7 @@ namespace core {
 	template<typename OB, typename OS, typename I, typename ... Funs>
 	struct fun_def {
 		using in_type = I;
-		using out_type = typename to_future<OB>::type;
+		using out_type = typename to_treeture<OB>::type;
 
 		std::function<bool(I)> bc_test;
 		std::vector<std::function<OB(I)>> base;
@@ -127,10 +127,10 @@ namespace core {
 			auto& step_cpy = step;
 
 			return (bc_test(in))
-				? spawn(
+				? out_type::spawn(
 						[=]()->OB { return detail::pickRandom(base_cpy)(in); }
 					)
-				: spawn(
+				: out_type::spawn(
 						[=]()->OB { return detail::pickRandom(base_cpy)(in); },
 						[=]()->out_type { return detail::pickRandom(step_cpy)(in, funs...); }
 				  	)
@@ -268,14 +268,14 @@ namespace core {
 		template<>
 		struct caller<0> {
 			template<typename O, typename F, typename I, typename D, typename ... Args>
-			typename std::enable_if<is_future<O>::value,O>::type
+			typename std::enable_if<is_treeture<O>::value,O>::type
 			call(const F& f, const I& i, const D& d, const Args& ... args) const {
 				return f(i,prec<0>(d),args...);
 			}
 			template<typename O, typename F, typename I, typename D, typename ... Args>
-			typename std::enable_if<!is_future<O>::value,O>::type
+			typename std::enable_if<!is_treeture<O>::value,O>::type
 			call(const F& f, const I& i, const D& d, const Args& ... args) const {
-				return atom([=]()->O { return f(i,prec<0>(d),args...); });
+				return treeture<O>::spawn([=]()->O { return f(i,prec<0>(d),args...); });
 			}
 		};
 

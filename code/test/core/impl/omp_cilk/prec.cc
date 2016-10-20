@@ -3,5 +3,5 @@
 #include "../../prec.cc"
 
 TEST(Parec,ImplCheck) {
-	EXPECT_EQ("OpenMP/Cilk", PAREC_IMPL);
+	EXPECT_EQ("OpenMP/Cilk", allscale::api::core::impl::getImplementationName());
 }

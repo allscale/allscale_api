@@ -11,6 +11,8 @@
 
 #include <pthread.h>
 
+#include "allscale/utils/printer/arrays.h"
+
 #include "allscale/api/core/impl/reference/lock.h"
 
 namespace allscale {
@@ -320,9 +322,9 @@ namespace reference {
 		template<typename Process, typename Split, typename R>
 		friend class SplitableTask;
 
-		TaskBasePtr task;
+		mutable TaskBasePtr task;
 
-		BitQueue queue;
+		mutable BitQueue queue;
 
 	protected:
 
@@ -349,7 +351,7 @@ namespace reference {
 		template<typename T>
 		treeture(treeture<T>&& t) : task(std::move(t.task)) {}
 
-		void wait();
+		void wait() const;
 
 		void get() {
 			wait();
@@ -399,7 +401,7 @@ namespace reference {
 
 	private:
 
-		void narrow() {
+		void narrow() const {
 			if (!task) return;
 			while(!queue.empty()) {
 				TaskBasePtr next = (queue.get()) ? task->getLeft() : task->getRight();
@@ -440,7 +442,7 @@ namespace reference {
 			return *this;
 		}
 
-		void wait();
+		void wait() const;
 
 		const T& get() {
 			wait();
@@ -928,13 +930,13 @@ namespace reference {
 	}
 
 	template<typename T>
-	void treeture<T>::wait() {
+	void treeture<T>::wait() const {
 		if (!task) return;
 		runtime::getCurrentWorker().schedule(task);
 		task->wait();
 	}
 
-	void treeture<void>::wait() {
+	void treeture<void>::wait() const {
 		if(!task) return;
 
 		// narrow scope
