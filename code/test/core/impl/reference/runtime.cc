@@ -9,12 +9,6 @@ namespace api {
 namespace core {
 namespace impl {
 
-	TEST(Parec,SelectedImplCheck) {
-		EXPECT_EQ("Reference SharedMemory", getImplementationName());
-	}
-
-namespace reference {
-
 	TEST(Parec,ImplCheck) {
 		EXPECT_EQ("Reference SharedMemory", getImplementationName());
 	}
@@ -570,7 +564,6 @@ namespace reference {
 		EXPECT_EQ(STRESS_RES, fib_split(STRESS_N).get());
 	}
 
-} // end namespace reference
 } // end namespace impl
 } // end namespace core
 } // end namespace api

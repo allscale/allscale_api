@@ -9,7 +9,6 @@ namespace allscale {
 namespace api {
 namespace core {
 namespace impl {
-namespace reference {
 
 	TEST(BitQueue, Basic) {
 		BitQueue queue;
@@ -45,7 +44,6 @@ namespace reference {
 		EXPECT_EQ(x,y);
 	}
 
-} // end namespace reference
 } // end namespace impl
 } // end namespace core
 } // end namespace api
