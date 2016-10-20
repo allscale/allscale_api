@@ -37,12 +37,14 @@ endforeach(exec_file)
 
 
 # Build unit tests
-set ( ut_prefix  ut_ )
+set ( ut_prefix  ut_api )
 file(GLOB_RECURSE test_cases test/*.cc)
 foreach ( case_file ${test_cases})
 	get_filename_component( case_name ${case_file} NAME_WE )
 	
-	set ( case_name ${ut_prefix}${case_name} )
+	fix_case_name( case_subdir ${case_file} )
+
+	set ( case_name ${ut_prefix}${case_subdir}_${case_name} )
 	add_executable(${case_name} ${case_file})
 
 	target_link_libraries(${case_name} parec_lib)

@@ -10,40 +10,6 @@ namespace allscale {
 namespace api {
 namespace core {
 
-	TEST(BitQueue, Basic) {
-		BitQueue queue;
-
-		// check put and pop
-		int x = 577;
-		for(int i=0; i<32; i++) {
-			queue.put(x & (1<<i));
-		}
-
-		int y = 0;
-		for(int i=0; i<32; i++) {
-			if (queue.pop()) {
-				y = y | (1<<i);
-			}
-		}
-
-		EXPECT_EQ(x,y);
-
-		// check the get function
-		for(int i=0; i<32; i++) {
-			queue.put(x & (1<<i));
-		}
-
-		y = 0;
-		for(int i=0; i<32; i++) {
-			if (queue.get()) {
-				y = y | (1<<i);
-			}
-			queue.pop();
-		}
-
-		EXPECT_EQ(x,y);
-	}
-
 	TEST(Treeture, Immediates) {
 
 		treeture<void> t1 = done();
@@ -239,7 +205,11 @@ namespace core {
 
 	}
 
-	int N = 40;
+	#ifndef BENCH_VALUE
+	#define BENCH_VALUE 40
+	#endif
+
+	int N = BENCH_VALUE;
 
 	TEST(Treeture, Bench_Seq) {
 		EXPECT_NE(0,fib(N));

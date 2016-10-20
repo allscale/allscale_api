@@ -1,6 +1,5 @@
-
 #define REFERENCE_IMPL
-#include "../prec.cc"
+#include "../../future.cc"
 
 TEST(Parec,ImplCheck) {
 	EXPECT_EQ("Reference SharedMemory", PAREC_IMPL);
