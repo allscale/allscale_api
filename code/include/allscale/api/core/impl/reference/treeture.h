@@ -594,26 +594,56 @@ namespace reference {
 				return true;
 			}
 
-			T pop_front() {
-				lock.lock();
+		private:
+
+			T pop_front_internal() {
 				if (empty()) {
-					lock.unlock();
 					return T();
 				}
 				T res(std::move(data[front]));
 				front = (front + 1) % buffer_size;
+				return res;
+			}
+
+			T pop_back_internal() {
+				if (empty()) {
+					return T();
+				}
+				back = (back - 1 + buffer_size) % buffer_size;
+				T res(std::move(data[back]));
+				return res;
+			}
+
+		public:
+
+			T pop_front() {
+				lock.lock();
+				const T& res = pop_front_internal();
+				lock.unlock();
+				return res;
+			}
+
+			T try_pop_front() {
+				if (!lock.try_lock()) {
+					return {};
+				}
+				const T& res = pop_front_internal();
 				lock.unlock();
 				return res;
 			}
 
 			T pop_back() {
 				lock.lock();
-				if (empty()) {
-					lock.unlock();
-					return T();
+				const T& res = pop_back_internal();
+				lock.unlock();
+				return res;
+			}
+
+			T try_pop_back() {
+				if (!lock.try_lock()) {
+					return {};
 				}
-				back = (back - 1 + buffer_size) % buffer_size;
-				T res(std::move(data[back]));
+				const T& res = pop_back_internal();
 				lock.unlock();
 				return res;
 			}
@@ -891,11 +921,10 @@ namespace reference {
 			}
 
 			// try to steal a task from another queue
-			if (TaskBasePtr t = other.queue.pop_front()) {
+			if (TaskBasePtr t = other.queue.try_pop_front()) {
 				t->split();
 				t->process();
-				// queue.push_back(t);		// add to local queue
-				return schedule_step();	// continue scheduling - no stealing
+				return schedule_step();	// continue scheduling
 			}
 
 			// no task found => wait a moment
