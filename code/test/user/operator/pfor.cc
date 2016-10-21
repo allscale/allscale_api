@@ -30,7 +30,7 @@ namespace user {
 		// increase all by 1
 		pfor(0,N,[&](const int& i) {
 			data[i]++;
-		}).wait();
+		});
 
 		// check that all have been updated
 		for(const auto& cur : data) {
@@ -69,7 +69,7 @@ namespace user {
 		// initialize data
 		pfor(data,[](int& x) {
 			x = 10;
-		}).wait();
+		});
 
 		// check state
 		for(const auto& cur : data) {
@@ -117,7 +117,7 @@ namespace user {
 		// update data in parallel
 		pfor(zero,full,[&](const Point& p){
 			(*data)[p[0]][p[1]][p[2]]++;
-		}).wait();
+		});
 
 		// check that all has been covered
 		for(int i=0; i<N; i++) {

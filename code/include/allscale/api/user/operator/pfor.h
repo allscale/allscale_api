@@ -82,15 +82,41 @@ namespace user {
 
 		// -- Adaptive Loop Dependencies --
 
-		class Dependencies {
+
+		struct iteration_reference {
+
+			core::treeture<void> handle;
 
 		public:
 
-			using task_ref = typename core::treeture<void>;
+			iteration_reference(core::treeture<void>&& handle) : handle(std::move(handle)) {}
 
-		private:
+			iteration_reference() {};
+			iteration_reference(const iteration_reference&) = default;
+			iteration_reference(iteration_reference&&) = default;
 
-			std::vector<task_ref> dependencies;
+			iteration_reference& operator=(const iteration_reference&) = default;
+			iteration_reference& operator=(iteration_reference&&) = default;
+
+			~iteration_reference() { wait(); }
+
+			void wait() const {
+				handle.wait();
+			}
+
+			iteration_reference getLeft() const {
+				return handle.getLeft();
+			}
+
+			iteration_reference getRight() const {
+				return handle.getRight();
+			}
+		};
+
+
+		class Dependencies {
+
+			std::vector<iteration_reference> dependencies;
 
 		public:
 
@@ -110,12 +136,12 @@ namespace user {
 				return dependencies.size() == 1;
 			}
 
-			const task_ref& getDependency() const {
+			const iteration_reference& getDependency() const {
 				assert_true(isSingle());
 				return dependencies[0];
 			}
 
-			const std::vector<task_ref>& getDependencies() const {
+			const std::vector<iteration_reference>& getDependencies() const {
 				return dependencies;
 			}
 
@@ -149,7 +175,7 @@ namespace user {
 
 
 	template<typename Iter, size_t dims, typename Body>
-	core::treeture<void> pfor(const std::array<Iter,dims>& a, const std::array<Iter,dims>& b, const Body& body) {
+	detail::iteration_reference pfor(const std::array<Iter,dims>& a, const std::array<Iter,dims>& b, const Body& body) {
 
 		// process 0-dimensional case
 		if (dims == 0) return core::done(); // no iterations required
@@ -210,7 +236,7 @@ namespace user {
 	 * A parallel for-each implementation iterating over the given range of elements.
 	 */
 	template<typename Iter, typename Body, typename Dependency>
-	core::treeture<void> pfor(const Iter& a, const Iter& b, const Body& body, const Dependency& dependency) {
+	detail::iteration_reference pfor(const Iter& a, const Iter& b, const Body& body, const Dependency& dependency) {
 		// implements a binary splitting policy for iterating over the given iterator range
 
 		// the iterator range and the local dependency
@@ -242,7 +268,7 @@ namespace user {
 	}
 
 	template<typename Iter, typename Body>
-	core::treeture<void> pfor(const Iter& a, const Iter& b, const Body& body) {
+	detail::iteration_reference pfor(const Iter& a, const Iter& b, const Body& body) {
 		return pfor(a,b,body,no_dependencies());
 	}
 
@@ -252,7 +278,7 @@ namespace user {
 	 * A parallel for-each implementation iterating over the elements of the given container.
 	 */
 	template<typename Container, typename Op>
-	core::treeture<void> pfor(Container& c, const Op& op) {
+	detail::iteration_reference pfor(Container& c, const Op& op) {
 		return pfor(c.begin(), c.end(), op);
 	}
 
@@ -260,7 +286,7 @@ namespace user {
 	 * A parallel for-each implementation iterating over the elements of the given container.
 	 */
 	template<typename Container, typename Op>
-	core::treeture<void> pfor(const Container& c, const Op& op) {
+	detail::iteration_reference pfor(const Container& c, const Op& op) {
 		return pfor(c.begin(), c.end(), op);
 	}
 
@@ -272,7 +298,7 @@ namespace user {
 	 * the hyper-box limited by the given vectors.
 	 */
 	template<typename Elem, size_t Dims, typename Body>
-	core::treeture<void> pfor(const data::Vector<Elem,Dims>& a, const data::Vector<Elem,Dims>& b, const Body& body) {
+	detail::iteration_reference pfor(const data::Vector<Elem,Dims>& a, const data::Vector<Elem,Dims>& b, const Body& body) {
 		const std::array<Elem,Dims>& x = a;
 		const std::array<Elem,Dims>& y = b;
 		return pfor(x,y,[&](const std::array<Elem,Dims>& pos) {
@@ -285,7 +311,7 @@ namespace user {
 	 * the hyper-box limited by the given vector.
 	 */
 	template<typename Elem, size_t Dims, typename Body>
-	core::treeture<void> pfor(const data::Vector<Elem,Dims>& a, const Body& body) {
+	detail::iteration_reference pfor(const data::Vector<Elem,Dims>& a, const Body& body) {
 		return pfor(data::Vector<Elem,Dims>(0),a,body);
 	}
 
@@ -300,7 +326,7 @@ namespace user {
 
 	public:
 
-		dependency(const core::treeture<void>& loop)
+		dependency(const detail::iteration_reference& loop)
 			: initial(loop) {}
 
 		const detail::Dependencies& getInitial() const {
@@ -311,7 +337,7 @@ namespace user {
 
 	struct one_on_one : public dependency {
 
-		one_on_one(const core::treeture<void>& loop)
+		one_on_one(const detail::iteration_reference& loop)
 			: dependency(loop) {}
 
 		static detail::SubDependencies split(const detail::Dependencies& dep) {
@@ -330,11 +356,11 @@ namespace user {
 
 	struct neighborhood_sync : public dependency {
 
-		neighborhood_sync(const core::treeture<void>& loop)
+		neighborhood_sync(const detail::iteration_reference& loop)
 			: dependency(loop) {}
 
 		static detail::SubDependencies split(const detail::Dependencies& dep) {
-			using TaskRef = typename detail::Dependencies::task_ref;
+			using TaskRef = detail::iteration_reference;
 
 			TaskRef done;
 
