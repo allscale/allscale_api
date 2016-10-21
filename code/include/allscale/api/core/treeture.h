@@ -1,5 +1,7 @@
 #pragma once
 
+#include <utility>
+
 /**
  * This header file formalizes the general, public interface of treetures, independent
  * of any actual implementation.
@@ -233,80 +235,45 @@ namespace core {
 
 	// --- control flow ---
 
-	namespace detail {
-
-		template<typename R>
-		treeture<R> to_treeture(treeture<R>&& a) {
-			return std::move(a);
-		}
-
-		template<typename A, typename R = std::result_of_t<A()>>
-		treeture<R> to_treeture(A&& a) {
-			return spawn(a);
-		}
-
-		template<typename T>
-		struct value_type {
-			using type = typename std::result_of_t<T()>;
-		};
-
-		template<typename T>
-		struct value_type<treeture<T>> {
-			using type = T;
-		};
-
-		template<typename T>
-		using value_type_t = typename value_type<T>::type;
-
-	}
-
-
-	inline treeture<void> parallel() {
-		return done();
-	}
 
 	template<typename A>
-	treeture<void> parallel(A&& a) {
-		return detail::to_treeture(std::move(a));
+	treeture<void> parallel(treeture<A>&& a) {
+		return std::move(a);
 	}
 
 	template<typename A, typename B>
-	treeture<void> parallel(A&& a, B&& b) {
-		return treeture<void>::combine(detail::to_treeture(std::move(a)),detail::to_treeture(std::move(b)),true);
+	treeture<void> parallel(treeture<A>&& a, treeture<B>&& b) {
+		return treeture<void>::combine(std::move(a),std::move(b),true);
 	}
 
 	template<typename F, typename ... Rest>
-	treeture<void> parallel(F&& first, Rest&& ... rest) {
+	treeture<void> parallel(treeture<F>&& first, treeture<Rest>&& ... rest) {
 		// TODO: balance this tree
-		return parallel(first, parallel(rest...));
+		return parallel(std::move(first), parallel(std::move(rest)...));
 	}
 
-
-	inline treeture<void> sequence() {
-		return done();
-	}
 
 	template<typename A>
-	treeture<void> sequence(A&& a) {
-		return detail::to_treeture(std::move(a));
+	treeture<void> sequence(treeture<A>&& a) {
+		return std::move(a);
 	}
 
 	template<typename A, typename B>
-	treeture<void> sequence(A&& a, B&& b) {
-		return treeture<void>::combine(detail::to_treeture(std::move(a)),detail::to_treeture(std::move(b)),false);
+	treeture<void> sequence(treeture<A>&& a, treeture<B>&& b) {
+		return treeture<void>::combine(std::move(a),std::move(b),false);
 	}
 
 	template<typename F, typename ... Rest>
-	treeture<void> sequence(F&& first, Rest&& ... rest) {
+	treeture<void> sequence(treeture<F>&& first, treeture<Rest>&& ... rest) {
 		// TODO: balance this tree
-		return sequence(std::move(first), sequence(rest...));
+		return sequence(std::move(first), sequence(std::move(rest)...));
 	}
 
 	// --- aggregation ---
 
-	template<typename A, typename B, typename R = detail::value_type_t<A>>
-	treeture<R> add(A&& a, B&& b) {
-		return treeture<R>::combine(detail::to_treeture(std::move(a)),detail::to_treeture(std::move(b)),[](R a, R b) { return a + b; });
+	template<typename A, typename B, typename R = decltype(std::declval<A>() + std::declval<B>())>
+	treeture<R> add(treeture<A>&& a, treeture<B>&& b) {
+		return treeture<R>::combine(std::move(a),std::move(b),[](R a, R b) { return a + b; });
 	}
 
 

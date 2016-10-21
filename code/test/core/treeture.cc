@@ -86,11 +86,11 @@ namespace core {
 		int x = 0;
 
 		sequence(
-			[&]() { EXPECT_EQ(0,x); x++; },
-			[&]() { EXPECT_EQ(1,x); x++; },
-			[&]() { EXPECT_EQ(2,x); x++; },
-			[&]() { EXPECT_EQ(3,x); x++; },
-			[&]() { EXPECT_EQ(4,x); x++; }
+			spawn([&]() { EXPECT_EQ(0,x); x++; }),
+			spawn([&]() { EXPECT_EQ(1,x); x++; }),
+			spawn([&]() { EXPECT_EQ(2,x); x++; }),
+			spawn([&]() { EXPECT_EQ(3,x); x++; }),
+			spawn([&]() { EXPECT_EQ(4,x); x++; })
 		).wait();
 
 		EXPECT_EQ(5,x);
@@ -103,9 +103,9 @@ namespace core {
 		int z = 0;
 
 		parallel(
-			[&]() { EXPECT_EQ(0,x); x++; },
-			[&]() { EXPECT_EQ(0,y); y++; },
-			[&]() { EXPECT_EQ(0,z); z++; }
+			spawn([&]() { EXPECT_EQ(0,x); x++; }),
+			spawn([&]() { EXPECT_EQ(0,y); y++; }),
+			spawn([&]() { EXPECT_EQ(0,z); z++; })
 		).wait();
 
 		EXPECT_EQ(1,x);
@@ -122,13 +122,13 @@ namespace core {
 		int z = 0;
 
 		parallel(
-			[&]() { EXPECT_EQ(0,x); x++; },
+			spawn([&]() { EXPECT_EQ(0,x); x++; }),
 			sequence(
-				[&]() { EXPECT_EQ(0,y); y++; },
-				[&]() { EXPECT_EQ(1,y); y++; },
-				[&]() { EXPECT_EQ(2,y); y++; }
+				spawn([&]() { EXPECT_EQ(0,y); y++; }),
+				spawn([&]() { EXPECT_EQ(1,y); y++; }),
+				spawn([&]() { EXPECT_EQ(2,y); y++; })
 			),
-			[&]() { EXPECT_EQ(0,z); z++; }
+			spawn([&]() { EXPECT_EQ(0,z); z++; })
 		).wait();
 
 		EXPECT_EQ(1,x);
@@ -140,15 +140,15 @@ namespace core {
 	TEST(Treeture, Add) {
 
 		auto t1 = add(
-			[](){ return 12; },
-			[](){ return 14; }
+			spawn([]{ return 12; }),
+			spawn([]{ return 14; })
 		);
 
 		EXPECT_EQ(26,t1.get());
 
 		auto t2 = add(
-			[](){ return 1.2; },
-			[](){ return 4.3; }
+			spawn([]{ return 1.2; }),
+			spawn([]{ return 4.3; })
 		);
 
 		EXPECT_EQ(1.2+4.3,t2.get());
@@ -229,9 +229,9 @@ namespace core {
 
 		// test a sequence
 		sequence(
-			[&](){ res.push_back(2); },
-			[&](){ res.push_back(3); },
-			[&](){ res.push_back(1); }
+			spawn([&](){ res.push_back(2); }),
+			spawn([&](){ res.push_back(3); }),
+			spawn([&](){ res.push_back(1); })
 		).get();
 		EXPECT_EQ(std::vector<int>({1,2,3,1}), res);
 
@@ -240,9 +240,9 @@ namespace core {
 
 		// test a parallel
 		parallel(
-			[&](){ res[0] = 1; },
-			[&](){ res[1] = 2; },
-			[&](){ res[2] = 3; }
+			spawn([&](){ res[0] = 1; }),
+			spawn([&](){ res[1] = 2; }),
+			spawn([&](){ res[2] = 3; })
 		).get();
 		EXPECT_EQ(std::vector<int>({1,2,3}), res);
 

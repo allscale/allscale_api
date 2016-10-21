@@ -173,7 +173,7 @@ namespace user {
 				if (detail::area(r) < 1) return;
 				detail::for_each(r,body);
 			},
-			[](const range& r, const typename core::prec_fun<void(range)>::type& nested) {
+			[](const range& r, const auto& nested) {
 				// here we have the binary splitting
 
 				// TODO: think about splitting all dimensions
@@ -229,7 +229,7 @@ namespace user {
 				r.dependencies.wait();
 				for(auto it = r.begin; it != r.end; ++it) body(detail::access(it));
 			},
-			[](const range& r, const typename core::prec_fun<void(range)>::type& nested) {
+			[](const range& r, const auto& nested) {
 				// here we have the binary splitting
 				auto mid = r.begin + (r.end - r.begin)/2;
 				auto dep = Dependency::split(r.dependencies);
