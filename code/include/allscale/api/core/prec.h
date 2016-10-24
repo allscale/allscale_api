@@ -111,6 +111,12 @@ namespace core {
 			const std::tuple<StepCases...>& step
 		) : bc_test(test), base(base), step(step) {}
 
+		fun_def(const fun_def& other) = default;
+		fun_def(fun_def&& other) = default;
+
+		fun_def& operator=(const fun_def&) = delete;
+		fun_def& operator=(fun_def&&) = delete;
+
 		template<typename ... Funs>
 		immediate<O> sequentialCall(const I& in, const Funs& ... funs) const {
 			// check for the base case, producing a value to be wrapped
@@ -224,18 +230,18 @@ namespace core {
 			using I = typename utils::type_at<i,utils::type_list<Defs...>>::type::in_type;
 			using O = typename utils::type_at<i,utils::type_list<Defs...>>::type::out_type;
 
-			const rec_defs<Defs...>& defs;
+			rec_defs<Defs...> defs;
 
 			callable(const rec_defs<Defs...>& defs) : defs(defs) {};
 
 			auto sequential_call() const {
-				return [&](const I& in)->immediate<O> {
+				return [=](const I& in)->immediate<O> {
 					return defs.template sequentialCall<i,O,I>(in);
 				};
 			}
 
 			auto parallel_call() const {
-				return [&](const I& in)->treeture<O> {
+				return [=](const I& in)->treeture<O> {
 					return defs.template parallelCall<i,O,I>(in);
 				};
 			}
@@ -298,6 +304,12 @@ namespace core {
 		template<typename ... Args>
 		rec_defs(const Args& ... args) : std::tuple<Defs...>(args...) {}
 
+		rec_defs(const rec_defs&) = default;
+		rec_defs(rec_defs&&) = default;
+
+		rec_defs& operator=(const rec_defs&) = delete;
+		rec_defs& operator=(rec_defs&&) = delete;
+
 		template<
 			unsigned i,
 			typename O,
@@ -329,8 +341,7 @@ namespace core {
 	}
 
 
-	// --- parec operator ---
-
+	// --- prec operator ---
 
 	template<
 		unsigned i = 0,
@@ -371,7 +382,7 @@ namespace core {
 		typename BT, typename BC, typename SC,
 		typename dummy = typename std::enable_if<!detail::is_fun_def<BT>::value,int>::type
 	>
-	auto prec(const BT& t, const BC& b, const SC& s)->decltype(prec<0>(fun(t,b,s))) {
+	auto prec(const BT& t, const BC& b, const SC& s) {
 		return prec<0>(fun(t,b,s));
 	}
 
