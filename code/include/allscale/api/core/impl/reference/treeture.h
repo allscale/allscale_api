@@ -401,15 +401,7 @@ namespace reference {
 
 	private:
 
-		void narrow() const {
-			if (!task) return;
-			while(!queue.empty()) {
-				TaskBasePtr next = (queue.get()) ? task->getLeft() : task->getRight();
-				if (!next) return;
-				queue.pop();
-				task = next;
-			}
-		}
+		void narrow() const;
 
 	};
 
@@ -517,6 +509,17 @@ namespace reference {
 		#define LOG_SCHEDULE(MSG) \
 			{  \
 				if (DEBUG_SCHEDULE) { \
+					std::thread::id this_id = std::this_thread::get_id(); \
+					std::lock_guard<std::mutex> lock(g_log_mutex); \
+					std::cout << "Thread " << this_id << ": " << MSG << "\n"; \
+				} \
+			}
+
+		const bool DEBUG_TASKS = false;
+
+		#define LOG_TASKS(MSG) \
+			{  \
+				if (DEBUG_TASKS) { \
 					std::thread::id this_id = std::this_thread::get_id(); \
 					std::lock_guard<std::mutex> lock(g_log_mutex); \
 					std::cout << "Thread " << this_id << ": " << MSG << "\n"; \
@@ -870,6 +873,7 @@ namespace reference {
 
 			// add task to queue
 			LOG_SCHEDULE( "Queue size before: " << queue.size() << "/" << queue.capacity );
+			LOG_TASKS( "Scheduling task: " << task );
 
 			// enqueue task into work queue
 			if (queue.push_back(task)) {
@@ -887,6 +891,7 @@ namespace reference {
 
 
 			// since queue is full, process directly
+			LOG_TASKS( "Processing task directly: " << task );
 			task->process();
 		}
 
@@ -900,12 +905,14 @@ namespace reference {
 				if (queue.size() < (queue.capacity*3)/4) {
 
 					LOG_SCHEDULE( "Splitting tasks @ queue size: " << queue.size() << "/" << queue.capacity );
+					LOG_TASKS( "Splitting task: " << t );
 
 					// split task
 					t->split();
 				}
 
 				// process this task
+				LOG_TASKS( "Processing task: " << t );
 				t->process();
 				return true;
 			}
@@ -922,8 +929,11 @@ namespace reference {
 
 			// try to steal a task from another queue
 			if (TaskBasePtr t = other.queue.try_pop_front()) {
+				LOG_TASKS( "Stolen task: " << t );
 				t->split();
+				LOG_TASKS( "Splited task: " << t );
 				t->process();
+				LOG_TASKS( "Processed task: " << t );
 				return schedule_step();	// continue scheduling
 			}
 
@@ -983,6 +993,23 @@ namespace reference {
 		// wait for task to be completed
 		task->wait();
 	}
+
+	void treeture<void>::narrow() const {
+		if (!task) return;
+		while(!task->isDone() && !queue.empty()) {
+
+			// get sub-task (if available)
+			TaskBasePtr next = (queue.get()) ? task->getLeft() : task->getRight();
+
+			// if not available, that is the closet we can get for now
+			if (!next) return;
+
+			// narrow the task reference
+			queue.pop();
+			task = next;
+		}
+	}
+
 
 } // end namespace reference
 } // end namespace impl

@@ -12,6 +12,7 @@ namespace user {
 
 	// --- basic parallel loop usage ---
 
+
 	TEST(PFor,Basic) {
 		const int N = 200;
 
@@ -28,7 +29,7 @@ namespace user {
 		// -- direct execution --
 
 		// increase all by 1
-		pfor(0,N,[&](const int& i) {
+		pfor(0,N,[&](int i) {
 			data[i]++;
 		});
 
@@ -132,6 +133,44 @@ namespace user {
 
 	}
 
+
+	TEST(PFor, Handler) {
+
+		const int N = 10;
+
+		// create data
+		std::vector<int> data(N);
+
+		// initialize data
+		auto As = pfor(data,[](int& x) {
+			x = 10;
+		});
+
+		// check state
+		for(const auto& cur : data) {
+			EXPECT_EQ(0,cur);
+		}
+
+		// wait for first half
+		As.getLeft().wait();
+
+//		// check state
+//		for(int i=0; i<N/2; i++) {
+//			EXPECT_EQ(10,data[i]) << "i=" << i;
+//		}
+//		for(int i=N/2; i<N; i++) {
+//			EXPECT_EQ(0,data[i]) << "i=" << i;
+//		}
+
+		// wait for second half
+		As.getRight().wait();
+
+		// check state
+		for(const auto& cur : data) {
+			EXPECT_EQ(10,cur);
+		}
+
+	}
 
 //	// --- loop iteration sync ---
 //
