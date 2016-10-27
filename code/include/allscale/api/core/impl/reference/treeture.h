@@ -11,6 +11,7 @@
 
 #include <pthread.h>
 
+#include "allscale/utils/assert.h"
 #include "allscale/utils/printer/arrays.h"
 
 #include "allscale/api/core/impl/reference/lock.h"
@@ -23,6 +24,49 @@ namespace impl {
 inline
 #endif
 namespace reference {
+
+	// ---------------------------------------------------------------------------------------------
+	//											  Debugging
+	// ---------------------------------------------------------------------------------------------
+
+
+	// -- Declarations --
+
+	const bool DEBUG = false;
+
+	std::mutex g_log_mutex;
+
+	#define LOG(MSG) \
+		{  \
+			if (DEBUG) { \
+				std::thread::id this_id = std::this_thread::get_id(); \
+				std::lock_guard<std::mutex> lock(g_log_mutex); \
+				std::cerr << "Thread " << this_id << ": " << MSG << "\n"; \
+			} \
+		}
+
+	const bool DEBUG_SCHEDULE = false;
+
+	#define LOG_SCHEDULE(MSG) \
+		{  \
+			if (DEBUG_SCHEDULE) { \
+				std::thread::id this_id = std::this_thread::get_id(); \
+				std::lock_guard<std::mutex> lock(g_log_mutex); \
+				std::cerr << "Thread " << this_id << ": " << MSG << "\n"; \
+			} \
+		}
+
+	const bool DEBUG_TASKS = false;
+
+	#define LOG_TASKS(MSG) \
+		{  \
+			if (DEBUG_TASKS) { \
+				std::thread::id this_id = std::this_thread::get_id(); \
+				std::lock_guard<std::mutex> lock(g_log_mutex); \
+				std::cerr << "Thread " << this_id << ": " << MSG << "\n"; \
+			} \
+		}
+
 
 	inline const std::string& getImplementationName() {
 		static const std::string name = "Reference SharedMemory";
@@ -45,59 +89,330 @@ namespace reference {
 	template<typename T>
 	using TaskPtr = std::shared_ptr<Task<T>>;
 
+
 	// the RT's interface to a task
-	class TaskBase {
+	class TaskBase : public std::enable_shared_from_this<TaskBase> {
 
-		std::atomic<bool> done;
-
-		TaskBasePtr left;
-		TaskBasePtr right;
+		static unsigned getNextID() {
+			static std::atomic<int> counter(0);
+			return (DEBUG || DEBUG_SCHEDULE || DEBUG_TASKS) ? ++counter : 0;
+		}
 
 	public:
 
-		TaskBase(bool done) : done(done) {}
-		TaskBase(TaskBasePtr&& left, TaskBasePtr&& right)
-			: done(false), left(std::move(left)), right(std::move(right)) {}
+		enum class State {
+			New,          // < this task has been created, but not enabled to run yet
+			Ready,        // < this task may be processed (scheduled in work queues)
+			Running,      // < this task is running
+			Aggregating,  // < this split task is aggregating results (skipped if not split)
+			Done          // < this task is completed
+		};
 
-		virtual ~TaskBase() {}
-
-		virtual void process() {
-			if (done) return;
-			compute();
-			done = true;
-			left.reset();
-			right.reset();
+		friend std::ostream& operator<<(std::ostream& out, const State& state) {
+			switch(state) {
+				case State::New: 		   return out << "New";
+				case State::Ready: 		   return out << "Ready";
+				case State::Running: 	   return out << "Running";
+				case State::Aggregating:   return out << "Aggregating";
+				case State::Done: 		   return out << "Done";
+			}
+			return out << "Invalid";
 		}
 
-		virtual void split() {}
+	private:
 
-		bool isDone() const {
-			return done;
+		// for debugging -- give each task an ID
+		unsigned id;
+
+		std::atomic<State> state;
+
+		// split task data
+		TaskBasePtr left;
+		TaskBasePtr right;
+		bool parallel;
+
+		// for the processing of split tasks
+		TaskBase* parent;                      // < a pointer to the parent to be notified upon completion
+		std::atomic<int> alive_child_counter;  // < the number of active child tasks
+
+		// for the mutation from a simple to a split task
+		TaskBasePtr substitute;
+
+	public:
+
+		TaskBase(bool done = true) : id(getNextID()), state(done ? State::Done : State::New), parent(nullptr) {
+			LOG_TASKS( "Created " << *this );
 		}
 
+		TaskBase(TaskBasePtr&& left, TaskBasePtr&& right, bool parallel)
+			: id(getNextID()), state(State::New), left(left), right(right), parallel(parallel), parent(nullptr), alive_child_counter(0) {
+			LOG_TASKS( "Created " << *this );
+			assert(left);
+			assert(right);
+		}
+
+		virtual ~TaskBase() {
+			LOG_TASKS( "Destroying Task " << *this );
+			assert_true(isDone()) << *this;
+		};
+
+		// -- state transitions --
+
+		// New -> Ready
+		void start();
+
+		// Ready -> Running -> Done
+		void run() {
+			LOG_TASKS( "Running Task " << *this );
+
+			// check that it is allowed to run
+			assert_eq(state, State::Ready);
+
+			// update state
+			setState(State::Running);
+
+			// forward call to substitute if present
+			if (substitute) {
+				if (!substitute->isDone()) {
+					substitute->run();
+				}
+				return;
+			}
+
+			// process split tasks
+			if (isSplit()) {					// if there is a left, it is a split task
+
+				// check some assumptions
+				assert(left && right);
+				assert( left->state == State::New ||  left->state == State::Done);
+				assert(right->state == State::New || right->state == State::Done);
+
+				// run task sequentially if requested
+				if (!parallel) {
+					left->runInline();
+					right->runInline();
+					finish();
+					return;
+				}
+
+				// count number of sub-tasks to be started
+				assert_eq(0,alive_child_counter);
+				if (left->state  == State::New) alive_child_counter++;
+				if (right->state == State::New) alive_child_counter++;
+
+				// check whether there are sub-tasks
+				if (alive_child_counter == 0) {
+					// perform reduction immediately since sub-tasks are done
+					finish();
+					// done
+					return;
+				}
+
+				// backup right since if left finishes quickly it will be reset
+				TaskBasePtr r = right;
+
+				// schedule left (if necessary)
+				if (left->state == State::New) {
+					LOG_TASKS( "Starting child " << *left << " of " << *this );
+					left->parent = this;
+					left->start();
+				}
+
+				// schedule right (if necessary)
+				if (r->state == State::New) {
+					LOG_TASKS( "Starting child " << *r << " of " << *this );
+					r->parent = this;
+					r->start();
+				}
+
+				// done
+				return;
+			}
+
+			// run computation
+			execute();
+
+			// finish task
+			finish();
+		}
+
+		void runInline() {
+			// forward call to substitute if present
+			if (substitute) {
+				substitute->runInline();
+				return;
+			}
+
+			// skip done tasks
+			if (isDone()) return;
+
+			// set to ready without going through the worker pool
+			setState(TaskBase::State::Ready);
+
+			// run the task
+			run();
+		}
+
+		// Ready -> Split (if supported, otherwise remains Ready)
+		virtual void split() {
+			// forward call to substitute if present
+			if (substitute) {
+				substitute->split();
+				return;
+			}
+
+			assert_eq(state, State::Ready);
+			// nothing by default
+		}
+
+		// wait for the task completion
 		void wait();
 
+
+		bool isDone() const {
+			// forward call to substitute if present
+			if (substitute) return substitute->isDone();
+			return state == State::Done;
+		}
+
 		TaskBasePtr getLeft() const {
+			// forward call to substitute if present
+			if (substitute) return substitute->getLeft();
 			return left;
 		}
 
 		TaskBasePtr getRight() const {
+			// forward call to substitute if present
+			if (substitute) return substitute->getRight();
 			return right;
 		}
 
 	protected:
 
-		virtual void compute() =0;
+		// Ready -> Running -> Done
+		virtual void execute() =0;
 
-		void setLeft(const TaskBasePtr& left) {
-			this->left = left;
+		// Split -> Done
+		virtual void aggregate() {
+			// nothing to do by default
 		}
 
-		void setRight(const TaskBasePtr& right) {
-			this->right = right;
+		void setSubstitute(TaskBasePtr&& newSub) {
+			// can only happen if this task is in ready state
+			assert_eq(State::Ready, state);
+
+			// must only be set once!
+			assert_false(substitute);
+			assert_true(newSub);
+			substitute = std::move(newSub);
+
+			// enable sub-task (bring task to ready state if necessary, without scheduling)
+			if (substitute->state == TaskBase::State::New) substitute->setState(TaskBase::State::Ready);
+
+			// connect substitute to parent
+			substitute->parent = this;
 		}
 
-		void processSubTasks(bool parallel);
+	private:
+
+		void setState(State newState) {
+			// check correctness of state transitions
+			assert_true(
+				(state == State::New         && newState == State::Ready       ) ||
+				(state == State::Ready       && newState == State::Running     ) ||
+				(state == State::Running     && newState == State::Done        ) ||
+				(state == State::Running     && newState == State::Aggregating ) ||
+				(state == State::Aggregating && newState == State::Done        )
+			) << "Illegal state transition from " << state << " to " << newState;
+
+			state = newState;
+			LOG_TASKS( "Updated state: " << *this );
+		}
+
+		bool isSplit() const {
+			return (bool)left;
+		}
+
+		bool switchState(State from, State to) {
+			return state.compare_exchange_strong(from,to,std::memory_order_relaxed,std::memory_order_relaxed);
+		}
+
+		void childDone(const TaskBase& child) {
+
+			// check whether it is the substitute
+			if (substitute.get() == &child) {
+				LOG_TASKS( "Substitute " << substitute << " of " << *this << " done");
+				finish();
+				return;
+			}
+
+			// process a split-child
+			LOG_TASKS( "Child " << child << " of " << *this << " done" );
+
+			// this one must be a split task
+			assert_true(isSplit());
+			assert_true(left.get() == &child || right.get() == &child) << *this;
+
+			// decrement active child count
+			unsigned old_child_count = alive_child_counter.fetch_sub(1);
+
+			// log alive counter
+			LOG_TASKS( "Child " << child << " of " << *this << " -- alive left: " << (old_child_count - 1) );
+
+			// check whether this was the last child
+			if (old_child_count != 1) return;
+
+			// finish this task
+			finish();
+
+			LOG_TASKS( "Child " << child << " of " << *this << " done - processing complete" );
+		}
+
+		void finish() {
+
+			LOG_TASKS( "Finishing task " << *this );
+
+			// check precondition
+			assert_true(state == State::Running)
+					<< "Actual State: " << state << "\nTask: " << *this;
+
+			// if it is a split, finish it by aggregating results
+			if (isSplit()) {
+				// update state
+				setState(State::Aggregating);
+
+				// log aggregation step
+				LOG( "Aggregating task " << *this );
+
+				// aggregate result
+				aggregate();
+
+				// delete sub-tasks
+				left.reset();
+				right.reset();
+
+				// log completion
+				LOG( "Aggregating task " << *this << " complete" );
+			}
+
+			// job is done
+			setState(State::Done);
+
+			// notify parent
+			if (parent) {
+				parent->childDone(*this);
+			}
+		}
+
+		// -- support printing of tasks for debugging --
+
+		friend std::ostream& operator<<(std::ostream& out, const TaskBase& task) {
+			if (task.substitute) return out << "Task(" << task.id << " @ " << &task << "," << task.state << ") -> " << *task.substitute;
+			return out << "Task(" << task.id << " @ " << &task << "," << task.state << "," << task.left << "," << task.right << ")";;
+		}
+
+		template<typename Process, typename Split, typename R>
+		friend class SplitableTask;
 
 	};
 
@@ -108,32 +423,43 @@ namespace reference {
 
 		T value;
 
+		Task<T>* substitute;
+
 	public:
 
-		Task() : TaskBase(false) {}
+		Task() : TaskBase(false), substitute(nullptr) {}
 
 		Task(const T& value)
-			: TaskBase(true), value(value) {}
+			: TaskBase(true), value(value), substitute(nullptr) {}
 
-		Task(TaskBasePtr&& left, TaskBasePtr&& right)
-			: TaskBase(std::move(left),std::move(right)) {}
+		Task(TaskBasePtr&& left, TaskBasePtr&& right, bool parallel)
+			: TaskBase(std::move(left),std::move(right), parallel), substitute(nullptr) {}
 
 
 		virtual ~Task(){};
 
 		const T& getValue() const {
+			if (substitute) return substitute->getValue();
 			return value;
 		}
 
 	protected:
 
-		void compute() override {
+		void execute() override {
 			value = computeValue();
 		}
 
-		virtual T computeValue() {
-			return value;
-		};
+		void aggregate() override {
+			value = computeAggregate();
+		}
+
+		virtual T computeValue() { return value; };
+		virtual T computeAggregate() { return value; };
+
+		void setSubstitute(TaskPtr<T>&& substitute) {
+			this->substitute = substitute.get();
+			TaskBase::setSubstitute(std::move(substitute));
+		}
 
 	};
 
@@ -143,23 +469,26 @@ namespace reference {
 
 		Task() : TaskBase(false) {}
 
-		Task(TaskBasePtr&& left, TaskBasePtr&& right)
-			: TaskBase(std::move(left),std::move(right)) {}
+		Task(TaskBasePtr&& left, TaskBasePtr&& right, bool parallel)
+			: TaskBase(std::move(left),std::move(right),parallel) {}
 
 		virtual ~Task(){};
 
 		void getValue() const {
-			// nothing
 		}
 
 	protected:
 
-		void compute() override {
+		void execute() override {
 			computeValue();
 		}
 
-		virtual void computeValue() {
-		};
+		void aggregate() override {
+			computeAggregate();
+		}
+
+		virtual void computeValue() {};
+		virtual void computeAggregate() {};
 
 	};
 
@@ -204,13 +533,18 @@ namespace reference {
 			// if split
 			if (subTask) {
 				// compute sub-task
-				subTask->process();
+				subTask->runInline();
 				return subTask->getValue();
 			}
 			return task();
 		}
 
 		void split() override;
+
+		R computeAggregate() override {
+			assert(subTask);
+			return subTask->getValue();
+		}
 
 	};
 
@@ -222,44 +556,43 @@ namespace reference {
 
 		C merge;
 
-		bool parallel;
-
 	public:
 
 		SplitTask(TaskPtr<A>&& left, TaskPtr<B>&& right, C&& merge, bool parallel)
-			: Task<R>(std::move(left),std::move(right)),
+			: Task<R>(std::move(left),std::move(right),parallel),
 			  left(static_cast<Task<A>&>(*this->getLeft())),
 			  right(static_cast<Task<B>&>(*this->getRight())),
-			  merge(merge),
-			  parallel(parallel) {}
+			  merge(merge) {}
+
 
 		R computeValue() override {
-			this->processSubTasks(parallel);
-			return merge(left.getValue(),right.getValue());
+			// should not be reached
+			assert_fail() << "Should always be split!";
+			return {};
 		}
 
-		void split() override {
-			// ignore
+		// Split -> Done
+		R computeAggregate() override {
+			return merge(left.getValue(),right.getValue());
 		}
 
 	};
 
 	template<typename A, typename B>
 	class SplitTask<void,A,B,void> : public Task<void> {
-
-		bool parallel;
-
 	public:
 
 		SplitTask(TaskBasePtr&& left, TaskBasePtr&& right, bool parallel)
-			: Task<void>(std::move(left),std::move(right)), parallel(parallel) {}
+			: Task<void>(std::move(left),std::move(right),parallel) {}
 
 		void computeValue() override {
-			this->processSubTasks(parallel);
+			// should not be reached
+			assert_fail() << "Should always be split!";
 		}
 
-		void split() override {
-			// ignore
+		// Split -> Done
+		void computeAggregate() override {
+			// nothing to do
 		}
 
 	};
@@ -351,9 +684,14 @@ namespace reference {
 		template<typename T>
 		treeture(treeture<T>&& t) : task(std::move(t.task)) {}
 
+		void start() {
+			task->start();
+		}
+
 		void wait() const;
 
 		void get() {
+			start();
 			wait();
 		}
 
@@ -434,9 +772,14 @@ namespace reference {
 			return *this;
 		}
 
+		void start() {
+			task->start();
+		}
+
 		void wait() const;
 
 		const T& get() {
+			start();
 			wait();
 			return task->getValue();
 		}
@@ -474,12 +817,14 @@ namespace reference {
 
 	template<typename Process, typename Split, typename R>
 	void SplitableTask<Process,Split,R>::split() {
+		assert_eq(TaskBase::State::Ready, this->state);
+
 		// decompose this task
 		subTask = std::static_pointer_cast<Task<R>>(decompose().task);
+		assert_true(subTask->state == TaskBase::State::New || subTask->state == TaskBase::State::Done);
 
-		// mutate this task into a split task
-		this->setLeft(subTask->getLeft());
-		this->setRight(subTask->getRight());
+		// mutate to new task
+		Task<R>::setSubstitute(std::move(subTask));
 	}
 
 
@@ -488,43 +833,6 @@ namespace reference {
 	// ---------------------------------------------------------------------------------------------
 
 	namespace runtime {
-
-		// -- Declarations --
-
-		const bool DEBUG = false;
-
-		std::mutex g_log_mutex;
-
-		#define LOG(MSG) \
-			{  \
-				if (DEBUG) { \
-					std::thread::id this_id = std::this_thread::get_id(); \
-					std::lock_guard<std::mutex> lock(g_log_mutex); \
-					std::cout << "Thread " << this_id << ": " << MSG << "\n"; \
-				} \
-			}
-
-		const bool DEBUG_SCHEDULE = false;
-
-		#define LOG_SCHEDULE(MSG) \
-			{  \
-				if (DEBUG_SCHEDULE) { \
-					std::thread::id this_id = std::this_thread::get_id(); \
-					std::lock_guard<std::mutex> lock(g_log_mutex); \
-					std::cout << "Thread " << this_id << ": " << MSG << "\n"; \
-				} \
-			}
-
-		const bool DEBUG_TASKS = false;
-
-		#define LOG_TASKS(MSG) \
-			{  \
-				if (DEBUG_TASKS) { \
-					std::thread::id this_id = std::this_thread::get_id(); \
-					std::lock_guard<std::mutex> lock(g_log_mutex); \
-					std::cout << "Thread " << this_id << ": " << MSG << "\n"; \
-				} \
-			}
 
 
 		// -----------------------------------------------------------------
@@ -869,11 +1177,10 @@ namespace reference {
 
 		}
 
-		void Worker::schedule(const TaskBasePtr& task) {
+		inline void Worker::schedule(const TaskBasePtr& task) {
 
 			// add task to queue
 			LOG_SCHEDULE( "Queue size before: " << queue.size() << "/" << queue.capacity );
-			LOG_TASKS( "Scheduling task: " << task );
 
 			// enqueue task into work queue
 			if (queue.push_back(task)) {
@@ -891,8 +1198,7 @@ namespace reference {
 
 
 			// since queue is full, process directly
-			LOG_TASKS( "Processing task directly: " << task );
-			task->process();
+			task->run();
 		}
 
 
@@ -905,15 +1211,13 @@ namespace reference {
 				if (queue.size() < (queue.capacity*3)/4) {
 
 					LOG_SCHEDULE( "Splitting tasks @ queue size: " << queue.size() << "/" << queue.capacity );
-					LOG_TASKS( "Splitting task: " << t );
 
 					// split task
 					t->split();
 				}
 
 				// process this task
-				LOG_TASKS( "Processing task: " << t );
-				t->process();
+				t->run();
 				return true;
 			}
 
@@ -929,11 +1233,9 @@ namespace reference {
 
 			// try to steal a task from another queue
 			if (TaskBasePtr t = other.queue.try_pop_front()) {
-				LOG_TASKS( "Stolen task: " << t );
+				LOG_SCHEDULE( "Stolen task: " << t );
 				t->split();
-				LOG_TASKS( "Splited task: " << t );
-				t->process();
-				LOG_TASKS( "Processed task: " << t );
+				t->run();
 				return schedule_step();	// continue scheduling
 			}
 
@@ -944,25 +1246,36 @@ namespace reference {
 
 	}
 
-	inline void TaskBase::processSubTasks(bool parallel) {
-		if (!parallel) {
-			// run sequentially
-			if (left) left->process();
-			if (right) right->process();
+
+	inline void TaskBase::start() {
+		LOG_TASKS("Starting " << *this );
+
+		// forward call to substitute, if present
+		if (substitute) {
+			substitute->start();
 			return;
 		}
 
-		// run in parallel
-		if (left)  runtime::getCurrentWorker().schedule(left);
-		if (right) runtime::getCurrentWorker().schedule(right);
+		// update state from New -> Ready only once
+		if(!switchState(State::New,State::Ready)) return;
 
-		// wait for them to finish
-		if (left)  left->wait();
-		if (right) right->wait();
+		// schedule task
+		runtime::getCurrentWorker().schedule(this->shared_from_this());
 	}
 
 	inline void TaskBase::wait() {
-		while(!done) {
+		LOG_TASKS("Waiting for " << *this );
+
+		// check that this task has been started before
+		assert_ge(state,State::Ready);
+
+		// forward call to substitute, if present
+		if (substitute) {
+			substitute->wait();
+			return;
+		}
+
+		while(!isDone()) {
 			// make some progress
 			runtime::getCurrentWorker().schedule_step();
 		}
@@ -971,7 +1284,6 @@ namespace reference {
 	template<typename T>
 	void treeture<T>::wait() const {
 		if (!task) return;
-		runtime::getCurrentWorker().schedule(task);
 		task->wait();
 	}
 
@@ -980,9 +1292,6 @@ namespace reference {
 
 		// narrow scope
 		narrow();
-
-		// trigger task execution
-		runtime::getCurrentWorker().schedule(task);
 
 		// keep narrowing scope until task fits or task is done
 		while(!queue.empty() && !task->isDone()) {

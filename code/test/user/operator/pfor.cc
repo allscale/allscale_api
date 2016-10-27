@@ -134,76 +134,81 @@ namespace user {
 	}
 
 
-	TEST(PFor, Handler) {
-
-		const int N = 10;
-
-		// create data
-		std::vector<int> data(N);
-
-		// initialize data
-		auto As = pfor(data,[](int& x) {
-			x = 10;
-		});
-
-		// check state
-		for(const auto& cur : data) {
-			EXPECT_EQ(0,cur);
-		}
-
-		// wait for first half
-		As.getLeft().wait();
-
-//		// check state
-//		for(int i=0; i<N/2; i++) {
-//			EXPECT_EQ(10,data[i]) << "i=" << i;
-//		}
-//		for(int i=N/2; i<N; i++) {
-//			EXPECT_EQ(0,data[i]) << "i=" << i;
-//		}
-
-		// wait for second half
-		As.getRight().wait();
-
-		// check state
-		for(const auto& cur : data) {
-			EXPECT_EQ(10,cur);
-		}
-
-	}
-
-//	// --- loop iteration sync ---
+//	TEST(PFor, Handler) {
 //
-//	TEST(Pfor, SyncOneOnOne) {
-//		const int N = 200;
+//		const int N = 10;
 //
+//		// create data
 //		std::vector<int> data(N);
 //
-//		auto As = pfor(0,N,[&](int i) {
-//			data[i] = 0;
+//		// initialize data
+//		auto As = pfor(data,[](int& x) {
+//			x = 10;
 //		});
 //
-//		auto Bs = pfor(0,N,[&](int i) {
-//			EXPECT_EQ(0,data[i]);
-//			data[i] = 1;
-//		}, one_on_one(As));
-//
-//		auto Cs = pfor(0,N,[&](int i) {
-//			EXPECT_EQ(1,data[i]);
-//			data[i] = 2;
-//		}, one_on_one(Bs));
-//
-//		for(int i=0; i<N; i++) {
-//			EXPECT_EQ(0, data[i]);
+//		// check state
+//		for(const auto& cur : data) {
+//			EXPECT_EQ(0,cur);
 //		}
 //
-//		Cs.wait();
+//		// wait for first half
+//		As.getLeft().wait();
 //
-//		for(int i=0; i<N; i++) {
-//			EXPECT_EQ(2, data[i]);
+////		// check state
+////		for(int i=0; i<N/2; i++) {
+////			EXPECT_EQ(10,data[i]) << "i=" << i;
+////		}
+////		for(int i=N/2; i<N; i++) {
+////			EXPECT_EQ(0,data[i]) << "i=" << i;
+////		}
+//
+//		// wait for second half
+//		As.getRight().wait();
+//
+//		// check state
+//		for(const auto& cur : data) {
+//			EXPECT_EQ(10,cur);
 //		}
+//
 //	}
-//
+
+	// --- loop iteration sync ---
+
+	TEST(DISABLED_Pfor, SyncOneOnOne) {
+		const int N = 10;
+
+		std::mutex outLock;
+		auto log = [&](const std::string& str, int i) {
+			std::lock_guard<std::mutex> lock(outLock);
+			std::cerr << str << i << "\n";
+		};
+
+		std::vector<int> data(N);
+
+		auto As = pfor(0,N,[&](int i) {
+			log("A",i);
+			data[i] = 0;
+		});
+
+		auto Bs = pfor(0,N,[&](int i) {
+			log("B",i);
+			EXPECT_EQ(0,data[i]);
+			data[i] = 1;
+		}, one_on_one(As));
+
+		auto Cs = pfor(0,N,[&](int i) {
+			log("C",i);
+			EXPECT_EQ(1,data[i]);
+			data[i] = 2;
+		}, one_on_one(Bs));
+
+		Cs.wait();
+
+		for(int i=0; i<N; i++) {
+			EXPECT_EQ(2, data[i]);
+		}
+	}
+
 //	TEST(Pfor, SyncNeighbor) {
 //		const int N = 20000;
 //

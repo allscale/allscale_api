@@ -245,19 +245,19 @@ namespace impl {
 		EXPECT_EQ(0,y);
 		EXPECT_EQ(0,z);
 
-		b.wait();
+		b.get();
 
 		EXPECT_EQ(0,x);
 		EXPECT_EQ(1,y);
 		EXPECT_EQ(0,z);
 
-		a.wait();
+		a.get();
 
 		EXPECT_EQ(1,x);
 		EXPECT_EQ(1,y);
 		EXPECT_EQ(0,z);
 
-		a.wait();
+		a.get();
 
 		EXPECT_EQ(1,x);
 		EXPECT_EQ(1,y);
@@ -272,7 +272,7 @@ namespace impl {
 
 		spawn(
 			[&]{ z++; }
-		).wait();
+		).get();
 
 		EXPECT_EQ(0,x);
 		EXPECT_EQ(0,y);
@@ -302,7 +302,7 @@ namespace impl {
 			EXPECT_EQ(0,y);
 			EXPECT_EQ(0,z);
 
-			t.wait();
+			t.get();
 
 			if (x == 0) {
 
@@ -312,7 +312,7 @@ namespace impl {
 				EXPECT_EQ(1,y);
 				EXPECT_EQ(1,z);
 
-				t.wait();
+				t.get();
 
 				EXPECT_EQ(0,x);
 				EXPECT_EQ(1,y);
@@ -325,7 +325,7 @@ namespace impl {
 				EXPECT_EQ(0,y);
 				EXPECT_EQ(0,z);
 
-				t.wait();
+				t.get();
 
 				EXPECT_EQ(1,x);
 				EXPECT_EQ(0,y);
@@ -379,7 +379,7 @@ namespace impl {
 
 		forEach(0,N,[&](int i){
 			data[i]++;
-		}).wait();
+		}).get();
 
 		for(int i=0; i<N; i++) {
 			EXPECT_EQ(11, data[i]);
@@ -403,7 +403,7 @@ namespace impl {
 		}
 
 		// wait for completion
-		As.wait();
+		As.get();
 
 		// check result
 		for(int i=0; i<N; i++) {
@@ -453,7 +453,7 @@ namespace impl {
 
 		forEachAfter(1,N,[&](int i){
 			data[i] = data[i-1] + 1;
-		}).wait();
+		}).get();
 
 		for(int i=0; i<N; i++) {
 			EXPECT_EQ(i, data[i]);
@@ -479,7 +479,7 @@ namespace impl {
 		}
 
 		// wait for completion
-		As.wait();
+		As.get();
 
 		// check result
 		for(int i=0; i<N; i++) {

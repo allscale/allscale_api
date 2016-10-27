@@ -67,15 +67,21 @@ namespace core {
 		int x = 0;
 		auto job = spawn([&](){ x++; });
 		EXPECT_EQ(0,x);
+
+		job.get();
+		EXPECT_EQ(1,x);
+
 		job.wait();
 		EXPECT_EQ(1,x);
-		job.wait();
-		EXPECT_EQ(1,x);
+
 		job.getLeft().getRight().wait();
 		EXPECT_EQ(1,x);
 
+		// -- spawn a new job --
 		job = spawn([&](){ x++; });
 		EXPECT_EQ(1,x);
+
+		job.get();
 		job.getLeft().getRight().wait();
 		EXPECT_EQ(2,x);
 
@@ -91,7 +97,7 @@ namespace core {
 			spawn([&]() { EXPECT_EQ(2,x); x++; }),
 			spawn([&]() { EXPECT_EQ(3,x); x++; }),
 			spawn([&]() { EXPECT_EQ(4,x); x++; })
-		).wait();
+		).get();
 
 		EXPECT_EQ(5,x);
 	}
@@ -106,7 +112,7 @@ namespace core {
 			spawn([&]() { EXPECT_EQ(0,x); x++; }),
 			spawn([&]() { EXPECT_EQ(0,y); y++; }),
 			spawn([&]() { EXPECT_EQ(0,z); z++; })
-		).wait();
+		).get();
 
 		EXPECT_EQ(1,x);
 		EXPECT_EQ(1,y);
@@ -129,7 +135,7 @@ namespace core {
 				spawn([&]() { EXPECT_EQ(2,y); y++; })
 			),
 			spawn([&]() { EXPECT_EQ(0,z); z++; })
-		).wait();
+		).get();
 
 		EXPECT_EQ(1,x);
 		EXPECT_EQ(3,y);

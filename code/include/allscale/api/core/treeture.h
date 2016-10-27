@@ -72,6 +72,8 @@ namespace core {
 		template<typename T>
 		treeture(treeture<T>&& t) : impl(std::move(t)) {}
 
+		void start() { impl::start(); }
+
 		void wait() const { impl::wait(); }
 
 		void get() { impl::get(); }
@@ -138,6 +140,8 @@ namespace core {
 
 		treeture& operator=(const treeture&) = delete;
 		treeture& operator=(treeture&& other) = default;
+
+		void start() { impl::start(); }
 
 		void wait() const { impl::wait(); }
 

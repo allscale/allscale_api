@@ -82,8 +82,9 @@ namespace user {
 
 		// -- Adaptive Loop Dependencies --
 
+		class iteration_reference {
 
-		struct iteration_reference {
+			friend class iteration_dependency;
 
 			core::treeture<void> handle;
 
@@ -92,31 +93,52 @@ namespace user {
 			iteration_reference(core::treeture<void>&& handle) : handle(std::move(handle)) {}
 
 			iteration_reference() {};
-			iteration_reference(const iteration_reference&) = default;
+			iteration_reference(const iteration_reference&) = delete;
 			iteration_reference(iteration_reference&&) = default;
 
-			iteration_reference& operator=(const iteration_reference&) = default;
+			iteration_reference& operator=(const iteration_reference&) = delete;
 			iteration_reference& operator=(iteration_reference&&) = default;
 
 			~iteration_reference() { wait(); }
+
+			void wait() {
+				handle.get();
+			}
+
+		};
+
+		class iteration_dependency {
+
+			core::treeture<void> handle;
+
+			iteration_dependency(core::treeture<void>&& handle)
+				: handle(std::move(handle)) {}
+
+		public:
+
+			iteration_dependency(const iteration_reference& ref)
+				: handle(ref.handle) {}
+
 
 			void wait() const {
 				handle.wait();
 			}
 
-			iteration_reference getLeft() const {
-				return handle.getLeft();
+			iteration_dependency getLeft() const {
+				return *this;
+//				return handle.getLeft();
 			}
 
-			iteration_reference getRight() const {
-				return handle.getRight();
+			iteration_dependency getRight() const {
+				return *this;
+//				return handle.getRight();
 			}
+
 		};
-
 
 		class Dependencies {
 
-			std::vector<iteration_reference> dependencies;
+			std::vector<iteration_dependency> dependencies;
 
 		public:
 
@@ -136,12 +158,12 @@ namespace user {
 				return dependencies.size() == 1;
 			}
 
-			const iteration_reference& getDependency() const {
+			const iteration_dependency& getDependency() const {
 				assert_true(isSingle());
 				return dependencies[0];
 			}
 
-			const std::vector<iteration_reference>& getDependencies() const {
+			const std::vector<iteration_dependency>& getDependencies() const {
 				return dependencies;
 			}
 
@@ -190,7 +212,7 @@ namespace user {
 		}
 
 		// trigger parallel processing
-		return core::prec(
+		auto res = core::prec(
 			[](const range& r) {
 				// if there is only one element left, we reached the base case
 				return detail::area(r) <= 1;
@@ -230,6 +252,12 @@ namespace user {
 				);
 			}
 		)(full);
+
+		// trigger execution
+		res.start();
+
+		// done
+		return std::move(res);
 	}
 
 	/**
@@ -247,7 +275,7 @@ namespace user {
 		};
 
 		// the parallel execution
-		return core::prec(
+		auto res = core::prec(
 			[](const range& r) {
 				return detail::distance(r.begin,r.end) <= 1;
 			},
@@ -265,6 +293,12 @@ namespace user {
 				);
 			}
 		)(range{a,b,dependency.getInitial()});
+
+		// start processing
+		res.start();
+
+		// done
+		return std::move(res);
 	}
 
 	template<typename Iter, typename Body>
@@ -326,7 +360,7 @@ namespace user {
 
 	public:
 
-		dependency(const detail::iteration_reference& loop)
+		dependency(const detail::iteration_dependency& loop)
 			: initial(loop) {}
 
 		const detail::Dependencies& getInitial() const {
@@ -337,7 +371,7 @@ namespace user {
 
 	struct one_on_one : public dependency {
 
-		one_on_one(const detail::iteration_reference& loop)
+		one_on_one(const detail::iteration_dependency& loop)
 			: dependency(loop) {}
 
 		static detail::SubDependencies split(const detail::Dependencies& dep) {
@@ -354,53 +388,53 @@ namespace user {
 
 	};
 
-	struct neighborhood_sync : public dependency {
-
-		neighborhood_sync(const detail::iteration_reference& loop)
-			: dependency(loop) {}
-
-		static detail::SubDependencies split(const detail::Dependencies& dep) {
-			using TaskRef = detail::iteration_reference;
-
-			TaskRef done;
-
-			// check for the root case
-			if (dep.isSingle()) {
-				const TaskRef& task = dep.getDependency();
-
-				// split the dependency
-				const TaskRef& left = task.getLeft();
-				const TaskRef& right = task.getRight();
-
-				return {
-					detail::Dependencies( done,left,right ),
-					detail::Dependencies( left,right,done )
-				};
-			}
-
-			// split up input dependencies
-			const auto& dependencies = dep.getDependencies();
-			if (dependencies.size() == 3) {
-
-				// split each of those
-				TaskRef a = dependencies[0].getRight();
-				TaskRef b = dependencies[1].getLeft();
-				TaskRef c = dependencies[1].getRight();
-				TaskRef d = dependencies[2].getLeft();
-
-				// and pack accordingly
-				return {
-					detail::Dependencies( a,b,c ),
-					detail::Dependencies( b,c,d )
-				};
-
-			}
-
-			// fall-back: no splitting
-			return { dep, dep };
-		}
-
-	};
+//	struct neighborhood_sync : public dependency {
+//
+//		neighborhood_sync(const detail::iteration_reference& loop)
+//			: dependency(loop) {}
+//
+//		static detail::SubDependencies split(const detail::Dependencies& dep) {
+//			using TaskRef = detail::iteration_reference;
+//
+//			TaskRef done;
+//
+//			// check for the root case
+//			if (dep.isSingle()) {
+//				const TaskRef& task = dep.getDependency();
+//
+//				// split the dependency
+//				const TaskRef& left = task.getLeft();
+//				const TaskRef& right = task.getRight();
+//
+//				return {
+//					detail::Dependencies( done,left,right ),
+//					detail::Dependencies( left,right,done )
+//				};
+//			}
+//
+//			// split up input dependencies
+//			const auto& dependencies = dep.getDependencies();
+//			if (dependencies.size() == 3) {
+//
+//				// split each of those
+//				TaskRef a = dependencies[0].getRight();
+//				TaskRef b = dependencies[1].getLeft();
+//				TaskRef c = dependencies[1].getRight();
+//				TaskRef d = dependencies[2].getLeft();
+//
+//				// and pack accordingly
+//				return {
+//					detail::Dependencies( a,b,c ),
+//					detail::Dependencies( b,c,d )
+//				};
+//
+//			}
+//
+//			// fall-back: no splitting
+//			return { dep, dep };
+//		}
+//
+//	};
 
 
 
