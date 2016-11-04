@@ -9,39 +9,51 @@
  * TODO: extend on this here ...
  */
 
-// This header starts by importing the actual future implementation. The
-// implementation includes:
-//		- the definintion of the future
-//		- a minimal set of basic factory functions
-//
-#ifdef OMP_CILK_IMPL
-	// a OpenMP / Cilk based implementation
-	#include "allscale/api/core/impl/omp_cilk/treeture.h"
-#else
-	#ifndef REFERENCE_IMPL
-		#define REFERENCE_IMPL 1
-	#endif
-	// a reference-runtime based implementation
-	#include "allscale/api/core/impl/reference/treeture.h"
-#endif
+#include "allscale/api/core/impl/sequential/treeture.h"
+#include "allscale/api/core/impl/reference/treeture.h"
 
 namespace allscale {
 namespace api {
 namespace core {
 
 
-	// ---------------------------------------------------------------------------------------------
+	// --------------------------------------------------------------------------------------------
 	//											Treetures
-	// ---------------------------------------------------------------------------------------------
-
-	namespace detail {
-		template<typename T>
-		using treeture_impl = impl::treeture<T>;
-	}
+	// --------------------------------------------------------------------------------------------
 
 
+	// ------------------------------------- Declarations -----------------------------------------
+
+	/**
+	 * The actual treeture, referencing the computation of a value.
+	 */
 	template<typename T>
 	class treeture;
+
+	/**
+	 * A factory for producing a treeture. While the treeture factory exists, input dependencies
+	 * may be added to the treeture to orchestrate its execution. Once the factory has produced
+	 * the treeture, the dependencies get frozen and the associated task is scheduled for execution.
+	 */
+	template<typename T>
+	class treeture_factory;
+
+	/**
+	 * A treeture factory factory that is delaying the creation of the factory until
+	 * the actual evaluation. This is to prevent the need to materialize the entire computation
+	 * tree before being able to start the computation.
+	 */
+	template<typename T, typename Gen>
+	class lazy_treeture_factory_factory;
+
+	/**
+	 * A class to model task dependencies
+	 */
+	template<typename ... Vs>
+	class dependencies;
+
+
+	// ------------------------------------- Definitions ------------------------------------------
 
 
 	template<>
@@ -49,8 +61,7 @@ namespace core {
 
 		using impl = detail::treeture_impl<void>;
 		
-		template<typename ... Args>
-		treeture(Args&& ... args) : impl(std::move(args)...) {}
+		treeture(detail::treeture_impl<void>&& treeture) : impl(std::move(treeture)) {}
 
 	public:
 
@@ -96,6 +107,14 @@ namespace core {
 			return impl::getRight();
 		}
 
+		treeture& after(const treeture& dep) {
+			return after({dep});
+		}
+
+		treeture& after(treeture_dependencies&& deps) {
+			impl::after(std::move(deps));
+			return *this;
+		}
 
 		// -- factories --
 
@@ -104,18 +123,18 @@ namespace core {
 		}
 
 		template<typename Action>
-		static treeture spawn(const Action& a) {
-			return impl::spawn(a);
+		static treeture spawn(treeture_dependencies&& deps, const Action& a) {
+			return impl::spawn(std::move(deps),a);
 		}
 
 		template<typename Process, typename Split>
-		static treeture spawn(const Process& p, const Split& s) {
-			return impl::spawn(p,s);
+		static treeture spawn(treeture_dependencies&& deps, const Process& p, const Split& s) {
+			return impl::spawn(std::move(deps),p,s);
 		}
 
 		template<typename A, typename B>
-		static treeture combine(treeture<A>&& a, treeture<B>&& b, bool parallel = true) {
-			return impl::combine(std::move(a), std::move(b), parallel);
+		static treeture combine(treeture_dependencies&& deps, treeture<A>&& a, treeture<B>&& b, bool parallel = true) {
+			return impl::combine(std::move(deps),std::move(a), std::move(b), parallel);
 		}
 
 	};
@@ -162,18 +181,18 @@ namespace core {
 		}
 
 		template<typename Action>
-		static treeture spawn(const Action& a) {
-			return impl::spawn(a);
+		static treeture spawn(treeture_dependencies&& deps, const Action& a) {
+			return impl::spawn(std::move(deps),a);
 		}
 
 		template<typename Process, typename Split>
-		static treeture spawn(const Process& p, const Split& s) {
-			return impl::spawn(p,s);
+		static treeture spawn(treeture_dependencies&& deps, const Process& p, const Split& s) {
+			return impl::spawn(std::move(deps),p,s);
 		}
 
 		template<typename A, typename B, typename C>
-		static treeture combine(treeture<A>&& a, treeture<B>&& b, C&& merge, bool parallel = true) {
-			return impl::combine(std::move(a),std::move(b), std::move(merge),parallel);
+		static treeture combine(treeture_dependencies&& deps, treeture<A>&& a, treeture<B>&& b, C&& merge, bool parallel = true) {
+			return impl::combine(std::move(deps),std::move(a),std::move(b), std::move(merge),parallel);
 		}
 
 	};
@@ -224,7 +243,7 @@ namespace core {
 		typename R = std::result_of_t<Action()>
 	>
 	treeture<R> spawn(const Action& a) {
-		return treeture<R>::spawn(a);
+		return treeture<R>::spawn(treeture_dependencies(),a);
 	}
 
 	template<
@@ -233,7 +252,7 @@ namespace core {
 		typename R = std::result_of_t<Process()>
 	>
 	treeture<R> spawn(const Process& p, const Split& s) {
-		return treeture<R>::spawn(p,s);
+		return treeture<R>::spawn(treeture_dependencies(),p,s);
 	}
 
 
@@ -247,7 +266,7 @@ namespace core {
 
 	template<typename A, typename B>
 	treeture<void> parallel(treeture<A>&& a, treeture<B>&& b) {
-		return treeture<void>::combine(std::move(a),std::move(b),true);
+		return treeture<void>::combine(treeture_dependencies(),std::move(a),std::move(b),true);
 	}
 
 	template<typename F, typename ... Rest>
@@ -264,7 +283,7 @@ namespace core {
 
 	template<typename A, typename B>
 	treeture<void> sequence(treeture<A>&& a, treeture<B>&& b) {
-		return treeture<void>::combine(std::move(a),std::move(b),false);
+		return treeture<void>::combine(treeture_dependencies(),std::move(a),std::move(b),false);
 	}
 
 	template<typename F, typename ... Rest>
@@ -277,7 +296,7 @@ namespace core {
 
 	template<typename A, typename B, typename R = decltype(std::declval<A>() + std::declval<B>())>
 	treeture<R> add(treeture<A>&& a, treeture<B>&& b) {
-		return treeture<R>::combine(std::move(a),std::move(b),[](R a, R b) { return a + b; });
+		return treeture<R>::combine(treeture_dependencies(),std::move(a),std::move(b),[](R a, R b) { return a + b; });
 	}
 
 

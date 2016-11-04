@@ -25,7 +25,7 @@ namespace sequential {
 
 	/**
 	 * A factory for producing a treeture. While the treeture factory exists, input dependencies
-	 * may be added to the treeture to orchestrate it execution. Once the factory has produced
+	 * may be added to the treeture to orchestrate its execution. Once the factory has produced
 	 * the treeture, the dependencies get frozen and the associated task is scheduled for execution.
 	 */
 	template<typename T>
@@ -61,6 +61,9 @@ namespace sequential {
 		explicit treeture(Fun&& fun) {
 			fun();
 		}
+
+		template<typename T>
+		treeture(const treeture<T>& other) {}
 
 		void wait() {}
 
