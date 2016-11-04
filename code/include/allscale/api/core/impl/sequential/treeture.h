@@ -39,34 +39,15 @@ namespace sequential {
 	template<typename T, typename Gen>
 	class lazy_treeture_factory_factory;
 
+	/**
+	 * A class to model task dependencies
+	 */
+	class dependencies;
+
 
 	// ------------------------------------- Definitions ------------------------------------------
 
 	// -- treeture --
-
-	template<typename T>
-	class treeture {
-
-		T value;
-
-	public:
-
-		using value_type = T;
-
-		treeture(const T& value)
-			: value(value) {}
-
-		template<typename Fun>
-		explicit treeture(Fun&& fun)
-			: value(fun()) {}
-
-		void wait() {}
-
-		T get() const {
-			return value;
-		}
-
-	};
 
 	template<>
 	class treeture<void> {
@@ -86,7 +67,52 @@ namespace sequential {
 		void get() const {
 			// nothing to do
 		}
+
+		treeture<void> getLeft() const {
+			return {};
+		}
+
+		treeture<void> getRight() const {
+			return {};
+		}
+
 	};
+
+	template<typename T>
+	class treeture {
+
+		T value;
+
+	public:
+
+		using value_type = T;
+
+		treeture(const T& value)
+			: value(value) {}
+
+		treeture(const T&& value)
+			: value(std::move(value)) {}
+
+		template<typename Fun>
+		explicit treeture(Fun&& fun)
+			: value(fun()) {}
+
+		void wait() {}
+
+		T get() const {
+			return value;
+		}
+
+		treeture<void> getLeft() const {
+			return {};
+		}
+
+		treeture<void> getRight() const {
+			return {};
+		}
+
+	};
+
 
 	template<typename Op, typename R = std::result_of_t<Op()>>
 	treeture<R> make_treeture(Op&& op) {
@@ -113,6 +139,17 @@ namespace sequential {
 
 		treeture_factory& operator=(const treeture_factory&) =delete;
 		treeture_factory& operator=(treeture_factory&&) =default;
+
+		template<typename V>
+		treeture_factory&& after(const treeture<V>&) && {
+			// for the sequential case, dependencies need not be recorded
+			return std::move(*this);
+		}
+
+		template<typename V>
+		treeture_factory&& after(treeture_factory<V>&& factory) && {
+			return std::move(*this).after(factory.toTreeture());
+		}
 
 		treeture<T> toTreeture() const {
 			return res;
@@ -143,11 +180,22 @@ namespace sequential {
 		explicit lazy_treeture_factory_factory(Gen&& gen)
 			: gen(std::move(gen)) {}
 
-//		lazy_treeture_factory_factory(const lazy_treeture_factory_factory&) =delete;
-//		lazy_treeture_factory_factory(lazy_treeture_factory_factory&&) =default;
-//
-//		lazy_treeture_factory_factory& operator=(const lazy_treeture_factory_factory&) =delete;
-//		lazy_treeture_factory_factory& operator=(lazy_treeture_factory_factory&&) =default;
+		template<typename V>
+		lazy_treeture_factory_factory&& after(const treeture<V>&) && {
+			// for the sequential case, dependencies need not be recorded
+			return std::move(*this);
+		}
+
+
+		template<typename V>
+		lazy_treeture_factory_factory&& after(treeture_factory<V>&& factory) && {
+			return std::move(*this).after(factory.toTreeture());
+		}
+
+		template<typename V, typename A>
+		lazy_treeture_factory_factory&& after(lazy_treeture_factory_factory<V,A>&& factory) && {
+			return std::move(*this).after(factory.toTreeture());
+		}
 
 		treeture_factory<T> toFactory() const {
 			return gen();
@@ -176,7 +224,35 @@ namespace sequential {
 		return lazy_treeture_factory_factory<T,Gen>(std::move(gen));
 	}
 
+	/**
+	 * There are no dependencies to be recorded, so this object is an empty object.
+	 */
+	class dependencies {};
+
+
 	// -------------------------------------- Operators -------------------------------------------
+
+
+	inline dependencies after() {
+		return {};
+	}
+
+	template<typename F, typename ... Rest>
+	dependencies after(const treeture<F>&, Rest ... rest) {
+		return after(std::move(rest)...);
+	}
+
+	template<typename F, typename ... Rest>
+	dependencies after(treeture_factory<F>&& f, Rest ... rest) {
+		f.get(); // wait for this one to be finished
+		return after(std::move(rest)...); // wait for the rest
+	}
+
+	template<typename F, typename Gen, typename ... Rest>
+	dependencies after(lazy_treeture_factory_factory<F,Gen>&& f, Rest ... rest) {
+		f.get(); // wait for this one to be finished
+		return after(std::move(rest)...); // wait for the rest
+	}
 
 
 	inline auto done() {
@@ -192,19 +268,26 @@ namespace sequential {
 		});
 	}
 
+
 	template<typename Op>
-	auto task(Op&& op) {
+	auto spawn(dependencies&&, Op&& op) {
 		return make_lazy_treeture_factory_factory([=](){
 			return make_treeture_factory([=](){ return make_treeture(std::move(op)); });
 		});
 	}
+
+	template<typename Op>
+	auto spawn(Op&& op) {
+		return spawn(after(),std::move(op));
+	}
+
 
 	auto seq() {
 		return done();
 	}
 
 	template<typename F, typename FA, typename ... R, typename ... RA>
-	auto seq(lazy_treeture_factory_factory<F,FA>&& f, lazy_treeture_factory_factory<R,RA>&& ... rest) {
+	auto seq(dependencies&&, lazy_treeture_factory_factory<F,FA>&& f, lazy_treeture_factory_factory<R,RA>&& ... rest) {
 		return make_lazy_treeture_factory_factory([f,rest...]() mutable {
 			return make_treeture_factory([f,rest...]() mutable {
 				return make_treeture([f,rest...]() mutable {
@@ -215,10 +298,20 @@ namespace sequential {
 		});
 	}
 
+	template<typename F, typename FA, typename ... R, typename ... RA>
+	auto seq(lazy_treeture_factory_factory<F,FA>&& f, lazy_treeture_factory_factory<R,RA>&& ... rest) {
+		return seq(after(), std::move(f),std::move(rest)...);
+	}
+
 	template<typename ... T, typename ... TA>
-	auto par(lazy_treeture_factory_factory<T,TA>&& ... tasks) {
+	auto par(dependencies&&, lazy_treeture_factory_factory<T,TA>&& ... tasks) {
 		// for the sequential implementation, parallel is the same as sequential
 		return seq(tasks...);
+	}
+
+	template<typename ... T, typename ... TA>
+	auto par(lazy_treeture_factory_factory<T,TA>&& ... tasks) {
+		return par(after(), tasks...);
 	}
 
 

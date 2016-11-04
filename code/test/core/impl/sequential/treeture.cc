@@ -30,7 +30,7 @@ namespace sequential {
 
 	TEST(Operator, Task) {
 
-		treeture<int> t1 = task([](){ return 12; });
+		treeture<int> t1 = spawn([](){ return 12; });
 		EXPECT_EQ(12, t1.get());
 
 	}
@@ -39,11 +39,11 @@ namespace sequential {
 
 		int x = 3;
 
-		// build a not-yet started sequential task
+		// build a not-yet started sequential tasks
 		auto ls = seq(
-				task([&]{ x++; }),
-				task([&]{ x*=2; }),
-				task([&]{ x-=1; x*=2; })
+				spawn([&]{ x++; }),
+				spawn([&]{ x*=2; }),
+				spawn([&]{ x-=1; x*=2; })
 		);
 
 		// should not be executed yet
@@ -64,6 +64,34 @@ namespace sequential {
 		auto t = sum(done(4),done(8));
 		EXPECT_EQ(12,t.get());
 
+	}
+
+	TEST(Treeture, Dependencies) {
+
+		int x = 0;
+
+		treeture<void> a = spawn([&]{
+			EXPECT_EQ(0,x);
+			x++;
+		});
+
+		treeture<void> b = spawn(after(a), [&]{
+			EXPECT_EQ(1,x);
+			x++;
+		});
+
+		treeture<void> c = spawn(after(b), [&]{
+			EXPECT_EQ(2,x);
+			x++;
+		});
+
+		treeture<void> d = spawn(after(a,b,c), [&]{
+			EXPECT_EQ(3,x);
+			x++;
+		});
+
+		d.get();
+		EXPECT_EQ(4,x);
 	}
 
 	// --- benchmark ---
