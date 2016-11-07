@@ -50,7 +50,7 @@ namespace sequential {
 		EXPECT_EQ(3,x);
 
 		// the treeture conversion should trigger the execution
-		treeture<void> s = ls;
+		treeture<void> s = std::move(ls);
 		EXPECT_EQ(14,x);
 
 		// and the get should do nothing
@@ -117,9 +117,9 @@ namespace sequential {
 		return (x <= 1) ? x : s_fib(x-1) + s_fib(x-2);
 	}
 
-	treeture_factory<int> gen_fib(int x) {
+	unreleased_treeture<int> gen_fib(int x) {
 		auto fib = [](int x) {
-			return make_lazy_treeture_factory_factory([=]() { return gen_fib(x); });
+			return make_lazy_unreleased_treeture([=]() { return gen_fib(x); });
 		};
 		if (x <= 1) {
 			return done(x);

@@ -31,26 +31,28 @@ namespace reference {
 	class treeture;
 
 	/**
-	 * A factory for producing a treeture. While the treeture factory exists, input dependencies
-	 * may be added to the treeture to orchestrate its execution. Once the factory has produced
-	 * the treeture, the dependencies get frozen and the associated task is scheduled for execution.
+	 * A treeture not yet released to the runtime system for execution.
 	 */
 	template<typename T>
-	class treeture_factory;
+	class unreleased_treeture;
 
 	/**
-	 * A treeture factory factory that is delaying the creation of the factory until
-	 * the actual evaluation. This is to prevent the need to materialize the entire computation
-	 * tree before being able to start the computation.
+	 * A handle for a lazily constructed unreleased treeture. This intermediate construct is utilized
+	 * for writing templated code that can be optimized to overhead-less computed values and to facilitate
+	 * the support of the sequence combinator.
 	 */
 	template<typename T, typename Gen>
-	class lazy_treeture_factory_factory;
+	class lazy_unreleased_treeture;
+
+	/**
+	 * A reference to a task to synchronize upon it.
+	 */
+	class task_reference;
 
 	/**
 	 * A class to model task dependencies
 	 */
-	template<typename ... Vs>
-	class dependencies;
+	using dependencies = std::vector<task_reference>;
 
 
 	// ---------------------------------------------------------------------------------------------
@@ -117,7 +119,7 @@ namespace reference {
 	template<typename T>
 	using TaskPtr = std::shared_ptr<Task<T>>;
 
-	using TaskDependencies = std::vector<treeture<void>>;
+	using TaskDependencies = dependencies;
 
 
 	// the RT's interface to a task
@@ -163,8 +165,9 @@ namespace reference {
 		TaskDependencies dependencies;
 
 		// split task data
-		TaskBasePtr left;		// TODO: those should be factories
+		TaskBasePtr left;
 		TaskBasePtr right;
+		bool parallel;
 
 		// for the processing of split tasks
 		TaskBase* parent;                      // < a pointer to the parent to be notified upon completion
@@ -180,14 +183,14 @@ namespace reference {
 			LOG_TASKS( "Created " << *this );
 		}
 
-		TaskBase(TaskDependencies&& dependencies, TaskBasePtr&& left, TaskBasePtr&& right)
+		TaskBase(TaskDependencies&& dependencies, TaskBasePtr&& left, TaskBasePtr&& right, bool parallel)
 			: id(getNextID()), state(State::New),
 			  dependencies(std::move(dependencies)),
-			  left(left), right(right),
+			  left(std::move(left)), right(std::move(right)), parallel(parallel),
 			  parent(nullptr), alive_child_counter(0) {
 			LOG_TASKS( "Created " << *this );
-			assert(left);
-			assert(right);
+			assert(this->left);
+			assert(this->right);
 		}
 
 		virtual ~TaskBase() {
@@ -195,7 +198,16 @@ namespace reference {
 			assert_true(isDone()) << *this;
 		};
 
+		// -- observers --
+
+		State getState() const {
+			return state;
+		}
+
 		// -- state transitions --
+
+		// New -> Blocked
+		void start();
 
 		// Blocked -> Blocked or Blocked -> Ready transition
 		bool isReady();
@@ -254,12 +266,14 @@ namespace reference {
 				if (left->state == State::New) {
 					LOG_TASKS( "Starting child " << *left << " of " << *this );
 					left->parent = this;
+					left->start();
 				}
 
 				// schedule right (if necessary)
 				if (r->state == State::New) {
 					LOG_TASKS( "Starting child " << *r << " of " << *this );
 					r->parent = this;
+					r->start();
 				}
 
 				// done
@@ -298,13 +312,14 @@ namespace reference {
 				return;
 			}
 
-			assert_eq(state, State::Ready);
-			// nothing by default
+			// this task must not be running yet
+			assert_lt(state,State::Running);
+
+			// by default, no splitting is supported
 		}
 
 		// wait for the task completion
 		void wait();
-
 
 		bool isDone() const {
 			// forward call to substitute if present
@@ -352,26 +367,33 @@ namespace reference {
 
 	private:
 
+		bool isValidTransition(State from, State to) {
+			return (from == State::New         && to == State::Ready       ) ||
+				   (from == State::New         && to == State::Blocked     ) ||
+				   (from == State::Blocked     && to == State::Ready       ) ||
+				   (from == State::Ready       && to == State::Running     ) ||
+				   (from == State::Running     && to == State::Done        ) ||
+				   (from == State::Running     && to == State::Aggregating ) ||
+				   (from == State::Aggregating && to == State::Done        ) ;
+		}
+
 		void setState(State newState) {
 			// check correctness of state transitions
-			assert_true(
-				(state == State::New         && newState == State::Blocked     ) ||
-				(state == State::Ready       && newState == State::Running     ) ||
-				(state == State::Running     && newState == State::Done        ) ||
-				(state == State::Running     && newState == State::Aggregating ) ||
-				(state == State::Aggregating && newState == State::Done        )
-			) << "Illegal state transition from " << state << " to " << newState;
+			assert_true(isValidTransition(state,newState))
+				<< "Illegal state transition from " << state << " to " << newState;
 
 			state = newState;
 			LOG_TASKS( "Updated state: " << *this );
 		}
 
-		bool isSplit() const {
-			return (bool)left;
+		bool switchState(State from, State to) {
+			assert_true(isValidTransition(from,to))
+				<< "Illegal state transition from " << from << " to " << to;
+			return state.compare_exchange_strong(from,to,std::memory_order_relaxed,std::memory_order_relaxed);
 		}
 
-		bool switchState(State from, State to) {
-			return state.compare_exchange_strong(from,to,std::memory_order_relaxed,std::memory_order_relaxed);
+		bool isSplit() const {
+			return (bool)left;
 		}
 
 		void childDone(const TaskBase& child) {
@@ -647,11 +669,14 @@ namespace reference {
 
 
 	// ---------------------------------------------------------------------------------------------
-	//											Treetures
+	//										task reference
 	// ---------------------------------------------------------------------------------------------
 
 
-
+	/**
+	 * A simple buffer of left/right decisions in the navigation of a treeture and
+	 * its sub-tasks.
+	 */
 	class BitQueue {
 
 		uint64_t buffer;
@@ -683,44 +708,27 @@ namespace reference {
 
 	};
 
-	template<typename T>
-	class treeture;
 
-
-	template<>
-	class treeture<void> {
-
-		template<typename Process, typename Split, typename R>
-		friend class SplitableTask;
-
-		mutable TaskBasePtr task;
-
-		mutable BitQueue queue;
+	/**
+	 * A reference to a task utilized for managing task synchronization.
+	 */
+	class task_reference {
 
 	protected:
 
-		treeture() {}
+		mutable TaskBasePtr task;
 
-		treeture(const TaskBasePtr& t) : task(t) {}
-		treeture(TaskBasePtr&& task) : task(std::move(task)) {}
+	private:
+
+		mutable BitQueue queue;
 
 	public:
 
-		using value_type = void;
+		task_reference() {}
 
-		treeture(const treeture&) = default;
-		treeture(treeture&& other) = default;
+		task_reference(TaskBasePtr&& task) : task(std::move(task)) {}
 
-		treeture& operator=(const treeture&) = default;
-		treeture& operator=(treeture&& other) = default;
-
-		// support implicit cast to void treeture
-		template<typename T>
-		treeture(const treeture<T>& t) : task(t.task) {}
-
-		// support implicit cast to void treeture
-		template<typename T>
-		treeture(treeture<T>&& t) : task(std::move(t.task)) {}
+		task_reference(const TaskBasePtr& task) : task(task) {}
 
 		bool isDone() const {
 			if (!task) return true;
@@ -732,56 +740,91 @@ namespace reference {
 
 		void wait() const;
 
-		void get() {
-			start();
-			wait();
-		}
-
-		treeture& descentLeft() {
+		task_reference& descentLeft() {
 			if (!task) return *this;
 			queue.put(0);
 			return *this;
 		}
 
-		treeture& descentRight() {
+		task_reference& descentRight() {
 			if (!task) return *this;
 			queue.put(1);
 			return *this;
 		}
 
-		treeture getLeft() const {
-			return treeture(*this).descentLeft();
+		task_reference getLeft() const {
+			return task_reference(*this).descentLeft();
 		}
 
-		treeture getRight() const {
-			return treeture(*this).descentRight();
-		}
-
-
-		// -- factories --
-
-		static treeture done() {
-			return treeture();
-		}
-
-		template<typename Action>
-		static treeture spawn(TaskDependencies&& deps, const Action& a) {
-			return treeture(TaskBasePtr(std::make_shared<SimpleTask<Action>>(std::move(deps),a)));
-		}
-
-		template<typename Process, typename Split>
-		static treeture spawn(TaskDependencies&& deps, const Process& p, const Split& s) {
-			return treeture(TaskBasePtr(std::make_shared<SplitableTask<Process,Split>>(std::move(deps),p,s)));
-		}
-
-		template<typename A, typename B>
-		static treeture combine(TaskDependencies&& deps, treeture<A>&& a, treeture<B>&& b, bool parallel) {
-			return treeture(TaskBasePtr(make_split_task(std::move(deps),std::move(a.task),std::move(b.task),parallel)));
+		task_reference getRight() const {
+			return task_reference(*this).descentRight();
 		}
 
 	private:
 
-		void narrow() const;
+		void narrow() const {
+			if (!task) return;
+			while(!task->isDone() && !queue.empty()) {
+
+				// get sub-task (if available)
+				TaskBasePtr next = (queue.get()) ? task->getLeft() : task->getRight();
+
+				// if not available, that is the closet we can get for now
+				if (!next) return;
+
+				// narrow the task reference
+				queue.pop();
+				task = next;
+			}
+		}
+
+	};
+
+
+	// ---------------------------------------------------------------------------------------------
+	//											Treetures
+	// ---------------------------------------------------------------------------------------------
+
+	template<typename T>
+	class treeture;
+
+
+	template<>
+	class treeture<void> : public task_reference {
+
+		template<typename Process, typename Split, typename R>
+		friend class SplitableTask;
+
+		friend class unreleased_treeture<void>;
+
+	protected:
+
+		treeture(const TaskBasePtr& t) : task_reference(t) {}
+		treeture(TaskBasePtr&& task) : task_reference(std::move(task)) {}
+
+	public:
+
+		using value_type = void;
+
+		treeture() {}
+
+		treeture(const treeture&) = default;
+		treeture(treeture&& other) = default;
+
+		treeture& operator=(const treeture&) = default;
+		treeture& operator=(treeture&& other) = default;
+
+		// support implicit cast to void treeture
+		template<typename T>
+		treeture(const treeture<T>& t) : task_reference(t.task) {}
+
+		// support implicit cast to void treeture
+		template<typename T>
+		treeture(treeture<T>&& t) : task_reference(std::move(t.task)) {}
+
+		void get() {
+			wait();
+		}
 
 	};
 
@@ -793,17 +836,19 @@ namespace reference {
 		template<typename Process, typename Split, typename R>
 		friend class SplitableTask;
 
+		friend class unreleased_treeture<T>;
+
 		TaskPtr<T> task;
 
 	protected:
-
-		treeture(const T& value) : task(std::make_shared<Task<T>>(TaskDependencies(),value)) {}
 
 		treeture(TaskPtr<T>&& task) : task(std::move(task)) {}
 
 	public:
 
 		using value_type = T;
+
+		treeture(const T& value) : task(std::make_shared<Task<T>>(TaskDependencies(),value)) {}
 
 		treeture(const treeture&) = delete;
 		treeture(treeture&& other) : task(std::move(other.task)) {}
@@ -814,42 +859,22 @@ namespace reference {
 			return *this;
 		}
 
-		void wait() const;
+		void wait() const {
+			if (!task) return;
+			task->wait();
+		}
 
 		const T& get() {
-			start();
 			wait();
 			return task->getValue();
 		}
 
-		treeture<void> getLeft() const {
-			return treeture<void>(*this).getLeft();
+		task_reference getLeft() const {
+			return task_reference(task).descentLeft();
 		}
 
-		treeture<void> getRight() const {
-			return treeture<void>(*this).getRight();
-		}
-
-
-		// -- factories --
-
-		static treeture done(const T& value) {
-			return treeture(value);
-		}
-
-		template<typename Action>
-		static treeture spawn(TaskDependencies&& deps, const Action& a) {
-			return treeture(TaskPtr<T>(std::make_shared<SimpleTask<Action>>(std::move(deps),a)));
-		}
-
-		template<typename Process, typename Split>
-		static treeture spawn(TaskDependencies&& deps, const Process& p, const Split& s) {
-			return treeture(TaskPtr<T>(std::make_shared<SplitableTask<Process,Split>>(std::move(deps),p,s)));
-		}
-
-		template<typename A, typename B, typename C>
-		static treeture combine(TaskDependencies&& deps, treeture<A>&& a, treeture<B>&& b, C&& merge, bool parallel = true) {
-			return treeture(make_split_task(std::move(deps),std::move(a.task),std::move(b.task),std::move(merge),parallel));
+		task_reference getRight() const {
+			return task_reference(task).descentRight();
 		}
 
 	};
@@ -864,6 +889,155 @@ namespace reference {
 
 		// mutate to new task
 		Task<R>::setSubstitute(std::move(subTask));
+	}
+
+
+
+	// ---------------------------------------------------------------------------------------------
+	//										 Unreleased Treetures
+	// ---------------------------------------------------------------------------------------------
+
+
+	/**
+	 * A handle to a yet unreleased task.
+	 */
+	template<typename T>
+	class unreleased_treeture : public task_reference {
+	public:
+
+		using value_type = T;
+
+		unreleased_treeture(TaskPtr<T>&& task)
+			: task_reference(std::move(task)) {}
+
+		unreleased_treeture(const unreleased_treeture&) =delete;
+		unreleased_treeture(unreleased_treeture&&) =default;
+
+		unreleased_treeture& operator=(const unreleased_treeture&) =delete;
+		unreleased_treeture& operator=(unreleased_treeture&&) =default;
+
+		~unreleased_treeture() { if(task) assert_ne(TaskBase::State::New,task->getState()); }
+
+		treeture<T> release() && {
+			if (task && !task->isDone()) task->start(); 		// release the task
+			return treeture<T>(std::move(*this).toTask());
+		}
+
+		operator treeture<T>() && {
+			return std::move(*this).release();
+		}
+
+		TaskPtr<T> toTask() && {
+			auto res = std::move(std::static_pointer_cast<Task<T>>(std::move(task)));
+			task.reset();
+			return res;
+		}
+
+	};
+
+
+
+	// ---------------------------------------------------------------------------------------------
+	//										   Operators
+	// ---------------------------------------------------------------------------------------------
+
+	dependencies after() {
+		return dependencies();
+	}
+
+	template<typename F, typename ... Rest>
+	dependencies after(const treeture<F>& f, Rest ... rest) {
+		auto res = after(std::move(rest)...);
+		res.push_back(f);
+		return res;
+	}
+
+	template<typename F, typename ... Rest>
+	dependencies after(const unreleased_treeture<F>& f, Rest ... rest) {
+		auto res = after(std::move(rest)...);
+		res.push_back(f);
+		return res;
+	}
+
+	inline unreleased_treeture<void> done(dependencies&& deps) {
+		return std::make_shared<Task<void>>(std::move(deps));
+	}
+
+	inline unreleased_treeture<void> done() {
+		return done(dependencies());
+	}
+
+	template<typename T>
+	unreleased_treeture<T> done(dependencies&& deps, const T& value) {
+		return std::make_shared<Task<T>>(std::move(deps),value);
+	}
+
+	template<typename T>
+	unreleased_treeture<T> done(const T& value) {
+		return done(dependencies(),value);
+	}
+
+
+	template<typename Action, typename T = std::result_of_t<Action()>>
+	unreleased_treeture<T> spawn(dependencies&& deps, Action&& op) {
+		return TaskPtr<T>(std::make_shared<SimpleTask<Action>>(std::move(deps),std::move(op)));
+	}
+
+	template<typename Action>
+	auto spawn(Action&& op) {
+		return spawn(after(),std::move(op));
+	}
+
+
+	inline unreleased_treeture<void> sequential(dependencies&& deps) {
+		return done(std::move(deps));
+	}
+
+	inline unreleased_treeture<void> sequential() {
+		return done();
+	}
+
+	template<typename F, typename ... R>
+	unreleased_treeture<void> sequential(dependencies&& deps, unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
+		// TODO: conduct a binary split to create a balanced tree
+		return make_split_task(std::move(deps),std::move(f).toTask(),sequential(std::move(rest)...).toTask(),false);
+	}
+
+	template<typename F, typename ... R>
+	unreleased_treeture<void> sequential(unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
+		return sequential(after(), std::move(f),std::move(rest)...);
+	}
+
+
+	inline unreleased_treeture<void> parallel(dependencies&& deps) {
+		return done(std::move(deps));
+	}
+
+	inline unreleased_treeture<void> parallel() {
+		return done();
+	}
+
+	template<typename F, typename ... R>
+	unreleased_treeture<void> parallel(dependencies&& deps, unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
+		// TODO: conduct a binary split to create a balanced tree
+		return make_split_task(std::move(deps),std::move(f).toTask(),parallel(std::move(deps),std::move(rest)...).toTask(),true);
+	}
+
+	template<typename F, typename ... R>
+	unreleased_treeture<void> parallel(unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
+		return parallel(after(), std::move(f),std::move(rest)...);
+	}
+
+
+
+	template<typename A, typename B, typename M, typename R = std::result_of_t<M(A,B)>>
+	unreleased_treeture<R> combine(dependencies&& deps, unreleased_treeture<A>&& a, unreleased_treeture<B>&& b, M&& m, bool parallel = true) {
+		return make_split_task(std::move(deps),std::move(a).toTask(),std::move(b).toTask(),std::move(m),parallel);
+	}
+
+	template<typename A, typename B, typename M, typename R = std::result_of_t<M(A,B)>>
+	unreleased_treeture<R> combine(unreleased_treeture<A>&& a, unreleased_treeture<B>&& b, M&& m, bool parallel = true) {
+		return combine(dependencies(),std::move(a),std::move(b),std::move(m),parallel);
 	}
 
 
@@ -1015,9 +1189,16 @@ namespace reference {
 
 			std::vector<TaskBasePtr> pool;
 
-			SpinLock lock;
+			mutable SpinLock lock;
 
 		public:
+
+			bool empty() const {
+				lock.lock();
+				bool res = pool.empty();
+				lock.unlock();
+				return res;
+			}
 
 			void addTask(TaskBasePtr&& task) {
 				lock.lock();
@@ -1029,7 +1210,7 @@ namespace reference {
 				lock.lock();
 				TaskBasePtr res;
 				for(auto& cur : pool) {
-					if(!cur->isDone()) continue;
+					if(!cur->isReady()) continue;
 					// found a complete one, remove it from the pool
 					res = std::move(cur);
 					cur = std::move(pool.back());
@@ -1238,8 +1419,11 @@ namespace reference {
 
 					// if there was no work for quite some time
 					if(idle_cycles > 100000) {
-						// wait for work
-						pool.waitForWork();
+						// if there may be no work at all ..
+						if(blocked.empty()) {
+							// wait for work by putting thread to sleep
+							pool.waitForWork();
+						}
 				
 						// reset cycles counter
 						idle_cycles = 0;
@@ -1303,6 +1487,9 @@ namespace reference {
 
 			// no task in queue, check the pool
 			if (TaskBasePtr t = blocked.getReadyTask()) {
+
+				LOG_SCHEDULE( "Retrieving unblocked task from list of blocked tasks.");
+
 				// process this task
 				t->split();
 				t->run();
@@ -1334,22 +1521,19 @@ namespace reference {
 
 	}
 
+	void TaskBase::start() {
+		LOG_TASKS("Starting " << *this );
 
-//	inline void TaskBase::start() {
-//		LOG_TASKS("Starting " << *this );
-//
-//		// forward call to substitute, if present
-//		if (substitute) {
-//			substitute->start();
-//			return;
-//		}
-//
-//		// update state from New -> Ready only once
-//		if(!switchState(State::New,State::Blocked)) return;
-//
-//		// schedule task
-//		runtime::getCurrentWorker().schedule(this->shared_from_this());
-//	}
+		// check that the given task is a new task
+		assert_eq(TaskBase::State::New, state);
+
+		// move to next state
+		setState(State::Blocked);
+
+		// schedule task
+		runtime::getCurrentWorker().schedule(this->shared_from_this());
+	}
+
 
 	inline bool TaskBase::isReady() {
 		// should only be called if blocked or ready
@@ -1382,7 +1566,7 @@ namespace reference {
 		LOG_TASKS("Waiting for " << *this );
 
 		// check that this task has been started before
-		assert_ge(state,State::Ready);
+		assert_lt(State::New,state);
 
 		// forward call to substitute, if present
 		if (substitute) {
@@ -1396,13 +1580,7 @@ namespace reference {
 		}
 	}
 
-	template<typename T>
-	void treeture<T>::wait() const {
-		if (!task) return;
-		task->wait();
-	}
-
-	void treeture<void>::wait() const {
+	inline void task_reference::wait() const {
 		if(!task) return;
 
 		// narrow scope
@@ -1417,23 +1595,6 @@ namespace reference {
 		// wait for task to be completed
 		task->wait();
 	}
-
-	void treeture<void>::narrow() const {
-		if (!task) return;
-		while(!task->isDone() && !queue.empty()) {
-
-			// get sub-task (if available)
-			TaskBasePtr next = (queue.get()) ? task->getLeft() : task->getRight();
-
-			// if not available, that is the closet we can get for now
-			if (!next) return;
-
-			// narrow the task reference
-			queue.pop();
-			task = next;
-		}
-	}
-
 
 } // end namespace reference
 } // end namespace impl
