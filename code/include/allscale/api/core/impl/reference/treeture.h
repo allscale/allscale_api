@@ -714,6 +714,9 @@ namespace reference {
 	 */
 	class task_reference {
 
+		template<typename Process, typename Split, typename R>
+		friend class SplitableTask;
+
 	protected:
 
 		mutable TaskBasePtr task;
@@ -791,9 +794,6 @@ namespace reference {
 
 	template<>
 	class treeture<void> : public task_reference {
-
-		template<typename Process, typename Split, typename R>
-		friend class SplitableTask;
 
 		friend class unreleased_treeture<void>;
 
@@ -884,7 +884,7 @@ namespace reference {
 		assert_eq(TaskBase::State::Ready, this->state);
 
 		// decompose this task
-		subTask = std::static_pointer_cast<Task<R>>(decompose().task);
+		subTask = decompose().toTask();
 		assert_true(subTask->state == TaskBase::State::New || subTask->state == TaskBase::State::Done);
 
 		// mutate to new task
@@ -988,6 +988,15 @@ namespace reference {
 		return spawn(after(),std::move(op));
 	}
 
+	template<typename Action, typename Split, typename T = std::result_of_t<Action()>>
+	unreleased_treeture<T> spawn(dependencies&& deps, Action&& op, Split&& split) {
+		return TaskPtr<T>(std::make_shared<SplitableTask<Action,Split>>(std::move(deps),std::move(op),std::move(split)));
+	}
+
+	template<typename Action, typename Split>
+	auto spawn(Action&& op, Split&& split) {
+		return spawn(after(),std::move(op),std::move(split));
+	}
 
 	inline unreleased_treeture<void> sequential(dependencies&& deps) {
 		return done(std::move(deps));

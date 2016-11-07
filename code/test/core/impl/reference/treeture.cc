@@ -166,7 +166,7 @@ namespace reference {
 
 	// --- benchmark ---
 
-	const int N = 20;
+	const int N = 32;
 
 	template<int x>
 	struct c_fib {
@@ -187,20 +187,39 @@ namespace reference {
 		return (x <= 1) ? x : s_fib(x-1) + s_fib(x-2);
 	}
 
+	TEST(Benchmark,SeqFib) {
+		EXPECT_EQ(c_fib<N>::value, s_fib(N));
+	}
+
+	unreleased_treeture<int> gen_fib_naive(int x) {
+		if (x <= 1) {
+			return done(x);
+		}
+		return sum(gen_fib_naive(x-1),gen_fib_naive(x-2));
+	}
+
+	int p_fib_naive(int x) {
+		return gen_fib_naive(x).release().get();
+	}
+
+	TEST(Benchmark,ParFibNaive) {
+		EXPECT_EQ(c_fib<N>::value, p_fib_naive(N));
+	}
+
 	unreleased_treeture<int> gen_fib(int x) {
 		if (x <= 1) {
 			return done(x);
 		}
-		return sum(gen_fib(x-1),gen_fib(x-2));
+		return spawn(
+				[=](){ return s_fib(x); },
+				[=](){ return sum(gen_fib(x-1),gen_fib(x-2)); }
+		);
 	}
 
 	int p_fib(int x) {
 		return gen_fib(x).release().get();
 	}
 
-	TEST(Benchmark,SeqFib) {
-		EXPECT_EQ(c_fib<N>::value, s_fib(N));
-	}
 
 	TEST(Benchmark,ParFib) {
 		EXPECT_EQ(c_fib<N>::value, p_fib(N));
