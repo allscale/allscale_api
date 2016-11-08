@@ -40,7 +40,7 @@ namespace sequential {
 		int x = 3;
 
 		// build a not-yet started sequential tasks
-		auto ls = seq(
+		auto ls = sequential(
 				spawn([&]{ x++; }),
 				spawn([&]{ x*=2; }),
 				spawn([&]{ x-=1; x*=2; })
@@ -58,6 +58,13 @@ namespace sequential {
 		EXPECT_EQ(14,x);
 
 	}
+
+
+	template<typename AA, typename BA>
+	auto sum(lazy_unreleased_treeture<int,AA>&& a, lazy_unreleased_treeture<int,BA>&& b) {
+		return combine(std::move(a),std::move(b),[](int a, int b) { return a+b; });
+	}
+
 
 	TEST(Operation, Sum) {
 

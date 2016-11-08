@@ -8,7 +8,6 @@
 #include "allscale/utils/vector_utils.h"
 
 #include "allscale/api/core/treeture.h"
-#include "allscale/api/core/immediate.h"
 
 namespace allscale {
 namespace api {
@@ -75,6 +74,7 @@ namespace core {
 			Res callRandom(const std::tuple<Versions...>& versions, const Args& ... args) {
 				return std::get<0>(versions)(args...);
 			}
+
 		};
 
 	} // end namespace detail
@@ -118,32 +118,32 @@ namespace core {
 		fun_def& operator=(fun_def&&) = delete;
 
 		template<typename ... Funs>
-		immediate<O> sequentialCall(const I& in, const Funs& ... funs) const {
+		impl::sequential::unreleased_treeture<O> sequentialCall(const I& in, const Funs& ... funs) const {
 			// check for the base case, producing a value to be wrapped
 			if (bc_test(in)) {
-				return evaluate([&]{ return detail::random_caller<sizeof...(BaseCases)-1>().template callRandom<O>(base, in); });
+				return impl::sequential::spawn([&]{ return detail::random_caller<sizeof...(BaseCases)-1>().template callRandom<O>(base, in); });
 			}
 
 			// run sequential step case producing an immediate value
-			return detail::random_caller<sizeof...(StepCases)-1>().template callRandom<immediate<O>>(step, in, funs.sequential_call()...);
+			return detail::random_caller<sizeof...(StepCases)-1>().template callRandom<impl::sequential::unreleased_treeture<O>>(step, in, funs.sequential_call()...);
 		}
 
 
 		template<typename ... Funs>
-		treeture<O> parallelCall(const I& in, const Funs& ... funs) const {
+		impl::reference::unreleased_treeture<O> parallelCall(const I& in, const Funs& ... funs) const {
 			// check for the base case
 			const auto& base = this->base;
-			if (bc_test(in)) return spawn([=] {
+			if (bc_test(in)) return impl::reference::spawn([=] {
 				return detail::random_caller<sizeof...(BaseCases)-1>().template callRandom<O>(base, in);
 			});
 
 			// run step case
 			const auto& step = this->step;
-			return spawn(
+			return impl::reference::spawn(
 					// the process version (sequential):
-					[=] { return detail::random_caller<sizeof...(StepCases)-1>().template callRandom<immediate<O>>(step, in, funs.sequential_call()...).get(); },
+					[=] { return detail::random_caller<sizeof...(StepCases)-1>().template callRandom<impl::sequential::unreleased_treeture<O>>(step, in, funs.sequential_call()...).get(); },
 					// the split version (parallel):
-					[=] { return detail::random_caller<sizeof...(StepCases)-1>().template callRandom<treeture<O>>(step, in, funs.parallel_call()...); }
+					[=] { return detail::random_caller<sizeof...(StepCases)-1>().template callRandom<impl::reference::unreleased_treeture<O>>(step, in, funs.parallel_call()...); }
 			);
 		}
 
@@ -235,13 +235,15 @@ namespace core {
 			callable(const rec_defs<Defs...>& defs) : defs(defs) {};
 
 			auto sequential_call() const {
-				return [=](const I& in)->immediate<O> {
-					return defs.template sequentialCall<i,O,I>(in);
+				return [=](const I& in) {
+					return impl::sequential::make_lazy_unreleased_treeture([=](){
+						return defs.template sequentialCall<i,O,I>(in);
+					});
 				};
 			}
 
 			auto parallel_call() const {
-				return [=](const I& in)->treeture<O> {
+				return [=](const I& in)->impl::reference::unreleased_treeture<O> {
 					return defs.template parallelCall<i,O,I>(in);
 				};
 			}
@@ -258,11 +260,11 @@ namespace core {
 		template<unsigned n>
 		struct caller {
 			template<typename O, typename F, typename I, typename D, typename ... Args>
-			immediate<O> sequentialCall(const F& f, const I& i, const D& d, const Args& ... args) const {
+			impl::sequential::unreleased_treeture<O> sequentialCall(const F& f, const I& i, const D& d, const Args& ... args) const {
 				return caller<n-1>().template sequentialCall<O>(f,i,d,createCallable<n>(d),args...);
 			}
 			template<typename O, typename F, typename I, typename D, typename ... Args>
-			treeture<O> parallelCall(const F& f, const I& i, const D& d, const Args& ... args) const {
+			impl::reference::unreleased_treeture<O> parallelCall(const F& f, const I& i, const D& d, const Args& ... args) const {
 				return caller<n-1>().template parallelCall<O>(f,i,d,createCallable<n>(d),args...);
 			}
 		};
@@ -270,11 +272,11 @@ namespace core {
 		template<>
 		struct caller<0> {
 			template<typename O, typename F, typename I, typename D, typename ... Args>
-			immediate<O> sequentialCall(const F& f, const I& i, const D& d, const Args& ... args) const {
+			auto sequentialCall(const F& f, const I& i, const D& d, const Args& ... args) const {
 				return f.sequentialCall(i,createCallable<0>(d),args...);
 			}
 			template<typename O, typename F, typename I, typename D, typename ... Args>
-			treeture<O> parallelCall(const F& f, const I& i, const D& d, const Args& ... args) const {
+			impl::reference::unreleased_treeture<O> parallelCall(const F& f, const I& i, const D& d, const Args& ... args) const {
 				return f.parallelCall(i,createCallable<0>(d),args...);
 			}
 		};
@@ -315,8 +317,8 @@ namespace core {
 			typename O,
 			typename I
 		>
-		immediate<O> sequentialCall(const I& in) const {
-			// call target function with an async
+		impl::sequential::unreleased_treeture<O> sequentialCall(const I& in) const {
+			// call target function with a spawn
 			return detail::caller<sizeof...(Defs)-1>().template sequentialCall<O>(std::get<i>(*this),in,*this);
 		}
 
@@ -325,8 +327,8 @@ namespace core {
 			typename O,
 			typename I
 		>
-		treeture<O> parallelCall(const I& in) const {
-			// call target function with an async
+		impl::reference::unreleased_treeture<O> parallelCall(const I& in) const {
+			// call target function with a spawn
 			return detail::caller<sizeof...(Defs)-1>().template parallelCall<O>(std::get<i>(*this),in,*this);
 		}
 

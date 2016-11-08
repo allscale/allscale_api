@@ -145,12 +145,12 @@ namespace sequential {
 			return res;
 		}
 
-		T get() const && {
-			return std::move(*this).release().get();
-		}
-
 		operator treeture<T>() const && {
 			return std::move(*this).release();
+		}
+
+		T get() const && {
+			return std::move(*this).release().get();
 		}
 
 	};
@@ -255,41 +255,41 @@ namespace sequential {
 	}
 
 
-	auto seq() {
+	auto sequential() {
 		return done();
 	}
 
 	template<typename F, typename FA, typename ... R, typename ... RA>
-	auto seq(dependencies&&, lazy_unreleased_treeture<F,FA>&& f, lazy_unreleased_treeture<R,RA>&& ... rest) {
+	auto sequential(dependencies&&, lazy_unreleased_treeture<F,FA>&& f, lazy_unreleased_treeture<R,RA>&& ... rest) {
 		return make_lazy_unreleased_treeture([f,rest...]() mutable {
 			return make_unreleased_treeture([f,rest...]() mutable {
 				return make_treeture([f,rest...]() mutable {
 					f.get();
-					seq(std::move(rest)...).get();
+					sequential(std::move(rest)...).get();
 				});
 			});
 		});
 	}
 
 	template<typename F, typename FA, typename ... R, typename ... RA>
-	auto seq(lazy_unreleased_treeture<F,FA>&& f, lazy_unreleased_treeture<R,RA>&& ... rest) {
-		return seq(after(), std::move(f),std::move(rest)...);
+	auto sequential(lazy_unreleased_treeture<F,FA>&& f, lazy_unreleased_treeture<R,RA>&& ... rest) {
+		return sequential(after(), std::move(f),std::move(rest)...);
 	}
 
 	template<typename ... T, typename ... TA>
-	auto par(dependencies&&, lazy_unreleased_treeture<T,TA>&& ... tasks) {
+	auto parallel(dependencies&&, lazy_unreleased_treeture<T,TA>&& ... tasks) {
 		// for the sequential implementation, parallel is the same as sequential
-		return seq(tasks...);
+		return sequential(tasks...);
 	}
 
 	template<typename ... T, typename ... TA>
-	auto par(lazy_unreleased_treeture<T,TA>&& ... tasks) {
-		return par(after(), tasks...);
+	auto parallel(lazy_unreleased_treeture<T,TA>&& ... tasks) {
+		return parallel(after(), tasks...);
 	}
 
 
 	template<typename A, typename AA, typename B, typename BA, typename M>
-	auto combine(lazy_unreleased_treeture<A,AA>&& a, lazy_unreleased_treeture<B,BA>&& b, M&& m) {
+	auto combine(dependencies&&, lazy_unreleased_treeture<A,AA>&& a, lazy_unreleased_treeture<B,BA>&& b, M&& m, bool = true) {
 		return make_lazy_unreleased_treeture([=]() {
 			return make_unreleased_treeture([=]() {
 				return make_treeture([=]() {
@@ -299,9 +299,9 @@ namespace sequential {
 		});
 	}
 
-	template<typename AA, typename BA>
-	auto sum(lazy_unreleased_treeture<int,AA>&& a, lazy_unreleased_treeture<int,BA>&& b) {
-		return combine(std::move(a),std::move(b),[](int a, int b) { return a+b; });
+	template<typename A, typename AA, typename B, typename BA, typename M>
+	auto combine(lazy_unreleased_treeture<A,AA>&& a, lazy_unreleased_treeture<B,BA>&& b, M&& m, bool parallel = true) {
+		return sequential::combine(after(), std::move(a), std::move(b), std::move(m), parallel);
 	}
 
 

@@ -788,39 +788,118 @@ namespace reference {
 	//											Treetures
 	// ---------------------------------------------------------------------------------------------
 
+
+	namespace detail {
+
+		/**
+		 * A common base class for all treetures, providing common functionality.
+		 */
+		template<typename T>
+		class treeture_base {
+
+			template<typename Process, typename Split, typename R>
+			friend class SplitableTask;
+
+		protected:
+
+			TaskBasePtr task;
+
+			treeture_base(TaskBasePtr&& task) : task(std::move(task)) {}
+
+		public:
+
+			using value_type = T;
+
+			treeture_base(const treeture_base&) = delete;
+			treeture_base(treeture_base&& other) : task(std::move(other.task)) {}
+
+			treeture_base& operator=(const treeture_base&) = delete;
+			treeture_base& operator=(treeture_base&& other) {
+				task = std::move(other.task);
+				return *this;
+			}
+
+			void wait() const {
+				if (!task) return;
+				task->wait();
+			}
+
+			task_reference getLeft() const {
+				return task_reference(task).descentLeft();
+			}
+
+			task_reference getRight() const {
+				return task_reference(task).descentRight();
+			}
+
+			task_reference getTaskReference() const {
+				return task_reference(task);
+			}
+
+			operator task_reference() const {
+				return getTaskReference();
+			}
+
+		};
+
+	}
+
+	/**
+	 * A treeture, providing a reference to the state of a task as well as to
+	 * the computed value upon completion.
+	 */
 	template<typename T>
-	class treeture;
+	class treeture : public detail::treeture_base<T> {
 
+		using super = detail::treeture_base<T>;
 
+		friend class unreleased_treeture<T>;
+
+	protected:
+
+		treeture(TaskPtr<T>&& task) : super(std::move(task)) {}
+
+	public:
+
+		treeture(const T& value = T()) : super(std::make_shared<Task<T>>(TaskDependencies(),value)) {}
+
+		treeture(const treeture&) = delete;
+		treeture(treeture&& other) = default;
+
+		treeture& operator=(const treeture&) = delete;
+		treeture& operator=(treeture&& other) = default;
+
+		const T& get() {
+			super::wait();
+			return std::static_pointer_cast<Task<T>>(this->task)->getValue();
+		}
+
+	};
+
+	/**
+	 * A specialization of the general value treeture for the void type, exhibiting
+	 * a modified signature for the get() member function.
+	 */
 	template<>
-	class treeture<void> : public task_reference {
+	class treeture<void> : public detail::treeture_base<void> {
+
+		using super = detail::treeture_base<void>;
 
 		friend class unreleased_treeture<void>;
 
 	protected:
 
-		treeture(const TaskBasePtr& t) : task_reference(t) {}
-		treeture(TaskBasePtr&& task) : task_reference(std::move(task)) {}
+		treeture(TaskBasePtr&& task) : super(std::move(task)) {}
 
 	public:
 
-		using value_type = void;
+		treeture() : super(TaskBasePtr()) {}
 
-		treeture() {}
-
-		treeture(const treeture&) = default;
+		treeture(const treeture&) = delete;
 		treeture(treeture&& other) = default;
 
-		treeture& operator=(const treeture&) = default;
+		treeture& operator=(const treeture&) = delete;
 		treeture& operator=(treeture&& other) = default;
-
-		// support implicit cast to void treeture
-		template<typename T>
-		treeture(const treeture<T>& t) : task_reference(t.task) {}
-
-		// support implicit cast to void treeture
-		template<typename T>
-		treeture(treeture<T>&& t) : task_reference(std::move(t.task)) {}
 
 		void get() {
 			wait();
@@ -828,56 +907,7 @@ namespace reference {
 
 	};
 
-	template<typename T>
-	class treeture {
 
-		friend class treeture<void>;
-
-		template<typename Process, typename Split, typename R>
-		friend class SplitableTask;
-
-		friend class unreleased_treeture<T>;
-
-		TaskPtr<T> task;
-
-	protected:
-
-		treeture(TaskPtr<T>&& task) : task(std::move(task)) {}
-
-	public:
-
-		using value_type = T;
-
-		treeture(const T& value) : task(std::make_shared<Task<T>>(TaskDependencies(),value)) {}
-
-		treeture(const treeture&) = delete;
-		treeture(treeture&& other) : task(std::move(other.task)) {}
-
-		treeture& operator=(const treeture&) = delete;
-		treeture& operator=(treeture&& other) {
-			task = std::move(other.task);
-			return *this;
-		}
-
-		void wait() const {
-			if (!task) return;
-			task->wait();
-		}
-
-		const T& get() {
-			wait();
-			return task->getValue();
-		}
-
-		task_reference getLeft() const {
-			return task_reference(task).descentLeft();
-		}
-
-		task_reference getRight() const {
-			return task_reference(task).descentRight();
-		}
-
-	};
 
 	template<typename Process, typename Split, typename R>
 	void SplitableTask<Process,Split,R>::split() {
@@ -927,6 +957,10 @@ namespace reference {
 			return std::move(*this).release();
 		}
 
+		T get() && {
+			return std::move(*this).release().get();
+		}
+
 		TaskPtr<T> toTask() && {
 			auto res = std::move(std::static_pointer_cast<Task<T>>(std::move(task)));
 			task.reset();
@@ -946,14 +980,14 @@ namespace reference {
 	}
 
 	template<typename F, typename ... Rest>
-	dependencies after(const treeture<F>& f, Rest ... rest) {
+	dependencies after(const treeture<F>& f, Rest&& ... rest) {
 		auto res = after(std::move(rest)...);
-		res.push_back(f);
+		res.push_back(f.getTaskReference());
 		return res;
 	}
 
 	template<typename F, typename ... Rest>
-	dependencies after(const unreleased_treeture<F>& f, Rest ... rest) {
+	dependencies after(const unreleased_treeture<F>& f, Rest&& ... rest) {
 		auto res = after(std::move(rest)...);
 		res.push_back(f);
 		return res;
@@ -1046,7 +1080,7 @@ namespace reference {
 
 	template<typename A, typename B, typename M, typename R = std::result_of_t<M(A,B)>>
 	unreleased_treeture<R> combine(unreleased_treeture<A>&& a, unreleased_treeture<B>&& b, M&& m, bool parallel = true) {
-		return combine(dependencies(),std::move(a),std::move(b),std::move(m),parallel);
+		return reference::combine(dependencies(),std::move(a),std::move(b),std::move(m),parallel);
 	}
 
 
