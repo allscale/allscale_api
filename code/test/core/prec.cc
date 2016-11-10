@@ -496,7 +496,7 @@ namespace core {
 		data.fill(0);
 
 		auto fill = prec(
-				[](int x) { return x < 0; },
+				[](int x) { return x <= 0; },
 				[](int) { },
 				[&](int x, const auto& nested) {
 					data[x-1] = 12;
@@ -593,7 +593,7 @@ namespace core {
 	}
 
 
-	TEST(RecOps, RecursionDepth) {
+	TEST(DISABLED_RecOps, RecursionDepth) {
 
 
 		auto sum = prec(
