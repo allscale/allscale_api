@@ -174,12 +174,12 @@ namespace sequential {
 			return gen();
 		}
 
-		treeture<T> toTreeture() const {
+		treeture<T> release() const {
 			return toUnreleasedTreeture();
 		}
 
 		T get() const {
-			return toTreeture().get();
+			return release().get();
 		}
 
 		operator unreleased_treeture<T>() const {
@@ -187,7 +187,7 @@ namespace sequential {
 		}
 
 		operator treeture<T>() const {
-			return toTreeture();
+			return release();
 		}
 
 	};

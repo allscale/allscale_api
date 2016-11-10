@@ -108,6 +108,23 @@ namespace core {
 	}
 
 
+	// --- releasing tasks ---
+
+	template<typename T>
+	inline impl::sequential::treeture<T> run(impl::sequential::unreleased_treeture<T>&& treeture) {
+		return std::move(treeture).release();
+	}
+
+	template<typename T, typename Gen>
+	inline impl::sequential::treeture<T> run(impl::sequential::lazy_unreleased_treeture<T,Gen>&& treeture) {
+		return std::move(treeture).release();
+	}
+
+	template<typename T>
+	inline impl::reference::treeture<T> run(impl::reference::unreleased_treeture<T>&& treeture) {
+		return std::move(treeture).release();
+	}
+
 
 	// --- completed tasks ---
 

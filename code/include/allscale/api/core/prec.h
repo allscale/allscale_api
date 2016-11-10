@@ -63,7 +63,7 @@ namespace core {
 				typename ... Args
 			>
 			Res callRandom(unsigned, const std::tuple<Versions...>& versions, const Args& ... args) {
-				return std::get<0>(versions)(args...);
+				return wrapResult<Res>(std::get<0>(versions)(args...));
 			}
 
 			template<
@@ -72,7 +72,18 @@ namespace core {
 				typename ... Args
 			>
 			Res callRandom(const std::tuple<Versions...>& versions, const Args& ... args) {
-				return std::get<0>(versions)(args...);
+				return wrapResult<Res>(std::get<0>(versions)(args...));
+			}
+
+
+			template<typename Res>
+			Res wrapResult(Res&& res) {
+				return std::move(res);
+			}
+
+			template<typename Res>
+			Res wrapResult(typename Res::value_type&& value) {
+				return done(value);
 			}
 
 		};
