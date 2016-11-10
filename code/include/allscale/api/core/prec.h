@@ -55,6 +55,99 @@ namespace core {
 
 		};
 
+
+		template<typename Out, typename In>
+		struct result_wrapper {
+
+			template<typename Fun>
+			Out operator()(Fun&& fun) {
+				return fun();
+			}
+
+		};
+
+		template<typename T>
+		struct result_wrapper<detail::completed_task<T>,T> {
+
+			template<typename Fun>
+			completed_task<T> operator()(Fun&& fun) {
+				return done(fun());
+			}
+
+		};
+
+		template<>
+		struct result_wrapper<detail::completed_task<void>,void> {
+
+			template<typename Fun>
+			completed_task<void> operator()(Fun&& fun) {
+				fun();
+				return done();
+			}
+
+		};
+
+		template<typename T>
+		struct result_wrapper<impl::sequential::unreleased_treeture<T>,T> : public result_wrapper<detail::completed_task<T>,T> {};
+
+		template<typename T,typename Gen>
+		struct result_wrapper<impl::sequential::lazy_unreleased_treeture<T,Gen>,T> : public result_wrapper<detail::completed_task<T>,T> {};
+
+		template<typename T>
+		struct result_wrapper<impl::reference::unreleased_treeture<T>,T> : public result_wrapper<detail::completed_task<T>,T> {};
+
+//		template<>
+//		struct result_wrapper<void> {
+//
+//			template<typename Res, typename Fun>
+//			Res wrap(Fun&& fun) {
+//				fun();
+//				return done();
+//			}
+//
+//		};
+//
+//		template<typename O>
+//		struct result_wrapper<detail::completed_task<O>> {
+//
+//			template<typename Res, typename Fun>
+//			Res wrap(Fun&& fun) {
+//				return fun();
+//			}
+//
+//		};
+//
+//		template<typename O>
+//		struct result_wrapper<impl::sequential::unreleased_treeture<O>> {
+//
+//			template<typename Res, typename Fun>
+//			Res wrap(Fun&& fun) {
+//				return fun();
+//			}
+//
+//		};
+//
+//		template<typename O, typename F>
+//		struct result_wrapper<impl::sequential::lazy_unreleased_treeture<O,F>> {
+//
+//			template<typename Res, typename Fun>
+//			Res wrap(Fun&& fun) {
+//				return fun();
+//			}
+//
+//		};
+//
+//		template<typename O>
+//		struct result_wrapper<impl::reference::unreleased_treeture<O>> {
+//
+//			template<typename Res, typename Fun>
+//			Res wrap(Fun&& fun) {
+//				return fun();
+//			}
+//
+//		};
+
+
 		template<>
 		struct random_caller<0> {
 			template<
@@ -63,7 +156,9 @@ namespace core {
 				typename ... Args
 			>
 			Res callRandom(unsigned, const std::tuple<Versions...>& versions, const Args& ... args) {
-				return wrapResult<Res>(std::get<0>(versions)(args...));
+				using res_type = decltype(std::get<0>(versions)(args...));
+				result_wrapper<Res,res_type> wrap;
+				return wrap([&](){ return std::get<0>(versions)(args...); });
 			}
 
 			template<
@@ -72,18 +167,9 @@ namespace core {
 				typename ... Args
 			>
 			Res callRandom(const std::tuple<Versions...>& versions, const Args& ... args) {
-				return wrapResult<Res>(std::get<0>(versions)(args...));
-			}
-
-
-			template<typename Res>
-			Res wrapResult(Res&& res) {
-				return std::move(res);
-			}
-
-			template<typename Res>
-			Res wrapResult(typename Res::value_type&& value) {
-				return done(value);
+				using res_type = decltype(std::get<0>(versions)(args...));
+				result_wrapper<Res,res_type> wrap;
+				return wrap([&](){ return std::get<0>(versions)(args...); });
 			}
 
 		};

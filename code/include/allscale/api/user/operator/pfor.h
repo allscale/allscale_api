@@ -109,9 +109,9 @@ namespace user {
 
 		class iteration_dependency {
 
-			core::treeture<void> handle;
+			core::task_reference handle;
 
-			iteration_dependency(core::treeture<void>&& handle)
+			iteration_dependency(core::task_reference&& handle)
 				: handle(std::move(handle)) {}
 
 		public:
@@ -200,7 +200,7 @@ namespace user {
 	detail::iteration_reference pfor(const std::array<Iter,dims>& a, const std::array<Iter,dims>& b, const Body& body) {
 
 		// process 0-dimensional case
-		if (dims == 0) return core::done(); // no iterations required
+		if (dims == 0) return detail::iteration_reference(core::done()); // no iterations required
 
 		// implements a recursive splitting policy for iterating over the given iterator range
 		using range = std::array<std::pair<Iter,Iter>,dims>;
@@ -212,7 +212,7 @@ namespace user {
 		}
 
 		// trigger parallel processing
-		auto res = core::prec(
+		return core::prec(
 			[](const range& r) {
 				// if there is only one element left, we reached the base case
 				return detail::area(r) <= 1;
@@ -252,12 +252,6 @@ namespace user {
 				);
 			}
 		)(full);
-
-		// trigger execution
-		res.start();
-
-		// done
-		return std::move(res);
 	}
 
 	/**
@@ -275,7 +269,7 @@ namespace user {
 		};
 
 		// the parallel execution
-		auto res = core::prec(
+		return core::prec(
 			[](const range& r) {
 				return detail::distance(r.begin,r.end) <= 1;
 			},
@@ -293,12 +287,6 @@ namespace user {
 				);
 			}
 		)(range{a,b,dependency.getInitial()});
-
-		// start processing
-		res.start();
-
-		// done
-		return std::move(res);
 	}
 
 	template<typename Iter, typename Body>

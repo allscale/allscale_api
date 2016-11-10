@@ -28,6 +28,10 @@ namespace core {
 	template<typename T>
 	using treeture = impl::reference::treeture<T>;
 
+	/**
+	 * A reference to a sub-task, to create
+	 */
+	using task_reference = impl::reference::task_reference;
 
 
 	// ---------------------------------------------------------------------------------------------
@@ -50,6 +54,14 @@ namespace core {
 				return impl::reference::done(value);
 			}
 
+			operator impl::sequential::treeture<T>() {
+				return impl::sequential::done(value);
+			}
+
+			operator impl::reference::treeture<T>() {
+				return impl::reference::done(value);
+			}
+
 			T get() {
 				return value;
 			}
@@ -59,12 +71,23 @@ namespace core {
 		template<>
 		struct completed_task<void> {
 
+			operator impl::sequential::unreleased_treeture<void>() {
+				return impl::sequential::done();
+			}
+
+			operator impl::reference::unreleased_treeture<void>() {
+				return impl::reference::done();
+			}
+
 			operator impl::sequential::treeture<void>() {
 				return impl::sequential::done();
 			}
 
 			operator impl::reference::treeture<void>() {
 				return impl::reference::done();
+			}
+
+			void get() {
 			}
 
 		};
@@ -152,6 +175,16 @@ namespace core {
 		return impl::sequential::sequential(std::move(f),std::move(rest)...);
 	}
 
+	template<typename ... Args, typename ... Impls>
+	auto sequential(impl::sequential::dependencies&& deps, impl::sequential::lazy_unreleased_treeture<Args,Impls>&& ... args) {
+		return impl::sequential::sequential(std::move(deps),std::move(args)...);
+	}
+
+	template<typename F, typename I, typename ... R, typename ... Impls>
+	auto sequential(impl::sequential::lazy_unreleased_treeture<F,I>&& f, impl::sequential::lazy_unreleased_treeture<R,Impls>&& ... rest) {
+		return impl::sequential::sequential(std::move(f),std::move(rest)...);
+	}
+
 	template<typename ... Args>
 	auto sequential(impl::reference::dependencies&& deps, impl::reference::unreleased_treeture<Args>&& ... args) {
 		return impl::reference::sequential(std::move(deps),std::move(args)...);
@@ -172,6 +205,16 @@ namespace core {
 
 	template<typename F, typename ... R>
 	auto parallel(impl::sequential::unreleased_treeture<F>&& f, impl::sequential::unreleased_treeture<R>&& ... rest) {
+		return impl::sequential::parallel(std::move(f),std::move(rest)...);
+	}
+
+	template<typename ... Args, typename ... Impls>
+	auto parallel(impl::sequential::dependencies&& deps, impl::sequential::lazy_unreleased_treeture<Args,Impls>&& ... args) {
+		return impl::sequential::parallel(std::move(deps),std::move(args)...);
+	}
+
+	template<typename F, typename I, typename ... R, typename ... Impls>
+	auto parallel(impl::sequential::lazy_unreleased_treeture<F,I>&& f, impl::sequential::lazy_unreleased_treeture<R,Impls>&& ... rest) {
 		return impl::sequential::parallel(std::move(f),std::move(rest)...);
 	}
 

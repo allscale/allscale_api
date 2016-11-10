@@ -489,6 +489,32 @@ namespace core {
 
 	}
 
+	TEST(RecOps, Fill) {
+
+		std::array<int,20> data;
+
+		data.fill(0);
+
+		auto fill = prec(
+				[](int x) { return x < 0; },
+				[](int) { },
+				[&](int x, const auto& nested) {
+					data[x-1] = 12;
+					return nested(x-1);
+				}
+		);
+
+		for(const auto& cur : data) {
+			EXPECT_EQ(0,cur);
+		}
+
+		fill(20).get();
+
+		for(const auto& cur : data) {
+			EXPECT_EQ(12,cur);
+		}
+
+	}
 
 
 	int fib(int x) {
@@ -605,7 +631,7 @@ namespace core {
 		return (x<2) ? x : sfib(x-1) + sfib(x-2);
 	}
 
-	static const int N = 30;
+	static const int N = 40;
 
 	TEST(ScalingTest, StaticFib) {
 		// this should not take any time
@@ -621,16 +647,15 @@ namespace core {
 	}
 
 
-//	TEST(DISABLED_WorkerSleepTest, StopAndGo) {
-//		// Unfortunately, I don't know a simple, portable way to check the
-//		// actual number of workers -- so this one must be inspected manually
-//		const int N = 45;
-//		EXPECT_EQ(static_fib<N>::value, pfib(N));
-//		EXPECT_EQ(static_fib<N>::value, sfib(N));
-//		EXPECT_EQ(static_fib<N>::value, pfib(N));
-//
-//	}
+	TEST(DISABLED_WorkerSleepTest, StopAndGo) {
+		// Unfortunately, I don't know a simple, portable way to check the
+		// actual number of workers -- so this one must be inspected manually
+		const int N = 45;
+		EXPECT_EQ(static_fib<N>::value, pfib(N));
+		EXPECT_EQ(static_fib<N>::value, sfib(N));
+		EXPECT_EQ(static_fib<N>::value, pfib(N));
 
+	}
 
 } // end namespace core
 } // end namespace api

@@ -2,12 +2,13 @@
 
 #include <vector>
 
-#include "allscale/api/core/treeture.h"
+#include "allscale/api/core/impl/reference/treeture.h"
 
 namespace allscale {
 namespace api {
 namespace core {
 namespace impl {
+namespace reference {
 
 	TEST(Parec,ImplCheck) {
 		EXPECT_EQ("Reference SharedMemory", getImplementationName());
@@ -188,10 +189,15 @@ namespace impl {
 		EXPECT_EQ(12,future.get());
 	}
 
+	template<typename T>
+	unreleased_treeture<T> add(unreleased_treeture<T>&& a, unreleased_treeture<T>&& b) {
+		return combine(std::move(a),std::move(b),[](T a, T b) { return a + b; });
+	}
+
 	TEST(Runtime, Spawn) {
 
 		// build a completed task
-		auto d = done(10);
+		treeture<int> d = done(10);
 		EXPECT_EQ(10, d.get());
 
 		// build a simple task
@@ -211,7 +217,7 @@ namespace impl {
 		);
 
 		// build an aggregate node
-		auto h = add(std::move(f), std::move(g));
+		treeture<int> h = add(std::move(f), std::move(g));
 
 		EXPECT_EQ(26, h.get());
 
@@ -233,7 +239,6 @@ namespace impl {
 			[&]{ x++; }
 		);
 
-		EXPECT_EQ(0,x);
 		EXPECT_EQ(0,y);
 		EXPECT_EQ(0,z);
 
@@ -241,13 +246,10 @@ namespace impl {
 			[&]{ y++; }
 		);
 
-		EXPECT_EQ(0,x);
-		EXPECT_EQ(0,y);
 		EXPECT_EQ(0,z);
 
 		b.get();
 
-		EXPECT_EQ(0,x);
 		EXPECT_EQ(1,y);
 		EXPECT_EQ(0,z);
 
@@ -338,7 +340,7 @@ namespace impl {
 	}
 
 	template<typename Body>
-	allscale::api::core::treeture<void> forEach(int begin, int end, const Body& body) {
+	unreleased_treeture<void> forEach(int begin, int end, const Body& body) {
 
 		// handle empty case
 		if (begin >= end) {
@@ -403,7 +405,7 @@ namespace impl {
 		}
 
 		// wait for completion
-		As.get();
+		std::move(As).get();
 
 		// check result
 		for(int i=0; i<N; i++) {
@@ -413,7 +415,7 @@ namespace impl {
 	}
 
 	template<typename Body>
-	allscale::api::core::treeture<void> forEachAfter(int begin, int end, const Body& body) {
+	unreleased_treeture<void> forEachAfter(int begin, int end, const Body& body) {
 
 		// handle empty case
 		if (begin >= end) {
@@ -436,7 +438,7 @@ namespace impl {
 					for(int i=begin; i<end; i++) body(i);
 				},
 				[=]() {
-					return sequence(
+					return sequential(
 							forEachAfter(begin,mid,body),
 							forEachAfter(mid,end,body)
 					);
@@ -479,7 +481,7 @@ namespace impl {
 		}
 
 		// wait for completion
-		As.get();
+		std::move(As).get();
 
 		// check result
 		for(int i=0; i<N; i++) {
@@ -518,7 +520,7 @@ namespace impl {
 
 	}
 
-	allscale::api::core::treeture<unsigned> fib_naive(unsigned n) {
+	unreleased_treeture<unsigned> fib_naive(unsigned n) {
 		if (n <= 1) return done(n);
 		return add(fib_naive(n-1),fib_naive(n-2));
 	}
@@ -540,7 +542,7 @@ namespace impl {
 		// EXPECT_EQ(STRESS_RES, fib_naive(STRESS_N).get());
 	}
 
-	allscale::api::core::treeture<unsigned> fib_split(unsigned n) {
+	unreleased_treeture<unsigned> fib_split(unsigned n) {
 		if (n <= 1) return done(n);
 		return spawn(
 				[=](){ return fib(n); },
@@ -564,6 +566,7 @@ namespace impl {
 		EXPECT_EQ(STRESS_RES, fib_split(STRESS_N).get());
 	}
 
+} // end namespace reference
 } // end namespace impl
 } // end namespace core
 } // end namespace api

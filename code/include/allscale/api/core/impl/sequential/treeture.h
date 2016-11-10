@@ -279,12 +279,12 @@ namespace sequential {
 	template<typename ... T, typename ... TA>
 	auto parallel(dependencies&&, lazy_unreleased_treeture<T,TA>&& ... tasks) {
 		// for the sequential implementation, parallel is the same as sequential
-		return sequential(tasks...);
+		return sequential(std::move(tasks)...);
 	}
 
 	template<typename ... T, typename ... TA>
 	auto parallel(lazy_unreleased_treeture<T,TA>&& ... tasks) {
-		return parallel(after(), tasks...);
+		return parallel(after(), std::move(tasks)...);
 	}
 
 
