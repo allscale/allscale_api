@@ -155,20 +155,20 @@ namespace user {
 
 		auto Bs = pfor(0,N,[&](int i) {
 			log("B",i);
-			EXPECT_EQ(0,data[i]);
+			EXPECT_EQ(0,data[i]) << "Index: " << i;
 			data[i] = 1;
 		}, one_on_one(As));
 
 		auto Cs = pfor(0,N,[&](int i) {
 			log("C",i);
-			EXPECT_EQ(1,data[i]);
+			EXPECT_EQ(1,data[i]) << "Index: " << i;
 			data[i] = 2;
 		}, one_on_one(Bs));
 
 		Cs.wait();
 
 		for(int i=0; i<N; i++) {
-			EXPECT_EQ(2, data[i]);
+			EXPECT_EQ(2, data[i]) << "Index: " << i;
 		}
 	}
 

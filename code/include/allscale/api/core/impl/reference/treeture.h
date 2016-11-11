@@ -164,6 +164,9 @@ namespace reference {
 		// a list of task to be completed before this task can be started
 		TaskDependencies dependencies;
 
+		// indicates whether this task can be split
+		bool splitable;
+
 		// split task data
 		TaskBasePtr left;
 		TaskBasePtr right;
@@ -179,7 +182,7 @@ namespace reference {
 	public:
 
 		TaskBase(TaskDependencies&& deps = TaskDependencies(), bool done = true)
-			: id(getNextID()), state(done ? State::Done : State::New), dependencies(std::move(deps)), parent(nullptr) {
+			: id(getNextID()), state(done ? State::Done : State::New), dependencies(std::move(deps)), splitable(false), parent(nullptr) {
 			LOG_TASKS( "Created " << *this );
 		}
 
@@ -339,6 +342,10 @@ namespace reference {
 			return right;
 		}
 
+		bool isSplitable() const {
+			return splitable;
+		}
+
 	protected:
 
 		// Ready -> Running -> Done
@@ -349,9 +356,14 @@ namespace reference {
 			// nothing to do by default
 		}
 
+		void setSplitable(bool value = true) {
+			splitable = value;
+		}
+
 		void setSubstitute(TaskBasePtr&& newSub) {
-			// can only happen if this task is in ready state
-			assert_eq(State::Ready, state);
+			// can only happen if this task is in blocked or ready state
+			assert_true(state == State::Blocked || state == State::Ready)
+					<< "Actual state: " << state;
 
 			// must only be set once!
 			assert_false(substitute);
@@ -587,7 +599,10 @@ namespace reference {
 	public:
 
 		SplitableTask(TaskDependencies&& deps, const Process& c, const Split& d)
-			: Task<R>(std::move(deps)), task(c), decompose(d) {}
+			: Task<R>(std::move(deps)), task(c), decompose(d) {
+			// mark this task as one that can be split
+			TaskBase::setSplitable();
+		}
 
 		R computeValue() override {
 			// if split
@@ -911,7 +926,11 @@ namespace reference {
 
 	template<typename Process, typename Split, typename R>
 	void SplitableTask<Process,Split,R>::split() {
-		assert_eq(TaskBase::State::Ready, this->state);
+		// do not split a second time
+		if (!TaskBase::isSplitable()) return;
+
+		assert_true(TaskBase::State::Blocked == this->state || TaskBase::State::Ready == this->state)
+				<< "Actual state: " << this->state;
 
 		// decompose this task
 		subTask = decompose().toTask();
@@ -919,6 +938,14 @@ namespace reference {
 
 		// mutate to new task
 		Task<R>::setSubstitute(std::move(subTask));
+
+		// mark as no longer splitable
+		TaskBase::setSplitable(false);
+
+		// also, mark as ready for being processed
+		if (this->state != TaskBase::State::Ready) {
+			TaskBase::setState(TaskBase::State::Ready);
+		}
 	}
 
 
@@ -1237,31 +1264,44 @@ namespace reference {
 		public:
 
 			bool empty() const {
-				lock.lock();
-				bool res = pool.empty();
-				lock.unlock();
-				return res;
+				std::lock_guard<SpinLock> lease(lock);
+				return pool.empty();
 			}
 
 			void addTask(TaskBasePtr&& task) {
-				lock.lock();
+				std::lock_guard<SpinLock> lease(lock);
 				pool.emplace_back(std::move(task));
-				lock.unlock();
 			}
 
 			TaskBasePtr getReadyTask() {
-				lock.lock();
-				TaskBasePtr res;
+				std::lock_guard<SpinLock> lease(lock);
+
+				// 1) look for some task that is ready
 				for(auto& cur : pool) {
 					if(!cur->isReady()) continue;
-					// found a complete one, remove it from the pool
-					res = std::move(cur);
+					// found a ready one, remove it from the pool
+					TaskBasePtr res = std::move(cur);
 					cur = std::move(pool.back());
 					pool.pop_back();
-					break;
+					return res;
 				}
-				lock.unlock();
-				return res;
+
+//				// 2) look for a splitable task
+//				for(auto& cur : pool) {
+//					if (!cur->isSplitable()) continue;
+//					// found a splitable one, split it
+//					TaskBasePtr res = std::move(cur);
+//					cur = std::move(pool.back());
+//					pool.pop_back();
+//
+//					// split the task and return the result
+//					res->split();
+//					assert_true(res->isReady());
+//					return res;
+//				}
+
+				// no work available
+				return {};
 			}
 
 		};
@@ -1581,6 +1621,11 @@ namespace reference {
 	inline bool TaskBase::isReady() {
 		// should only be called if blocked or ready
 		assert_true(state == State::Blocked || state == State::Ready) << "Actual State:" << state;
+
+		// if substituted, check substitute
+		if (substitute) {
+			return substitute->isReady();
+		}
 
 		// if already identified as ready before, that's it
 		if (state == State::Ready) return true;
