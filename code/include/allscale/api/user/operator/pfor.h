@@ -116,6 +116,8 @@ namespace user {
 
 		public:
 
+			iteration_dependency() {}
+
 			iteration_dependency(const iteration_reference& ref)
 				: handle(ref.handle) {}
 
@@ -383,54 +385,57 @@ namespace user {
 
 	};
 
-//	struct neighborhood_sync : public dependency {
-//
-//		neighborhood_sync(const detail::iteration_reference& loop)
-//			: dependency(loop) {}
-//
-//		static detail::SubDependencies split(const detail::Dependencies& dep) {
-//			using TaskRef = detail::iteration_reference;
-//
-//			TaskRef done;
-//
-//			// check for the root case
-//			if (dep.isSingle()) {
-//				const TaskRef& task = dep.getDependency();
-//
-//				// split the dependency
-//				const TaskRef& left = task.getLeft();
-//				const TaskRef& right = task.getRight();
-//
-//				return {
-//					detail::Dependencies( done,left,right ),
-//					detail::Dependencies( left,right,done )
-//				};
-//			}
-//
-//			// split up input dependencies
-//			const auto& dependencies = dep.getDependencies();
-//			if (dependencies.size() == 3) {
-//
-//				// split each of those
-//				TaskRef a = dependencies[0].getRight();
-//				TaskRef b = dependencies[1].getLeft();
-//				TaskRef c = dependencies[1].getRight();
-//				TaskRef d = dependencies[2].getLeft();
-//
-//				// and pack accordingly
-//				return {
-//					detail::Dependencies( a,b,c ),
-//					detail::Dependencies( b,c,d )
-//				};
-//
-//			}
-//
-//			// fall-back: no splitting
-//			return { dep, dep };
-//		}
-//
-//	};
+	struct neighborhood_sync : public dependency {
 
+		neighborhood_sync(const detail::iteration_reference& loop)
+			: dependency(loop) {}
+
+		static detail::SubDependencies split(const detail::Dependencies& dep) {
+			using iter_dependency = detail::iteration_dependency;
+
+
+			// check for the root case
+			if (dep.isSingle()) {
+				const iter_dependency& dependency = dep.getDependency();
+
+				// split the dependency
+				const iter_dependency& left = dependency.getLeft();
+				const iter_dependency& right = dependency.getRight();
+
+				// combine sub-dependencies
+				iter_dependency done;
+				return {
+					detail::Dependencies( done,left,right ),
+					detail::Dependencies( left,right,done )
+				};
+			}
+
+			// split up input dependencies
+			const auto& dependencies = dep.getDependencies();
+			if (dependencies.size() == 3) {
+
+				// split each of those
+				auto a = dependencies[0].getRight();
+				auto b = dependencies[1].getLeft();
+				auto c = dependencies[1].getRight();
+				auto d = dependencies[2].getLeft();
+
+				// and pack accordingly
+				return {
+					detail::Dependencies( a,b,c ),
+					detail::Dependencies( b,c,d )
+				};
+
+			}
+
+			// this should not happen
+			assert_fail() << "Unexpected input dependency!";
+
+			// fall-back: no splitting
+			return { dep, dep };
+		}
+
+	};
 
 
 } // end namespace user
