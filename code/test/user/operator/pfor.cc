@@ -134,47 +134,10 @@ namespace user {
 	}
 
 
-//	TEST(PFor, Handler) {
-//
-//		const int N = 10;
-//
-//		// create data
-//		std::vector<int> data(N);
-//
-//		// initialize data
-//		auto As = pfor(data,[](int& x) {
-//			x = 10;
-//		});
-//
-//		// check state
-//		for(const auto& cur : data) {
-//			EXPECT_EQ(0,cur);
-//		}
-//
-//		// wait for first half
-//		As.getLeft().wait();
-//
-////		// check state
-////		for(int i=0; i<N/2; i++) {
-////			EXPECT_EQ(10,data[i]) << "i=" << i;
-////		}
-////		for(int i=N/2; i<N; i++) {
-////			EXPECT_EQ(0,data[i]) << "i=" << i;
-////		}
-//
-//		// wait for second half
-//		As.getRight().wait();
-//
-//		// check state
-//		for(const auto& cur : data) {
-//			EXPECT_EQ(10,cur);
-//		}
-//
-//	}
 
 	// --- loop iteration sync ---
 
-	TEST(DISABLED_Pfor, SyncOneOnOne) {
+	TEST(Pfor, SyncOneOnOne) {
 		const int N = 10;
 
 		std::mutex outLock;

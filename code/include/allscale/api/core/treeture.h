@@ -103,31 +103,26 @@ namespace core {
 
 	// -- sequential --
 
-	template<typename F, typename ... Rest>
-	impl::sequential::dependencies after(const impl::sequential::treeture<F>& f, Rest ... rest) {
+	template<typename ... Rest>
+	impl::sequential::dependencies after(const impl::sequential::task_reference& f, Rest ... rest) {
 		return impl::sequential::after(std::move(f),std::move(rest)...);
 	}
 
-	template<typename F, typename ... Rest>
-	impl::sequential::dependencies after(impl::sequential::unreleased_treeture<F>&& f, Rest ... rest) {
-		return impl::sequential::after(std::move(f),std::move(rest)...);
+	inline impl::sequential::dependencies after(const std::vector<impl::sequential::task_reference>& deps) {
+		return impl::sequential::after(deps);
 	}
 
-	template<typename F, typename Gen, typename ... Rest>
-	impl::sequential::dependencies after(impl::sequential::lazy_unreleased_treeture<F,Gen>&& f, Rest ... rest) {
-		return impl::sequential::after(std::move(f),std::move(rest)...);
-	}
+
 
 	// -- reference --
 
-	template<typename F, typename ... Rest>
-	impl::reference::dependencies after(const impl::reference::treeture<F>& f, Rest&& ... rest) {
+	template<typename ... Rest>
+	impl::reference::dependencies after(const impl::reference::task_reference& f, Rest ... rest) {
 		return impl::reference::after(std::move(f),std::move(rest)...);
 	}
 
-	template<typename F, typename ... Rest>
-	impl::reference::dependencies after(const impl::reference::unreleased_treeture<F>& f, Rest&& ... rest) {
-		return impl::reference::after(std::move(f),std::move(rest)...);
+	inline impl::reference::dependencies after(const std::vector<impl::reference::task_reference>& deps) {
+		return impl::reference::after(deps);
 	}
 
 

@@ -164,6 +164,7 @@ namespace reference {
 		EXPECT_EQ(4,x);
 	}
 
+
 	// --- benchmark ---
 
 	const int N = 32;

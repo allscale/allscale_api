@@ -770,7 +770,7 @@ namespace reference {
 			while(!task->isDone() && !queue.empty()) {
 
 				// get sub-task (if available)
-				TaskBasePtr next = (queue.get()) ? task->getLeft() : task->getRight();
+				TaskBasePtr next = (queue.get()) ? task->getRight() : task->getLeft();
 
 				// if not available, that is the closet we can get for now
 				if (!next) return;
@@ -975,23 +975,23 @@ namespace reference {
 	//										   Operators
 	// ---------------------------------------------------------------------------------------------
 
-	dependencies after() {
+
+
+	inline dependencies after() {
 		return dependencies();
 	}
 
-	template<typename F, typename ... Rest>
-	dependencies after(const treeture<F>& f, Rest&& ... rest) {
+	template<typename ... Rest>
+	dependencies after(const task_reference& r, const Rest& ... rest) {
 		auto res = after(std::move(rest)...);
-		res.push_back(f.getTaskReference());
+		res.push_back(r);
 		return res;
 	}
 
-	template<typename F, typename ... Rest>
-	dependencies after(const unreleased_treeture<F>& f, Rest&& ... rest) {
-		auto res = after(std::move(rest)...);
-		res.push_back(f);
-		return res;
+	dependencies after(const std::vector<task_reference>& refs) {
+		return refs;
 	}
+
 
 	inline unreleased_treeture<void> done(dependencies&& deps) {
 		return std::make_shared<Task<void>>(std::move(deps));

@@ -125,13 +125,15 @@ namespace user {
 			}
 
 			iteration_dependency getLeft() const {
-				return *this;
-//				return handle.getLeft();
+				return handle.getLeft();
 			}
 
 			iteration_dependency getRight() const {
-				return *this;
-//				return handle.getRight();
+				return handle.getRight();
+			}
+
+			operator core::task_reference() const {
+				return handle;
 			}
 
 		};
@@ -165,6 +167,12 @@ namespace user {
 
 			const std::vector<iteration_dependency>& getDependencies() const {
 				return dependencies;
+			}
+
+			operator std::vector<core::task_reference>() const {
+				std::vector<core::task_reference> res;
+				for(const auto& cur : dependencies) res.push_back(cur);
+				return res;
 			}
 
 			void wait() const {
@@ -274,7 +282,6 @@ namespace user {
 				return detail::distance(r.begin,r.end) <= 1;
 			},
 			[body](const range& r) {
-				r.dependencies.wait();
 				for(auto it = r.begin; it != r.end; ++it) body(detail::access(it));
 			},
 			[](const range& r, const auto& nested) {
@@ -282,8 +289,8 @@ namespace user {
 				auto mid = r.begin + (r.end - r.begin)/2;
 				auto dep = Dependency::split(r.dependencies);
 				return core::parallel(
-						nested(range{r.begin,mid,dep.left}),
-						nested(range{mid,r.end,dep.right})
+						nested(core::after(dep.left), range{r.begin,mid,dep.left}),
+						nested(core::after(dep.right),range{mid,r.end,dep.right})
 				);
 			}
 		)(range{a,b,dependency.getInitial()});

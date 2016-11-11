@@ -38,6 +38,11 @@ namespace sequential {
 	class lazy_unreleased_treeture;
 
 	/**
+	 * A class to reference tasks for synchronization purposes.
+	 */
+	class task_reference;
+
+	/**
 	 * A class to model task dependencies
 	 */
 	class dependencies;
@@ -45,10 +50,41 @@ namespace sequential {
 
 	// ------------------------------------- Definitions ------------------------------------------
 
+	// -- task_reference --
+
+	class task_reference {
+
+		bool isDone() const {
+			return true;
+		}
+
+		void wait() const {
+			// always done
+		}
+
+		task_reference& descentLeft() {
+			return *this;
+		}
+
+		task_reference& descentRight() {
+			return *this;
+		}
+
+		task_reference getLeft() const {
+			return *this;
+		}
+
+		task_reference getRight() const {
+			return *this;
+		}
+
+	};
+
+
 	// -- treeture --
 
 	template<>
-	class treeture<void> {
+	class treeture<void> : public task_reference {
 	public:
 
 		using value_type = void;
@@ -63,24 +99,14 @@ namespace sequential {
 		template<typename T>
 		treeture(const treeture<T>& other) {}
 
-		void wait() {}
-
 		void get() const {
 			// nothing to do
-		}
-
-		treeture<void> getLeft() const {
-			return {};
-		}
-
-		treeture<void> getRight() const {
-			return {};
 		}
 
 	};
 
 	template<typename T>
-	class treeture {
+	class treeture : public task_reference {
 
 		T value;
 
@@ -98,18 +124,8 @@ namespace sequential {
 		explicit treeture(Fun&& fun)
 			: value(fun()) {}
 
-		void wait() {}
-
 		T get() const {
 			return value;
-		}
-
-		treeture<void> getLeft() const {
-			return {};
-		}
-
-		treeture<void> getRight() const {
-			return {};
 		}
 
 	};
@@ -123,7 +139,7 @@ namespace sequential {
 	// -- unreleased_treeture --
 
 	template<typename T>
-	class unreleased_treeture {
+	class unreleased_treeture : public task_reference {
 
 		treeture<T> res;
 
@@ -210,21 +226,13 @@ namespace sequential {
 		return {};
 	}
 
-	template<typename F, typename ... Rest>
-	dependencies after(const treeture<F>&, Rest ... rest) {
-		return after(std::move(rest)...);
+	template<typename ... Rest>
+	dependencies after(const task_reference&, const Rest& ... rest) {
+		return after(rest...);
 	}
 
-	template<typename F, typename ... Rest>
-	dependencies after(unreleased_treeture<F>&& f, Rest ... rest) {
-		f.get(); // wait for this one to be finished
-		return after(std::move(rest)...); // wait for the rest
-	}
-
-	template<typename F, typename Gen, typename ... Rest>
-	dependencies after(lazy_unreleased_treeture<F,Gen>&& f, Rest ... rest) {
-		f.get(); // wait for this one to be finished
-		return after(std::move(rest)...); // wait for the rest
+	dependencies after(const std::vector<task_reference>&) {
+		return {};		// if it is a task_reference, it is computed
 	}
 
 
