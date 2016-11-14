@@ -147,6 +147,8 @@ namespace sequential {
 
 		using value_type = T;
 
+		unreleased_treeture() {}
+
 		template<typename Fun>
 		explicit unreleased_treeture(Fun&& fun)
 			: res(fun()) {}

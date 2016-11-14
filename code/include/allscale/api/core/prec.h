@@ -294,10 +294,19 @@ namespace core {
 				}
 
 				auto operator()(impl::reference::dependencies&& deps, const I& in) const {
+					// This is the hand-over between the parallel and sequential implementation
 					return impl::sequential::make_lazy_unreleased_treeture([=](){
-						// need to wait for dependencies
-						for(const auto& cur : deps) cur.wait();
-						return defs.template sequentialCall<i,O,I>(impl::sequential::after(),in);
+						// create the location to store the result
+						impl::sequential::unreleased_treeture<O> res;
+						// compute the result, after the dependencies have been resolved
+						impl::reference::spawn(
+							impl::reference::dependencies(std::move(deps)),
+							[&]() {
+								res = defs.template sequentialCall<i,O,I>(impl::sequential::after(),in);
+							}
+						).get();
+						// return the resulting unreleased treeture
+						return res;
 					});
 				}
 

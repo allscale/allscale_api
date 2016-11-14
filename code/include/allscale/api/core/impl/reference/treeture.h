@@ -229,6 +229,8 @@ namespace reference {
 			if (substitute) {
 				if (!substitute->isDone()) {
 					substitute->run();
+				} else {
+					finish();
 				}
 				return;
 			}
@@ -436,7 +438,7 @@ namespace reference {
 			// finish this task
 			finish();
 
-			LOG_TASKS( "Child " << child << " of " << *this << " done - processing complete" );
+			// LOG_TASKS( "Child " << child << " of " << *this << " done - processing complete" );
 		}
 
 		void finish() {
@@ -458,9 +460,10 @@ namespace reference {
 				// aggregate result
 				aggregate();
 
-				// delete sub-tasks
-				left.reset();
-				right.reset();
+				// TODO: figure out a way to clean up memory safely
+//				// delete sub-tasks
+//				left.reset();
+//				right.reset();
 
 				// log completion
 				LOG( "Aggregating task " << *this << " complete" );
@@ -740,6 +743,8 @@ namespace reference {
 
 		mutable BitQueue queue;
 
+		mutable SpinLock lock;
+
 	public:
 
 		task_reference() {}
@@ -748,9 +753,25 @@ namespace reference {
 
 		task_reference(const TaskBasePtr& task) : task(task) {}
 
+		task_reference(const task_reference& other) {
+			std::lock_guard<SpinLock> lease(other.lock);
+			task = other.task;
+			queue = other.queue;
+		}
+
+		task_reference(task_reference&& other) {
+			std::lock_guard<SpinLock> lease(other.lock);
+			task = std::move(other.task);
+			queue = std::move(other.queue);
+		}
+
+		task_reference& operator=(const task_reference&) = delete;
+		task_reference& operator=(task_reference&&) = delete;
+
 		bool isDone() const {
-			if (!task) return true;
 			narrow();
+			std::lock_guard<SpinLock> lease(lock);
+			if (!task) return true;
 			if (!task->isDone()) return false;
 			task.reset();
 			return true;
@@ -759,12 +780,14 @@ namespace reference {
 		void wait() const;
 
 		task_reference& descentLeft() {
+			std::lock_guard<SpinLock> lease(lock);
 			if (!task) return *this;
 			queue.put(0);
 			return *this;
 		}
 
 		task_reference& descentRight() {
+			std::lock_guard<SpinLock> lease(lock);
 			if (!task) return *this;
 			queue.put(1);
 			return *this;
@@ -781,6 +804,7 @@ namespace reference {
 	private:
 
 		void narrow() const {
+			std::lock_guard<SpinLock> lease(lock);
 			if (!task) return;
 			while(!task->isDone() && !queue.empty()) {
 
@@ -1669,19 +1693,10 @@ namespace reference {
 	}
 
 	inline void task_reference::wait() const {
-		if(!task) return;
-
-		// narrow scope
-		narrow();
-
-		// keep narrowing scope until task fits or task is done
-		while(!queue.empty() && !task->isDone()) {
-			narrow();
-			if (!task->isDone()) runtime::getCurrentWorker().schedule_step();
+		// keep narrowing scope until done (implicit in isDone)
+		while(!isDone()) {
+			runtime::getCurrentWorker().schedule_step();
 		}
-
-		// wait for task to be completed
-		task->wait();
 	}
 
 } // end namespace reference
