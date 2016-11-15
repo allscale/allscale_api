@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <algorithm>
 
 #include "allscale/utils/printer/arrays.h"
 
@@ -121,12 +122,12 @@ namespace data {
 
 	template<typename T, std::size_t Dims>
 	Vector<T,Dims> pointwiseMin(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
-		return pointwise(a,b,&std::min<T>);
+		return pointwise(a,b,[](const T& a, const T& b) { return std::min<T>(a,b); });
 	}
 
 	template<typename T, std::size_t Dims>
 	Vector<T,Dims> pointwiseMax(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
-		return pointwise(a,b,&std::max<T>);
+		return pointwise(a,b,[](const T& a, const T& b) { return std::max<T>(a,b); });
 	}
 
 } // end namespace data

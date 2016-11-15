@@ -48,7 +48,7 @@ if (NOT third_part_libs_home )
 endif()
 
 # fix GTEST version
-set(GTEST_VERSION 1.7.0)
+set(GTEST_VERSION 1.8.0)
 
 # lookup pthread library
 find_library(pthread_lib pthread)
