@@ -138,10 +138,13 @@ namespace user {
 	// --- loop iteration sync ---
 
 	TEST(Pfor, SyncOneOnOne) {
-		const int N = 10;
+
+		const int N = 10000;
+		const bool enable_log = false;
 
 		std::mutex outLock;
 		auto log = [&](const std::string& str, int i) {
+			if (!enable_log) return;
 			std::lock_guard<std::mutex> lock(outLock);
 			std::cerr << str << i << "\n";
 		};
@@ -173,7 +176,7 @@ namespace user {
 	}
 
 	TEST(Pfor, SyncNeighbor) {
-		const int N = 20000;
+		const int N = 10000;
 
 		std::vector<int> dataA(N);
 		std::vector<int> dataB(N);

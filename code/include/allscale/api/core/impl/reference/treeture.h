@@ -124,7 +124,7 @@ namespace reference {
 	// -----------------------------------------------------------------
 
 
-	const bool ENABLE_MONITORING = true;
+	const bool ENABLE_MONITORING = false;
 
 	namespace monitoring {
 
@@ -451,6 +451,11 @@ namespace reference {
 				// done
 				return;
 			}
+
+			// check that all dependencies have completed
+			assert_true(std::all_of(dependencies.begin(),dependencies.end(),[](const auto& cur){
+				return cur.isDone();
+			}));
 
 			// run computation
 			execute();
@@ -932,8 +937,6 @@ namespace reference {
 	 */
 	class task_reference {
 
-		friend class TaskBase;
-
 		template<typename Process, typename Split, typename R>
 		friend class SplitableTask;
 
@@ -1001,6 +1004,11 @@ namespace reference {
 
 		task_reference getRight() const {
 			return task_reference(*this).descentRight();
+		}
+
+		operator TaskBasePtr() const {
+			narrow();
+			return task;
 		}
 
 	private:
@@ -1293,6 +1301,16 @@ namespace reference {
 		return done();
 	}
 
+	template<typename A, typename B>
+	unreleased_treeture<void> sequential(dependencies&& deps, unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
+		return make_split_task(std::move(deps),std::move(a).toTask(),std::move(b).toTask(),false);
+	}
+
+	template<typename A, typename B>
+	unreleased_treeture<void> sequential(unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
+		return sequential(after(),std::move(a),std::move(b));
+	}
+
 	template<typename F, typename ... R>
 	unreleased_treeture<void> sequential(dependencies&& deps, unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
 		// TODO: conduct a binary split to create a balanced tree
@@ -1311,6 +1329,16 @@ namespace reference {
 
 	inline unreleased_treeture<void> parallel() {
 		return done();
+	}
+
+	template<typename A, typename B>
+	unreleased_treeture<void> parallel(dependencies&& deps, unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
+		return make_split_task(std::move(deps),std::move(a).toTask(),std::move(b).toTask(),true);
+	}
+
+	template<typename A, typename B>
+	unreleased_treeture<void> parallel(unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
+		return parallel(after(),std::move(a),std::move(b));
 	}
 
 	template<typename F, typename ... R>
@@ -1519,19 +1547,21 @@ namespace reference {
 					return res;
 				}
 
-//				// 2) look for a splitable task
-//				for(auto& cur : pool) {
-//					if (!cur->isSplitable()) continue;
-//					// found a splitable one, split it
-//					TaskBasePtr res = std::move(cur);
-//					cur = std::move(pool.back());
-//					pool.pop_back();
-//
-//					// split the task and return the result
-//					res->split();
-//					assert_true(res->isReady());
-//					return res;
-//				}
+				// 2) look for a splitable task
+				for(auto& cur : pool) {
+					if (!cur->isSplitable()) continue;
+
+					// found a splitable one, split it
+					TaskBasePtr res = std::move(cur);
+					cur = std::move(pool.back());
+					pool.pop_back();
+
+					// split the task and return the result
+					res->split();
+
+					assert_true(res->isReady());
+					return res;
+				}
 
 				// no work available
 				return {};
@@ -1881,7 +1911,7 @@ namespace reference {
 	std::vector<TaskBasePtr> TaskBase::getDependencies() const {
 		std::vector<TaskBasePtr> res;
 		for(const auto& cur : dependencies) {
-			res.push_back(cur.task);
+			res.push_back(cur);
 		}
 		return res;
 	}
