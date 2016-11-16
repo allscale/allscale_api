@@ -10,10 +10,6 @@ namespace core {
 namespace impl {
 namespace reference {
 
-	TEST(Parec,ImplCheck) {
-		EXPECT_EQ("Reference SharedMemory", getImplementationName());
-	}
-
 	TEST(TaskQueue, Basic) {
 
 		runtime::SimpleQueue<int,3> queue;

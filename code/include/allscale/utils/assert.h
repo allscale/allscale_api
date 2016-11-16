@@ -12,6 +12,8 @@
 #define __xstr(a) __str(a)
 #define __str(a) #a
 
+#include "allscale/utils/unused.h"
+
 #if defined(NDEBUG)
 
 #define _assert_ignore                                                                                                                                         \
@@ -33,12 +35,6 @@
 
 #else
 #include <iostream>
-
-#ifdef __GNUC__
-	#define __unused __attribute__((unused))
-#else
-	#define __unused
-#endif
 
 
 namespace insieme {

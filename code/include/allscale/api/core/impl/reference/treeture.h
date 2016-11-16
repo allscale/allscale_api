@@ -2,6 +2,7 @@
 
 #include <array>
 #include <atomic>
+#include <algorithm>
 #include <bitset>
 #include <cassert>
 #include <condition_variable>
@@ -55,6 +56,25 @@ namespace reference {
 	using dependencies = std::vector<task_reference>;
 
 
+
+	// ---------------------------------------------------------------------------------------------
+	//								    Internal Forward Declarations
+	// ---------------------------------------------------------------------------------------------
+
+
+	class TaskBase;
+
+	template<typename T>
+	class Task;
+
+	using TaskBasePtr = std::shared_ptr<TaskBase>;
+
+	template<typename T>
+	using TaskPtr = std::shared_ptr<Task<T>>;
+
+	using TaskDependencies = dependencies;
+
+
 	// ---------------------------------------------------------------------------------------------
 	//											  Debugging
 	// ---------------------------------------------------------------------------------------------
@@ -98,9 +118,145 @@ namespace reference {
 		}
 
 
-	inline const std::string& getImplementationName() {
-		static const std::string name = "Reference SharedMemory";
-		return name;
+
+	// -----------------------------------------------------------------
+	//						  Monitoring (for Debugging)
+	// -----------------------------------------------------------------
+
+
+	const bool ENABLE_MONITORING = true;
+
+	namespace monitoring {
+
+		enum class EventType {
+			Run, Split, Wait
+		};
+
+		struct Event {
+
+			EventType type;
+
+			const TaskBase* task;
+
+			bool operator==(const Event& other) const {
+				return other.type == type && other.task == task;
+			}
+
+			friend std::ostream& operator<<(std::ostream& out, const Event& e);
+		};
+
+
+		class ThreadState {
+
+			using guard = std::lock_guard<std::mutex>;
+
+			std::thread::id thread_id;
+
+			std::mutex lock;
+
+			std::vector<Event> eventStack;
+
+		public:
+
+			ThreadState() : thread_id(std::this_thread::get_id()) {
+				guard g(getStateLock());
+				getStates().push_back(this);
+			}
+
+			~ThreadState() {
+				assert_true(eventStack.empty());
+
+				guard g(getStateLock());
+				auto& list = getStates();
+				auto it = std::find(list.begin(),list.end(),this);
+				if (it != list.end()) {
+					std::swap(*it,list.back());
+					list.pop_back();
+				}
+			}
+
+			void pushEvent(const Event& e) {
+				guard g(lock);
+				eventStack.push_back(e);
+			}
+
+			void popEvent(__unused const Event& e) {
+				guard g(lock);
+				assert_eq(e,eventStack.back());
+				eventStack.pop_back();
+			}
+
+			void dumpState(std::ostream& out) {
+				guard g(lock);
+				out << "\nThread: " << thread_id << "\n";
+				out << "\tStack:\n";
+				for(const auto& cur : eventStack) {
+					out << "\t\t" << cur << "\n";
+				}
+				out << "\n";
+			}
+
+			static void dumpStates(std::ostream& out) {
+				// lock states
+				std::lock_guard<std::mutex> g(getStateLock());
+
+				// print all current states
+				for(const auto& cur : getStates()) {
+					cur->dumpState(out);
+				}
+			}
+
+		private:
+
+			static std::mutex& getStateLock() {
+				static std::mutex state_lock;
+				return state_lock;
+			}
+
+			static std::vector<ThreadState*>& getStates() {
+				static std::vector<ThreadState*> states;
+				return states;
+			}
+
+		};
+
+		thread_local static ThreadState tl_thread_state;
+
+
+		struct Action {
+
+			bool active;
+			Event e;
+
+			Action() : active(false) {}
+
+			Action(const Event& e) : active(true), e(e) {
+				// register action
+				tl_thread_state.pushEvent(e);
+			}
+
+			Action(Action&& other) : active(other.active), e(other.e) {
+				other.active = false;
+			}
+
+			Action(const Action&) = delete;
+
+			Action& operator=(const Action&) = delete;
+			Action& operator=(Action&&) = delete;
+
+			~Action() {
+				if (!active) return;
+				// remove action from action stack
+				tl_thread_state.popEvent(e);
+			}
+
+		};
+
+		Action log(EventType type, const TaskBase* task) {
+			if (!ENABLE_MONITORING) return {};
+			return Event{type,task};
+		}
+
 	}
 
 
@@ -109,25 +265,13 @@ namespace reference {
 	// ---------------------------------------------------------------------------------------------
 
 
-	class TaskBase;
-
-	template<typename T>
-	class Task;
-
-	using TaskBasePtr = std::shared_ptr<TaskBase>;
-
-	template<typename T>
-	using TaskPtr = std::shared_ptr<Task<T>>;
-
-	using TaskDependencies = dependencies;
-
 
 	// the RT's interface to a task
 	class TaskBase : public std::enable_shared_from_this<TaskBase> {
 
 		static unsigned getNextID() {
 			static std::atomic<int> counter(0);
-			return (DEBUG || DEBUG_SCHEDULE || DEBUG_TASKS) ? ++counter : 0;
+			return (DEBUG || DEBUG_SCHEDULE || DEBUG_TASKS || ENABLE_MONITORING) ? ++counter : 0;
 		}
 
 	public:
@@ -203,9 +347,16 @@ namespace reference {
 
 		// -- observers --
 
+		unsigned getId() const {
+			return id;
+		}
+
 		State getState() const {
 			return state;
 		}
+
+		std::vector<TaskBasePtr> getDependencies() const;
+
 
 		// -- state transitions --
 
@@ -217,6 +368,9 @@ namespace reference {
 
 		// Ready -> Running -> Done
 		void run() {
+			// log this event
+			auto action = monitoring::log(monitoring::EventType::Run, this);
+
 			LOG_TASKS( "Running Task " << *this );
 
 			// check that it is allowed to run
@@ -228,10 +382,18 @@ namespace reference {
 			// forward call to substitute if present
 			if (substitute) {
 				if (!substitute->isDone()) {
+
+					// run substitute
 					substitute->run();
+					substitute->wait();
+
+					// at this point, the job should be done
+					assert_eq(state, State::Done);
+
 				} else {
 					finish();
 				}
+
 				return;
 			}
 
@@ -281,6 +443,9 @@ namespace reference {
 					r->start();
 				}
 
+				// wait until this task is completed
+				wait();
+
 				// done
 				return;
 			}
@@ -311,6 +476,9 @@ namespace reference {
 
 		// Ready -> Split (if supported, otherwise remains Ready)
 		virtual void split() {
+			// log this event
+			auto action = monitoring::log(monitoring::EventType::Split, this);
+
 			// forward call to substitute if present
 			if (substitute) {
 				substitute->split();
@@ -469,20 +637,36 @@ namespace reference {
 				LOG( "Aggregating task " << *this << " complete" );
 			}
 
-			// job is done
-			setState(State::Done);
-
 			// notify parent
 			if (parent) {
 				parent->childDone(*this);
 			}
+
+			// job is done
+			setState(State::Done);
 		}
 
 		// -- support printing of tasks for debugging --
 
 		friend std::ostream& operator<<(std::ostream& out, const TaskBase& task) {
-			if (task.substitute) return out << "Task(" << task.id << " @ " << &task << "," << task.state << ") -> " << *task.substitute;
-			return out << "Task(" << task.id << " @ " << &task << "," << task.state << "," << task.left << "," << task.right << ")";;
+
+			// if substituted, print the task and its substitute
+			if (task.substitute) {
+				return out << task.id << " -> " << *task.substitute;
+			}
+
+			// if split, print the task and its children
+			if (task.isSplit()) {
+				out << task.id << ":" << task.state << " = [";
+				if (task.left) out << *task.left; else out << "nil";
+				out << ",";
+				if (task.right) out << *task.right; else out << "nil";
+				out << "]";
+				return out;
+			}
+
+			// in all other cases, just print the id
+			return out << task.id << ":" << task.state;
 		}
 
 		template<typename Process, typename Split, typename R>
@@ -731,6 +915,8 @@ namespace reference {
 	 * A reference to a task utilized for managing task synchronization.
 	 */
 	class task_reference {
+
+		friend class TaskBase;
 
 		template<typename Process, typename Split, typename R>
 		friend class SplitableTask;
@@ -1142,6 +1328,7 @@ namespace reference {
 	namespace runtime {
 
 
+
 		// -----------------------------------------------------------------
 		//						    Worker Pool
 		// -----------------------------------------------------------------
@@ -1166,6 +1353,8 @@ namespace reference {
 
 		private:
 
+			using guard = std::lock_guard<SpinLock>;
+
 			static const size_t buffer_size = capacity + 1;
 
 			mutable SpinLock lock;
@@ -1189,26 +1378,22 @@ namespace reference {
 			}
 
 			bool push_front(const T& t) {
-				lock.lock();
+				guard g(lock);
 				if (full()) {
-					lock.unlock();
 					return false;
 				}
 				front = (front - 1 + buffer_size) % buffer_size;
 				data[front] = t;
-				lock.unlock();
 				return true;
 			}
 
 			bool push_back(const T& t) {
-				lock.lock();
+				guard g(lock);
 				if (full()) {
-					lock.unlock();
 					return false;
 				}
 				data[back] = t;
 				back = (back + 1) % buffer_size;
-				lock.unlock();
 				return true;
 			}
 
@@ -1235,10 +1420,8 @@ namespace reference {
 		public:
 
 			T pop_front() {
-				lock.lock();
-				const T& res = pop_front_internal();
-				lock.unlock();
-				return res;
+				guard g(lock);
+				return pop_front_internal();
 			}
 
 			T try_pop_front() {
@@ -1251,10 +1434,8 @@ namespace reference {
 			}
 
 			T pop_back() {
-				lock.lock();
-				const T& res = pop_back_internal();
-				lock.unlock();
-				return res;
+				guard g(lock);
+				return pop_back_internal();
 			}
 
 			T try_pop_back() {
@@ -1267,19 +1448,31 @@ namespace reference {
 			}
 
 			size_t size() const {
-				lock.lock();
-				size_t res = (back >= front) ? (back - front) : (buffer_size - (front - back));
-				lock.unlock();
+				guard g(lock);
+				return (back >= front) ? (back - front) : (buffer_size - (front - back));
+			}
+
+			std::vector<T> getSnapshot() const {
+				std::vector<T> res;
+				guard g(lock);
+				size_t i = front;
+				while(i != back) {
+					res.push_back(data[i]);
+					i += (i + 1) % buffer_size;
+				}
 				return res;
 			}
 
 			friend std::ostream& operator<<(std::ostream& out, const SimpleQueue& queue) {
+				guard g(queue.lock);
 				return out << "[" << queue.data << "," << queue.front << " - " << queue.back << "]";
 			}
 
 		};
 
 		class SimpleTaskPool {
+
+			using guard = std::lock_guard<SpinLock>;
 
 			std::vector<TaskBasePtr> pool;
 
@@ -1288,17 +1481,17 @@ namespace reference {
 		public:
 
 			bool empty() const {
-				std::lock_guard<SpinLock> lease(lock);
+				guard lease(lock);
 				return pool.empty();
 			}
 
 			void addTask(TaskBasePtr&& task) {
-				std::lock_guard<SpinLock> lease(lock);
+				guard lease(lock);
 				pool.emplace_back(std::move(task));
 			}
 
 			TaskBasePtr getReadyTask() {
-				std::lock_guard<SpinLock> lease(lock);
+				guard lease(lock);
 
 				// 1) look for some task that is ready
 				for(auto& cur : pool) {
@@ -1326,6 +1519,12 @@ namespace reference {
 
 				// no work available
 				return {};
+			}
+
+			std::vector<TaskBasePtr> getSnapshot() const {
+				guard g(lock);
+				std::vector<TaskBasePtr> res = pool;
+				return res;
 			}
 
 		};
@@ -1386,6 +1585,22 @@ namespace reference {
 
 			void join() {
 				thread.join();
+			}
+
+			void dumpState(std::ostream& out) const {
+				out << "Worker " << id << " / " << thread.get_id() << ":\n";
+				out << "\tQueue:\n";
+				for(const auto& cur : queue.getSnapshot()) {
+					out << "\t\t" << cur->getId() << "\n";
+				}
+
+				out << "\tBlocked:\n";
+				for(const auto& cur : blocked.getSnapshot()) {
+					out << "\t\t" << cur->getId() << " waiting for [";
+					out << utils::join(",", cur->getDependencies(), [](std::ostream& out, const TaskBasePtr& dep) {
+						out << dep->getId() << ":" << dep->getState();
+					}) << "]\n";
+				}
 			}
 
 		private:
@@ -1479,6 +1694,12 @@ namespace reference {
 
 			Worker& getWorker() {
 				return getWorker(0);
+			}
+
+			void dumpState(std::ostream& out) {
+				for(const auto& cur : workers) {
+					cur->dumpState(out);
+				}
 			}
 
 		protected:
@@ -1628,6 +1849,27 @@ namespace reference {
 
 	}
 
+	namespace monitoring {
+
+		inline std::ostream& operator<<(std::ostream& out, const Event& e) {
+			switch(e.type) {
+			case EventType::Run:    return out << "Running task     " << *e.task;
+			case EventType::Split:  return out << "Splitting task   " << *e.task;
+			case EventType::Wait:   return out << "Waiting for task " << *e.task;
+			}
+			return out << "Unknown Event";
+		}
+
+	}// end namespace monitoring
+
+	std::vector<TaskBasePtr> TaskBase::getDependencies() const {
+		std::vector<TaskBasePtr> res;
+		for(const auto& cur : dependencies) {
+			res.push_back(cur.task);
+		}
+		return res;
+	}
+
 	void TaskBase::start() {
 		LOG_TASKS("Starting " << *this );
 
@@ -1675,6 +1917,9 @@ namespace reference {
 	}
 
 	inline void TaskBase::wait() {
+		// log this event
+		auto action = monitoring::log(monitoring::EventType::Wait, this);
+
 		LOG_TASKS("Waiting for " << *this );
 
 		// check that this task has been started before
@@ -1704,4 +1949,11 @@ namespace reference {
 } // end namespace core
 } // end namespace api
 } // end namespace allscale
+
+
+void __dumpRuntimeState() {
+	allscale::api::core::impl::reference::monitoring::ThreadState::dumpStates(std::cout);
+	allscale::api::core::impl::reference::runtime::WorkerPool::getInstance().dumpState(std::cout);
+}
+
 

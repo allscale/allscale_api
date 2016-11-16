@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <vector>
 
@@ -293,20 +294,37 @@ namespace core {
 					});
 				}
 
-				auto operator()(impl::reference::dependencies&& deps, const I& in) const {
+				auto operator()(__unused impl::reference::dependencies&& deps, const I& in) const {
+
+//					// at this point all dependencies should be completed
+//					assert_true(std::all_of(deps.begin(),deps.end(),[](const auto& cur){
+//						return cur.isDone();
+//					}));
+
+					// for for the completion of all the tasks
+					//  - since this tasks has been released, its parents are already done
+					for(const auto& cur : deps) {
+						// busy wait until done TODO: figure out why wait is not allowed and how to circumvent
+						while(!cur.isDone()) {}
+//						cur.wait();
+					}
+
 					// This is the hand-over between the parallel and sequential implementation
 					return impl::sequential::make_lazy_unreleased_treeture([=](){
-						// create the location to store the result
-						impl::sequential::unreleased_treeture<O> res;
-						// compute the result, after the dependencies have been resolved
-						impl::reference::spawn(
-							impl::reference::dependencies(std::move(deps)),
-							[&]() {
-								res = defs.template sequentialCall<i,O,I>(impl::sequential::after(),in);
-							}
-						).get();
-						// return the resulting unreleased treeture
-						return res;
+
+						return defs.template sequentialCall<i,O,I>(impl::sequential::after(),in);
+
+//						// create the location to store the result
+//						impl::sequential::unreleased_treeture<O> res;
+//						// compute the result, after the dependencies have been resolved
+//						impl::reference::spawn(
+//							impl::reference::dependencies(std::move(deps)),
+//							[&]() {
+//								res = defs.template sequentialCall<i,O,I>(impl::sequential::after(),in);
+//							}
+//						).get();
+//						// return the resulting unreleased treeture
+//						return res;
 					});
 				}
 
