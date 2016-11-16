@@ -385,10 +385,12 @@ namespace reference {
 
 					// run substitute
 					substitute->run();
+
+					// wait for the substitute to be finish
 					substitute->wait();
 
-					// at this point, the job should be done
-					assert_eq(state, State::Done);
+					// at this point, the job should be done as well
+					assert_true(isDone());
 
 				} else {
 					finish();
@@ -637,36 +639,50 @@ namespace reference {
 				LOG( "Aggregating task " << *this << " complete" );
 			}
 
+			// job is done
+			setState(State::Done);
+
 			// notify parent
 			if (parent) {
 				parent->childDone(*this);
 			}
-
-			// job is done
-			setState(State::Done);
 		}
 
 		// -- support printing of tasks for debugging --
 
 		friend std::ostream& operator<<(std::ostream& out, const TaskBase& task) {
 
+			auto printDependencies = [&]() {
+				out << "{" << utils::join(",",task.getDependencies(),[](std::ostream& out, const TaskBasePtr& p){
+					out << *p;
+				}) << "}";
+			};
+
 			// if substituted, print the task and its substitute
 			if (task.substitute) {
-				return out << task.id << " -> " << *task.substitute;
+				out << task.id << " ";
+				printDependencies();
+				out << " -> " << *task.substitute;
+				return out;
 			}
 
 			// if split, print the task and its children
 			if (task.isSplit()) {
-				out << task.id << ":" << task.state << " = [";
+				out << task.id << " ";
+				printDependencies();
+				out << " : " << task.state << " = [";
 				if (task.left) out << *task.left; else out << "nil";
 				out << ",";
 				if (task.right) out << *task.right; else out << "nil";
-				out << "]";
+				out << "] ";
 				return out;
 			}
 
 			// in all other cases, just print the id
-			return out << task.id << ":" << task.state;
+			out << task.id << " ";
+			printDependencies();
+			out << " : " << task.state;
+			return out;
 		}
 
 		template<typename Process, typename Split, typename R>
@@ -1591,12 +1607,12 @@ namespace reference {
 				out << "Worker " << id << " / " << thread.get_id() << ":\n";
 				out << "\tQueue:\n";
 				for(const auto& cur : queue.getSnapshot()) {
-					out << "\t\t" << cur->getId() << "\n";
+					out << "\t\t" << *cur << "\n";
 				}
 
 				out << "\tBlocked:\n";
 				for(const auto& cur : blocked.getSnapshot()) {
-					out << "\t\t" << cur->getId() << " waiting for [";
+					out << "\t\t" << *cur << " waiting for [";
 					out << utils::join(",", cur->getDependencies(), [](std::ostream& out, const TaskBasePtr& dep) {
 						out << dep->getId() << ":" << dep->getState();
 					}) << "]\n";

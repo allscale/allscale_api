@@ -295,7 +295,7 @@ namespace user {
 						nested(core::after(dep.right),range{mid,r.end,dep.right})
 				);
 			}
-		)(range{a,b,dependency.getInitial()});
+		)(core::after(dependency.getInitial()), range{a,b,dependency.getInitial()});
 	}
 
 	template<typename Iter, typename Body>

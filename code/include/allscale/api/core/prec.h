@@ -296,35 +296,16 @@ namespace core {
 
 				auto operator()(__unused impl::reference::dependencies&& deps, const I& in) const {
 
-//					// at this point all dependencies should be completed
-//					assert_true(std::all_of(deps.begin(),deps.end(),[](const auto& cur){
-//						return cur.isDone();
-//					}));
-
-					// for for the completion of all the tasks
-					//  - since this tasks has been released, its parents are already done
-					for(const auto& cur : deps) {
-						// busy wait until done TODO: figure out why wait is not allowed and how to circumvent
-						while(!cur.isDone()) {}
-//						cur.wait();
-					}
+					// at this point all dependencies should be completed
+					assert_true(std::all_of(deps.begin(),deps.end(),[](const auto& cur){
+						return cur.isDone();
+					}));
 
 					// This is the hand-over between the parallel and sequential implementation
 					return impl::sequential::make_lazy_unreleased_treeture([=](){
 
 						return defs.template sequentialCall<i,O,I>(impl::sequential::after(),in);
 
-//						// create the location to store the result
-//						impl::sequential::unreleased_treeture<O> res;
-//						// compute the result, after the dependencies have been resolved
-//						impl::reference::spawn(
-//							impl::reference::dependencies(std::move(deps)),
-//							[&]() {
-//								res = defs.template sequentialCall<i,O,I>(impl::sequential::after(),in);
-//							}
-//						).get();
-//						// return the resulting unreleased treeture
-//						return res;
 					});
 				}
 
@@ -443,6 +424,34 @@ namespace core {
 	};
 
 
+	namespace detail {
+
+		/**
+		 * The struct forming the callable created by the prec operator.
+		 */
+		template<
+			unsigned i,
+			typename I,
+			typename O,
+			typename ... Defs
+		>
+		struct prec_operation {
+
+			rec_defs<Defs...> defs;
+
+			treeture<O> operator()(impl::reference::dependencies&& deps, const I& in) {
+				return defs.template parallelCall<i,O,I>(std::move(deps),in);
+			}
+
+			treeture<O> operator()(const I& in) {
+				return (*this)(impl::reference::after(),in);
+			}
+		};
+
+
+	}
+
+
 	template<
 		typename ... Defs
 	>
@@ -460,9 +469,7 @@ namespace core {
 		typename O = typename utils::type_at<i,utils::type_list<Defs...>>::type::out_type
 	>
 	auto prec(const rec_defs<Defs...>& defs) {
-		return [=](const I& in)->treeture<O> {
-			return defs.template parallelCall<i,O,I>(impl::reference::after(),in);
-		};
+		return detail::prec_operation<i,I,O,Defs...>{defs};
 	}
 
 
@@ -473,19 +480,7 @@ namespace core {
 		typename dummy = typename std::enable_if<detail::is_fun_def<First>::value,int>::type
 	>
 	auto prec(const First& f, const Rest& ... r) {
-		#ifdef __clang__
-			// works e.g. for clang
-			return prec<i>(group(f,r...));
-		#else
-			// required to circumvent GCC bug
-			using I = typename utils::type_at<i,utils::type_list<First,Rest...>>::type::in_type;
-			using O = typename utils::type_at<i,utils::type_list<First,Rest...>>::type::out_type;
-
-			auto defs = group(f,r...);
-			return [=](const I& in)->treeture<O> {
-				return defs.template parallelCall<i,O,I>(impl::reference::after(),in);
-			};
-		#endif
+		return prec<i>(group(f,r...));
 	}
 
 	template<
