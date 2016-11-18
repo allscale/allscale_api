@@ -6,6 +6,8 @@
 #include "allscale/api/user/operator/pfor.h"
 #include "allscale/api/user/data/vector.h"
 
+#include "allscale/utils/string_utils.h"
+
 namespace allscale {
 namespace api {
 namespace user {
@@ -95,7 +97,7 @@ namespace user {
 
 	TEST(PFor, Vector) {
 
-		const int N = 200;
+		const int N = 100;
 
 		using Point = data::Vector<int,3>;
 		using Grid = std::array<std::array<std::array<int,N>,N>,N>;
@@ -175,6 +177,45 @@ namespace user {
 		}
 	}
 
+
+	TEST(Pfor, SyncOneOnOne_DifferentSize) {
+
+		const int N = 10000;
+
+		std::vector<int> data(N+20);
+
+		auto As = pfor(0,N,[&](int i) {
+			data[i] = 0;
+		});
+
+		// test a smaller one
+		auto Bs = pfor(0,N-1,[&](int i) {
+			EXPECT_EQ(0,data[i]) << "Index: " << i;
+			data[i] = 1;
+		}, one_on_one(As));
+
+		// and an even smaller one
+		auto Cs = pfor(0,N-2,[&](int i) {
+			EXPECT_EQ(1,data[i]) << "Index: " << i;
+			data[i] = 2;
+		}, one_on_one(Bs));
+
+		// and a bigger one
+		auto Ds = pfor(0,N+20,[&](int i) {
+			if (i < N-2) EXPECT_EQ(2,data[i]) << "Index: " << i;
+			else if (i < N-1) EXPECT_EQ(1,data[i]) << "Index: " << i;
+			else if (i < N) EXPECT_EQ(0,data[i]) << "Index: " << i;
+			data[i] = 3;
+		}, one_on_one(Cs));
+
+		Ds.wait();
+
+		for(int i=0; i<N+20; i++) {
+			EXPECT_EQ(3, data[i]) << "Index: " << i;
+		}
+	}
+
+
 	TEST(Pfor, SyncNeighbor) {
 		const int N = 10000;
 
@@ -225,6 +266,151 @@ namespace user {
 			EXPECT_EQ(3, dataA[i]);
 			EXPECT_EQ(2, dataB[i]);
 		}
+	}
+
+
+	TEST(Pfor, SyncNeighbor_DifferentSize) {
+		const int N = 10000;
+
+		std::vector<int> dataA(N+20);
+		std::vector<int> dataB(N+20);
+
+		auto As = pfor(0,N,[&](int i) {
+			dataA[i] = 1;
+		});
+
+		auto Bs = pfor(0,N-1,[&](int i) {
+
+			// the neighborhood of i has to be completed in A
+			if (i != 0) {
+				EXPECT_EQ(1,dataA[i-1]) << "Index: " << i;
+			}
+
+			EXPECT_EQ(1,dataA[i])   << "Index: " << i;
+
+			EXPECT_EQ(1,dataA[i+1]) << "Index: " << i;
+
+			dataB[i] = 2;
+		}, neighborhood_sync(As));
+
+		auto Cs = pfor(0,N-2,[&](int i) {
+
+			// the neighborhood of i has to be completed in B
+			if (i != 0) {
+				EXPECT_EQ(2,dataB[i-1]) << "Index: " << i;
+			}
+
+			EXPECT_EQ(2,dataB[i])   << "Index: " << i;
+
+			EXPECT_EQ(2,dataB[i+1]) << "Index: " << i;
+
+			dataA[i] = 3;
+		}, neighborhood_sync(Bs));
+
+		// also try a larger range
+		auto Ds = pfor(0,N+20,[&](int i) {
+
+			// the neighborhood of i has to be completed in A
+			if (i != 0 && i <= N-2 ) {
+				EXPECT_EQ(3,dataA[i-1]) << "Index: " << i;
+			} else if ( i != 0 && i < N ) {
+				EXPECT_EQ(1,dataA[i-1]) << "Index: " << i;
+			}
+
+			if (i < N-2) {
+				EXPECT_EQ(3,dataA[i])   << "Index: " << i;
+			} else if (i < N) {
+				EXPECT_EQ(1,dataA[i])   << "Index: " << i;
+			}
+
+			if (i != N-1 && i < N-3) {
+				EXPECT_EQ(3,dataA[i+1]) << "Index: " << i;
+			} else if (i != N-1 && i < N) {
+				EXPECT_EQ(1,dataA[i+1]) << "Index: " << i;
+			}
+
+			dataB[i] = 4;
+
+		}, neighborhood_sync(Cs));
+
+		// trigger execution
+		Ds.wait();
+
+		// check result
+		for(int i=0; i<N-2; i++) {
+			EXPECT_EQ(3, dataA[i]);
+		}
+		for(int i=N-2; i<N-1; i++) {
+			EXPECT_EQ(1, dataA[i]);
+		}
+		for(int i=0; i<N+20; i++) {
+			EXPECT_EQ(4, dataB[i]);
+		}
+	}
+
+	TEST(Range,GrowAndShrink) {
+
+		using range = detail::range<int>;
+
+		range limit(0,5);
+		range a(1,2);
+
+		EXPECT_EQ("[0,5)",toString(limit));
+		EXPECT_EQ("[1,2)",toString(a));
+
+		EXPECT_EQ("[0,3)",toString(a.grow(limit)));
+		EXPECT_EQ("[0,4)",toString(a.grow(limit).grow(limit)));
+		EXPECT_EQ("[0,5)",toString(a.grow(limit).grow(limit).grow(limit)));
+		EXPECT_EQ("[0,5)",toString(a.grow(limit).grow(limit).grow(limit).grow(limit)));
+
+		EXPECT_EQ("[0,4)",toString(a.grow(limit,2)));
+		EXPECT_EQ("[0,5)",toString(a.grow(limit,3)));
+		EXPECT_EQ("[0,5)",toString(a.grow(limit,4)));
+
+
+
+		EXPECT_EQ("[2,2)",toString(a.shrink()));
+		EXPECT_EQ("[1,4)",toString(limit.shrink()));
+		EXPECT_EQ("[2,3)",toString(limit.shrink().shrink()));
+		EXPECT_EQ("[3,3)",toString(limit.shrink().shrink().shrink()));
+
+		EXPECT_EQ("[2,3)",toString(limit.shrink(2)));
+		EXPECT_EQ("[3,3)",toString(limit.shrink(3)));
+
+	}
+
+	TEST(Range,GrowAndShrink_2D) {
+
+		using range = detail::range<std::array<int,2>>;
+
+		range limit({0,2},{5,7});
+		range a({1,4},{2,5});
+
+		EXPECT_EQ("[[0,2],[5,7])",toString(limit));
+		EXPECT_EQ("[[1,4],[2,5])",toString(a));
+
+		EXPECT_EQ("[[0,3],[3,6])",toString(a.grow(limit)));
+		EXPECT_EQ("[[0,2],[4,7])",toString(a.grow(limit).grow(limit)));
+		EXPECT_EQ("[[0,2],[5,7])",toString(a.grow(limit).grow(limit).grow(limit)));
+		EXPECT_EQ("[[0,2],[5,7])",toString(a.grow(limit).grow(limit).grow(limit).grow(limit)));
+
+		EXPECT_EQ("[[0,2],[4,7])",toString(a.grow(limit,2)));
+		EXPECT_EQ("[[0,2],[5,7])",toString(a.grow(limit,3)));
+		EXPECT_EQ("[[0,2],[5,7])",toString(a.grow(limit,4)));
+
+
+		EXPECT_EQ("[[2,5],[2,5])",toString(a.shrink()));
+
+		EXPECT_EQ("[[1,3],[4,6])",toString(limit.shrink()));
+		EXPECT_EQ("[[2,4],[3,5])",toString(limit.shrink().shrink()));
+		EXPECT_EQ("[[3,5],[3,5])",toString(limit.shrink().shrink().shrink()));
+		EXPECT_EQ("[[4,6],[4,6])",toString(limit.shrink().shrink().shrink().shrink()));
+
+		EXPECT_EQ("[[1,3],[4,6])",toString(limit.shrink()));
+		EXPECT_EQ("[[2,4],[3,5])",toString(limit.shrink(2)));
+		EXPECT_EQ("[[3,5],[3,5])",toString(limit.shrink(3)));
+		EXPECT_EQ("[[4,6],[4,6])",toString(limit.shrink(4)));
+
 	}
 
 } // end namespace user
