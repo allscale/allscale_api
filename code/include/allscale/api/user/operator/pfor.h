@@ -42,12 +42,27 @@ namespace user {
 		template<typename T>
 		struct is_loop_dependency : public std::is_base_of<loop_dependency,T> {};
 
+		/**
+		 * A small container for splitting dependencies.
+		 */
+		template<typename Dependency>
+		struct SubDependencies {
+			Dependency left;
+			Dependency right;
+		};
+
 	} // end namespace detail
 
 	/**
 	 * The dependency to be used if no dependencies are required.
 	 */
-	struct no_dependencies;
+	struct no_dependencies : public detail::loop_dependency {
+
+		detail::SubDependencies<no_dependencies> split() const {
+			return detail::SubDependencies<no_dependencies>();
+		}
+
+	};
 
 	// ---------------------------------------------------------------------------------------------
 	//									Basic Generic pfor Operators
@@ -485,7 +500,7 @@ namespace user {
 
 		public:
 
-			iteration_reference(const range<Iter>& range = range<Iter>()) : _range(range) {}
+			iteration_reference(const range<Iter>& _range = range<Iter>()) : _range(_range) {}
 
 			iteration_reference(const range<Iter>& range, const core::task_reference& handle)
 				: _range(range), handle(handle) {}
@@ -537,12 +552,6 @@ namespace user {
 
 			~loop_reference() { this->wait(); }
 
-		};
-
-		template<typename Dependency>
-		struct SubDependencies {
-			Dependency left;
-			Dependency right;
 		};
 
 	} // end namespace detail
@@ -614,13 +623,6 @@ namespace user {
 	}
 
 
-	struct no_dependencies : public detail::loop_dependency {
-
-		detail::SubDependencies<no_dependencies> split() const {
-			return detail::SubDependencies<no_dependencies>();
-		}
-
-	};
 
 	template<typename Iter>
 	class one_on_one_dependency : public detail::loop_dependency {
