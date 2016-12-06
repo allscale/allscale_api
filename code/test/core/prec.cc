@@ -5,6 +5,9 @@
 #include <string>
 
 #include "allscale/api/core/prec.h"
+#include "allscale/api/user/arithmetic.h"
+
+using namespace allscale::api::user;
 
 namespace allscale {
 namespace api {

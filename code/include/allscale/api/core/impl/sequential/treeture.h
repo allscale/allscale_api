@@ -185,6 +185,8 @@ namespace sequential {
 
 	public:
 
+		using value_type = T;
+
 		explicit lazy_unreleased_treeture(Gen&& gen)
 			: gen(std::move(gen)) {}
 

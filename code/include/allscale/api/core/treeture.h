@@ -248,19 +248,6 @@ namespace core {
 		return impl::reference::combine(std::move(a),std::move(b),std::move(m),parallel);
 	}
 
-
-	// --- specific aggregators ---
-
-	template<typename A, typename FA, typename B, typename FB, typename R = decltype(std::declval<A>() + std::declval<B>())>
-	auto add(impl::sequential::lazy_unreleased_treeture<A,FA>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b) {
-		return core::combine(std::move(a),std::move(b),[](const R& a, const R& b) { return a + b; });
-	}
-
-	template<typename A, typename B, typename R = decltype(std::declval<A>() + std::declval<B>())>
-	auto add(impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b) {
-		return core::combine(std::move(a),std::move(b),[](const R& a, const R& b) { return a + b; });
-	}
-
 } // end namespace core
 } // end namespace api
 } // end namespace allscale
