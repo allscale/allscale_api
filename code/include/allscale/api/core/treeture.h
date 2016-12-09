@@ -44,6 +44,8 @@ namespace core {
 		template<typename T>
 		struct completed_task {
 
+			using value_type = T;
+
 			T value;
 
 			operator impl::sequential::unreleased_treeture<T>() {
@@ -70,6 +72,8 @@ namespace core {
 
 		template<>
 		struct completed_task<void> {
+
+			using value_type = void;
 
 			operator impl::sequential::unreleased_treeture<void>() {
 				return impl::sequential::done();
@@ -246,6 +250,31 @@ namespace core {
 	template<typename A, typename B, typename M>
 	auto combine(impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b, M&& m, bool parallel = true) {
 		return impl::reference::combine(std::move(a),std::move(b),std::move(m),parallel);
+	}
+
+	template<typename A, typename B, typename M>
+	auto combine(detail::completed_task<A>&& a, detail::completed_task<B>&& b, M&& m, bool = true) {
+		return done(m(a.get(),b.get()));
+	}
+
+	template<typename A, typename B, typename FB, typename M>
+	auto combine(detail::completed_task<A>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b, M&& m, bool parallel = true) {
+		return core::combine(impl::sequential::done(a.get()), std::move(b), std::move(m), parallel);
+	}
+
+	template<typename A, typename FA, typename B, typename M>
+	auto combine(impl::sequential::lazy_unreleased_treeture<A,FA>&& a, detail::completed_task<B>&& b, M&& m, bool parallel = true) {
+		return core::combine(std::move(a), impl::sequential::done(b.get()), std::move(m), parallel);
+	}
+
+	template<typename A, typename B, typename M>
+	auto combine(detail::completed_task<A>&& a, impl::reference::unreleased_treeture<B>&& b, M&& m, bool parallel = true) {
+		return core::combine(impl::reference::done(a.get()), std::move(b), std::move(m), parallel);
+	}
+
+	template<typename A, typename B, typename M>
+	auto combine(impl::reference::unreleased_treeture<A>&& a, detail::completed_task<B>&& b, M&& m, bool parallel = true) {
+		return core::combine(std::move(a), impl::reference::done(b.get()), std::move(m), parallel);
 	}
 
 } // end namespace core
