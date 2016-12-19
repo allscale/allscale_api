@@ -1674,16 +1674,16 @@ namespace reference {
 
 			WorkerPool() {
 
-				int numWorkers = std::thread::hardware_concurrency();
+				int requestedNumWorkers = std::thread::hardware_concurrency();
 
 				// parse environment variable
 				if (char* val = std::getenv("NUM_WORKERS")) {
 					auto userDef = std::atoi(val);
-					if (userDef != 0) numWorkers = userDef;
+					if (userDef != 0) requestedNumWorkers = userDef;
 				}
 
 				// reduce by one, since main thread also counts
-				numWorkers--;
+				int numWorkers = requestedNumWorkers - 1;
 
 				// must be at least one worker
 				if (numWorkers < 1) numWorkers = 1;
@@ -1696,8 +1696,17 @@ namespace reference {
 				// start workers
 				for(auto& cur : workers) cur->start();
 
+				// terminate worker if only one thread is requested
+				if (requestedNumWorkers == 1) {
+					workers.front()->poison();
+					workAvailable();
+				}
+
 				// fix affinity of main thread
 				detail::fixAffinity(0);
+
+				// make first worker being linked to the main thread
+				setCurrentWorker(*workers.front());
 			}
 
 			~WorkerPool() {
@@ -1754,7 +1763,9 @@ namespace reference {
 
 			void waitForWork() {
 				std::unique_lock<std::mutex> lk(m);
+				LOG_SCHEDULE("Going to sleep");
 				cv.wait(lk);
+				LOG_SCHEDULE("Woken up again");
 			}
 
 			void workAvailable() {
@@ -1780,7 +1791,7 @@ namespace reference {
 			// start processing loop
 			while(alive) {
 
-				// count number of idle cylces
+				// count number of idle cycles
 				int idle_cycles = 0;
 
 				// conduct a schedule step
@@ -1836,7 +1847,9 @@ namespace reference {
 
 
 			// since queue is full, process directly
+			LOG_SCHEDULE("Starting task " << task);
 			task->run();
+			LOG_SCHEDULE("Finished task " << task);
 		}
 
 
@@ -1855,7 +1868,9 @@ namespace reference {
 				}
 
 				// process this task
+				LOG_SCHEDULE("Starting task " << t);
 				t->run();
+				LOG_SCHEDULE("Finished task " << t);
 				return true;
 			}
 
