@@ -16,7 +16,7 @@ For the build process, `cmake` (Version >=2.6) is required.
 ## Getting the Sources
 Change to a working directory on your system and clone the repository using
 ```
-git clone git@goedis.dps.uibk.ac.at:herbert.jordan/allscale_api.git allscale_api
+git clone git@github.com:allscale/allscale_api.git
 ```
 The command creates a sub-directory `allscale_api`.
 
@@ -45,14 +45,4 @@ make -j8
 ```
 within your local `allscale_api` directory.
 
-
-## Prototype APIs
-
-The API prototypes can be found here:
-
-| Pilot | Prototype / Demonstrator |
-| -------- | -------- |
-| AMDADOS | [code/test/demos/amdados_demo.cc](code/test/demos/amdados_demo.cc) |
-| iPic3D | [code/test/demos/ipic3d_demo.cc](code/test/demos/ipic3d_demo.cc) |
-| Fine/Open | [code/test/demos/fine_open_demo.cc](code/test/demos/fine_open_demo.cc) |
 
