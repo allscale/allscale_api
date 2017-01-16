@@ -24,7 +24,7 @@ namespace reference {
 	TEST(WorkItemID, TypeProperties) {
 
 		EXPECT_TRUE(std::is_default_constructible<WorkItemID>::value);
-		EXPECT_FALSE(std::is_trivially_constructible<WorkItemID>::value);
+		EXPECT_TRUE(std::is_trivially_constructible<WorkItemID>::value);
 
 		EXPECT_TRUE(std::is_trivially_copy_constructible<WorkItemID>::value);
 		EXPECT_TRUE(std::is_trivially_copy_assignable<WorkItemID>::value);
