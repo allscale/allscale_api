@@ -47,10 +47,6 @@ foreach ( case_file ${test_cases})
 	set ( case_name ${ut_prefix}${case_subdir}_${case_name} )
 	add_executable(${case_name} ${case_file})
 
-	target_link_libraries(${case_name} parec_lib)
-	target_link_libraries(${case_name} gomp)
-	target_link_libraries(${case_name} cilkrts)
-
 	add_unit_test(${case_name} ${ut_prefix})
 endforeach(case_file)
 
