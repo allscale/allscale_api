@@ -4,6 +4,7 @@
 #include <chrono>
 #include <vector>
 #include <list>
+#include <thread>
 #include <fstream>
 
 #include "allscale/api/core/impl/reference/work_item_id.h"
@@ -76,14 +77,32 @@ namespace reference {
 		// -- factories --
 
 		static ProfileLogEntry createWorkerCreatedEntry() {
-			return ProfileLogEntry(getTimeStamp(), WorkerCreated);
+			return ProfileLogEntry(getCurrentTime(), WorkerCreated);
 		}
 
+		static ProfileLogEntry createWorkerDestroyedEntry() {
+			return ProfileLogEntry(getCurrentTime(), WorkerDestroyed);
+		}
+
+		static ProfileLogEntry createWorkerSuspendedEntry() {
+			return ProfileLogEntry(getCurrentTime(), WorkerSuspended);
+		}
+
+		static ProfileLogEntry createWorkerResumedEntry() {
+			return ProfileLogEntry(getCurrentTime(), WorkerResumed);
+		}
+
+		static ProfileLogEntry createTaskStolenEntry(const WorkItemID& workItemId) {
+			return ProfileLogEntry(getCurrentTime(), TaskStolen, workItemId);
+		}
 
 		static ProfileLogEntry createTaskStartedEntry(const WorkItemID& workItemId) {
-			return ProfileLogEntry(getTimeStamp(), TaskStarted, workItemId);
+			return ProfileLogEntry(getCurrentTime(), TaskStarted, workItemId);
 		}
 
+		static ProfileLogEntry createTaskEndedEntry(const WorkItemID& workItemId) {
+			return ProfileLogEntry(getCurrentTime(), TaskEnded, workItemId);
+		}
 
 		// -- utility functions --
 
@@ -119,7 +138,7 @@ namespace reference {
 		/**
 		 * A utility to retrieve a timestamp for events.
 		 */
-		static uint64_t getTimeStamp() {
+		static uint64_t getCurrentTime() {
 			static thread_local uint64_t last = 0;
 
 			// get current time
@@ -143,10 +162,14 @@ namespace reference {
 
 	class ProfileLog {
 
-		// the block size of the log
-		static const int N = 1000000;
+	public:
 
-		using block_t = std::array<ProfileLogEntry,N>;
+		// the block size of the log
+		enum { BATCH_SIZE = 100000 };
+
+	private:
+
+		using block_t = std::array<ProfileLogEntry,BATCH_SIZE>;
 		using block_list_t = std::list<block_t>;
 
 		using block_const_iter = block_list_t::const_iterator;
@@ -194,15 +217,18 @@ namespace reference {
 			entry_const_iter e_cur;
 			entry_const_iter e_end;
 
+			entry_const_iter log_end;
+
 		public:
 
-			static iterator begin(const block_list_t& blocks) {
+			static iterator begin(const block_list_t& blocks, const entry_const_iter& log_end) {
 				iterator res;
 				res.b_cur = blocks.begin();
 				res.b_end = blocks.end();
 				if (res.isEnd()) return res;
 				res.e_cur = res.b_cur->begin();
 				res.e_end = res.b_cur->end();
+				res.log_end = log_end;
 				return res;
 			}
 
@@ -214,7 +240,7 @@ namespace reference {
 			}
 
 			bool operator==(const iterator& other) const {
-				return (isEnd() && other.isEnd()) || e_cur == other.e_cur;
+				return isEnd() && other.isEnd();
 			}
 
 			bool operator!=(const iterator& other) const {
@@ -228,6 +254,14 @@ namespace reference {
 			iterator& operator++() {
 				// go to next entry
 				++e_cur;
+
+				// if it is the end of the log => jump to end of iterator range
+				if (e_cur == log_end) {
+					b_cur = b_end;
+					return *this;
+				}
+
+				// if not end of current block is reached, continue
 				if (e_cur != e_end) return *this;
 
 				// go to next block
@@ -251,7 +285,7 @@ namespace reference {
 		};
 
 		iterator begin() const {
-			return iterator::begin(data);
+			return iterator::begin(data,next);
 		}
 
 		iterator end() const {
@@ -263,6 +297,14 @@ namespace reference {
 			// save the number of blocks
 			std::size_t num_blocks = data.size();
 			out.write((char*)&num_blocks,sizeof(num_blocks));
+
+			// save the offset of the last block
+			std::size_t offset = 0;
+			if (num_blocks > 0) {
+				offset = next - data.back().begin();
+			}
+			out.write((char*)&offset,sizeof(offset));
+
 			// save all blocks
 			for(const auto& cur : data) {
 				out.write((char*)&cur,sizeof(block_t));
@@ -278,11 +320,23 @@ namespace reference {
 			// load the number of blocks
 			std::size_t num_blocks;
 			in.read((char*)&num_blocks,sizeof(num_blocks));
+
+			// load the offset for the last block
+			std::size_t offset;
+			in.read((char*)&offset,sizeof(offset));
+
 			ProfileLog log;
 			for(std::size_t i = 0; i<num_blocks; i++) {
 				log.data.emplace_back();
 				in.read((char*)&log.data.back(),sizeof(block_t));
 			}
+
+			// move next pointer to last position
+			if (num_blocks > 0) {
+				log.next = log.data.back().begin() + offset;
+			}
+
+			// done
 			return log;
 		}
 
@@ -292,6 +346,61 @@ namespace reference {
 		}
 
 	};
+
+	std::string getLogFileNameForWorker(int id) {
+		// create the filename
+		char filename[17];
+		snprintf(filename,17,"profile_log.%04d", id);
+		return filename;
+	}
+
+	static int& getCurrentWorkerID() {
+		static thread_local int workerID;
+		return workerID;
+	}
+
+	static inline void setCurrentWorkerID(int id) {
+		getCurrentWorkerID() = id;
+	}
+
+	namespace detail {
+
+		struct ProfileLogHandler {
+			ProfileLog log;
+
+			~ProfileLogHandler() {
+				// save log to the chosen filename
+				log.saveTo(getLogFileNameForWorker(getCurrentWorkerID()));
+			}
+		};
+
+		ProfileLog& getProfileLog() {
+			static thread_local ProfileLogHandler logHandler;
+			return logHandler.log;
+		}
+
+		void logProfilerEventInternal(const ProfileLogEntry& entry) {
+			getProfileLog() << entry;
+		}
+
+	}
+
+
+	#ifdef ENABLE_PROFILING
+
+		const bool PROFILING_ENABLED = true;
+
+		#define logProfilerEvent(EVENT) \
+			allscale::api::core::impl::reference::detail::logProfilerEventInternal(EVENT)
+
+	#else
+
+		const bool PROFILING_ENABLED = false;
+
+		#define logProfilerEvent(EVENT) /* ignore */
+
+	#endif
+
 
 
 } // end namespace reference

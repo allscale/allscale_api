@@ -16,6 +16,7 @@
 #include "allscale/utils/printer/arrays.h"
 
 #include "allscale/api/core/impl/reference/lock.h"
+#include "allscale/api/core/impl/reference/profiling.h"
 
 namespace allscale {
 namespace api {
@@ -271,7 +272,7 @@ namespace reference {
 
 		static unsigned getNextID() {
 			static std::atomic<int> counter(0);
-			return (DEBUG || DEBUG_SCHEDULE || DEBUG_TASKS || ENABLE_MONITORING) ? ++counter : 0;
+			return (DEBUG || DEBUG_SCHEDULE || DEBUG_TASKS || ENABLE_MONITORING || PROFILING_ENABLED) ? ++counter : 0;
 		}
 
 	public:
@@ -971,7 +972,15 @@ namespace reference {
 		}
 
 		task_reference& operator=(const task_reference&) = delete;
-		task_reference& operator=(task_reference&&) = delete;
+
+		task_reference& operator=(task_reference&& other) {
+			if (this == &other) return *this;
+			std::lock_guard<SpinLock> leaseA(lock);
+			std::lock_guard<SpinLock> leaseB(other.lock);
+			task = std::move(other.task);
+			queue = std::move(other.queue);
+			return *this;
+		}
 
 		bool isDone() const {
 			narrow();
@@ -1599,7 +1608,7 @@ namespace reference {
 			volatile bool alive;
 
 			// list of tasks ready to run
-			SimpleQueue<TaskBasePtr,8> queue;
+			SimpleQueue<TaskBasePtr,16> queue;
 
 			// list of blocked tasks
 			SimpleTaskPool blocked;
@@ -1653,6 +1662,8 @@ namespace reference {
 
 			void run();
 
+			void runTask(const TaskBasePtr& task);
+
 		public:
 
 			void schedule(TaskBasePtr&& task);
@@ -1660,8 +1671,6 @@ namespace reference {
 			bool schedule_step();
 
 		};
-
-
 
 
 		class WorkerPool {
@@ -1672,41 +1681,40 @@ namespace reference {
 			std::mutex m;
 			std::condition_variable cv;
 
+		public:
+
 			WorkerPool() {
 
-				int requestedNumWorkers = std::thread::hardware_concurrency();
+				int numWorkers = std::thread::hardware_concurrency();
 
 				// parse environment variable
 				if (char* val = std::getenv("NUM_WORKERS")) {
 					auto userDef = std::atoi(val);
-					if (userDef != 0) requestedNumWorkers = userDef;
+					if (userDef != 0) numWorkers = userDef;
 				}
 
-				// reduce by one, since main thread also counts
-				int numWorkers = requestedNumWorkers - 1;
-
-				// must be at least one worker
+				// there must be at least one worker
 				if (numWorkers < 1) numWorkers = 1;
 
 				// create workers
 				for(int i=0; i<numWorkers; ++i) {
-					workers.push_back(new Worker(*this,i+1));
+					workers.push_back(new Worker(*this,i));
 				}
 
-				// start workers
-				for(auto& cur : workers) cur->start();
-
-				// terminate worker if only one thread is requested
-				if (requestedNumWorkers == 1) {
-					workers.front()->poison();
-					workAvailable();
+				// start additional workers (worker 0 is main thread)
+				for(int i=1; i<numWorkers; ++i) {
+					workers[i]->start();
 				}
+
+				// make worker 0 being linked to the main thread
+				setCurrentWorker(*workers.front());
 
 				// fix affinity of main thread
 				detail::fixAffinity(0);
 
-				// make first worker being linked to the main thread
-				setCurrentWorker(*workers.front());
+				// fix worker id of main thread
+				setCurrentWorkerID(0);
+
 			}
 
 			~WorkerPool() {
@@ -1721,8 +1729,8 @@ namespace reference {
 				workAvailable();
 
 				// wait for their death
-				for(auto& cur : workers) {
-					cur->join();
+				for(std::size_t i=1; i<workers.size(); ++i) {
+					workers[i]->join();
 				}
 
 				// free resources
@@ -1731,8 +1739,6 @@ namespace reference {
 				}
 
 			}
-
-		public:
 
 			static WorkerPool& getInstance() {
 				static WorkerPool pool;
@@ -1782,6 +1788,12 @@ namespace reference {
 
 		inline void Worker::run() {
 
+			// fix worker ID
+			setCurrentWorkerID(id);
+
+			// log creation of worker event
+			logProfilerEvent(ProfileLogEntry::createWorkerCreatedEntry());
+
 			// fix affinity
 			detail::fixAffinity(id);
 
@@ -1806,8 +1818,15 @@ namespace reference {
 					if(idle_cycles > 100000) {
 						// if there may be no work at all ..
 						if(blocked.empty()) {
+
+							// report sleep event
+							logProfilerEvent(ProfileLogEntry::createWorkerSuspendedEntry());
+
 							// wait for work by putting thread to sleep
 							pool.waitForWork();
+
+							// report awakening
+							logProfilerEvent(ProfileLogEntry::createWorkerResumedEntry());
 						}
 				
 						// reset cycles counter
@@ -1816,8 +1835,19 @@ namespace reference {
 				}
 			}
 
+			// log worker termination event
+			logProfilerEvent(ProfileLogEntry::createWorkerDestroyedEntry());
+
 			// done
 
+		}
+
+		void Worker::runTask(const TaskBasePtr& task) {
+			LOG_SCHEDULE("Starting task " << task);
+			logProfilerEvent(ProfileLogEntry::createTaskStartedEntry(WorkItemID(task->getId())));
+			task->run();
+			logProfilerEvent(ProfileLogEntry::createTaskEndedEntry(WorkItemID(task->getId())));
+			LOG_SCHEDULE("Finished task " << task);
 		}
 
 		inline void Worker::schedule(TaskBasePtr&& task) {
@@ -1847,9 +1877,7 @@ namespace reference {
 
 
 			// since queue is full, process directly
-			LOG_SCHEDULE("Starting task " << task);
-			task->run();
-			LOG_SCHEDULE("Finished task " << task);
+			runTask(task);
 		}
 
 
@@ -1868,9 +1896,7 @@ namespace reference {
 				}
 
 				// process this task
-				LOG_SCHEDULE("Starting task " << t);
-				t->run();
-				LOG_SCHEDULE("Finished task " << t);
+				runTask(t);
 				return true;
 			}
 
@@ -1881,7 +1907,7 @@ namespace reference {
 
 				// process this task
 				t->split();
-				t->run();
+				runTask(t);
 				return true;	// successfully completed a task
 			}
 
@@ -1897,9 +1923,13 @@ namespace reference {
 
 			// try to steal a task from another queue
 			if (TaskBasePtr t = other.queue.try_pop_front()) {
+
+				// log creation of worker event
+				logProfilerEvent(ProfileLogEntry::createTaskStolenEntry(t->getId()));
+
 				LOG_SCHEDULE( "Stolen task: " << t );
 				t->split();
-				t->run();
+				runTask(t);
 				return true;	// successfully completed a task
 			}
 

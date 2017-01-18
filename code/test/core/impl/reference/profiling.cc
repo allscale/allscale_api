@@ -3,7 +3,10 @@
 #include <sstream>
 #include <vector>
 
+#define ENABLE_PROFILING
 #include "allscale/api/core/impl/reference/profiling.h"
+
+#include "allscale/api/core/impl/reference/treeture.h"
 
 namespace allscale {
 namespace api {
@@ -11,19 +14,22 @@ namespace core {
 namespace impl {
 namespace reference {
 
+	TEST(ProfilingEnableSwitch, Flag) {
+		EXPECT_TRUE(PROFILING_ENABLED);
+	}
+
 	TEST(ProfileLogEntry, TypeProperties) {
 		EXPECT_TRUE(std::is_trivially_constructible<ProfileLogEntry>::value);
 		EXPECT_TRUE(std::is_trivially_copy_constructible<ProfileLogEntry>::value);
 		EXPECT_TRUE(std::is_trivially_copy_assignable<ProfileLogEntry>::value);
 	}
 
-	TEST(ProfileLog, WriteRead) {
-
-		// the number of entries to be tested
-		const int N = 10000000;
+	void testWriteRead(int N) {
 
 		// create a profiler log
 		ProfileLog log;
+
+		EXPECT_EQ(log.begin(),log.end());
 
 		// add some entries
 		for(int i=0; i<N; ++i) {
@@ -42,12 +48,26 @@ namespace reference {
 
 	}
 
-	TEST(ProfileLog, WriteStoreLoadRead) {
+	TEST(ProfileLog, WriteReadEmpty) {
+		testWriteRead(0);
+	}
 
-		// the number of entries to be tested
-		const int N = 10000000;
+	TEST(ProfileLog, WriteReadShort) {
+		EXPECT_LT(500,ProfileLog::BATCH_SIZE);
+		testWriteRead(500);
+	}
 
-		// create a in-memory stream
+	TEST(ProfileLog, WriteReadMedium) {
+		testWriteRead(ProfileLog::BATCH_SIZE + 500);
+	}
+
+	TEST(ProfileLog, WriteReadLong) {
+		testWriteRead(ProfileLog::BATCH_SIZE * 10 + 500);
+	}
+
+	void testWriteStoreLoadAndRead(int N) {
+
+		// create an in-memory buffer
 		std::stringstream buffer(std::ios_base::out | std::ios_base::in | std::ios_base::binary);
 
 		{
@@ -78,6 +98,56 @@ namespace reference {
 			EXPECT_EQ(i,N);
 
 		}
+	}
+
+	TEST(ProfileLog, WriteStoreLoadReadEmpty) {
+		testWriteStoreLoadAndRead(0);
+	}
+
+	TEST(ProfileLog, WriteStoreLoadReadShort) {
+		EXPECT_LT(500,ProfileLog::BATCH_SIZE);
+		testWriteStoreLoadAndRead(500);
+	}
+
+	TEST(ProfileLog, WriteStoreLoadReadMedium) {
+		testWriteStoreLoadAndRead(ProfileLog::BATCH_SIZE + 500);
+	}
+
+	TEST(ProfileLog, WriteStoreLoadReadLong) {
+		testWriteStoreLoadAndRead(ProfileLog::BATCH_SIZE * 10 + 500);
+	}
+
+	bool exists(const std::string& filename) {
+		std::ifstream f(filename.c_str());
+		return f.good();
+	}
+
+	TEST(ProfileLog, WorkerPoolProfiling) {
+
+		int poolsize = 0;
+
+		{
+			// start up a worker pool
+			runtime::WorkerPool pool;
+
+			poolsize = pool.getNumWorkers();
+			EXPECT_LE(1,poolsize);
+
+			// shut it down (implicit in destructor)
+		}
+
+		// see whether there are logs (all but the first, since no log message in those)
+		for(int i=1; i<poolsize; ++i) {
+			auto file = getLogFileNameForWorker(i);
+			EXPECT_PRED1(exists,file);
+
+			// delete the file
+			std::remove(file.c_str());
+		}
+
+		// there is no additional log file (bad test)
+		EXPECT_FALSE(exists(getLogFileNameForWorker(poolsize)));
+
 	}
 
 } // end namespace reference
