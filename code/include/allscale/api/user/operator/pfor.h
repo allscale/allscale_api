@@ -365,6 +365,8 @@ namespace user {
 
 		public:
 
+			range() {}
+
 			range(const Iter& begin, const Iter& end)
 				: _begin(begin), _end(end) {
 				if (empty()) { _end = _begin; }
@@ -504,6 +506,12 @@ namespace user {
 
 			iteration_reference(const range<Iter>& range, const core::task_reference& handle)
 				: _range(range), handle(handle) {}
+
+			iteration_reference(const iteration_reference&) = default;
+			iteration_reference(iteration_reference&&) = default;
+
+			iteration_reference& operator=(const iteration_reference&) = default;
+			iteration_reference& operator=(iteration_reference&&) = default;
 
 			void wait() const {
 				handle.wait();
