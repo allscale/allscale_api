@@ -227,9 +227,9 @@ std::vector<Activity> extractActivities(const std::vector<ProfileLog>& logs, con
 	}
 
 	// extract start and end times of all work items
-	std::map<WorkItemID,std::size_t> thread;
-	std::map<WorkItemID,std::size_t> start;
-	std::map<WorkItemID,std::size_t> end;
+	std::map<TaskID,std::size_t> thread;
+	std::map<TaskID,std::size_t> start;
+	std::map<TaskID,std::size_t> end;
 
 	// create activity list
 	std::vector<Activity> res;
@@ -244,7 +244,7 @@ std::vector<Activity> extractActivities(const std::vector<ProfileLog>& logs, con
 		for(const auto& entry : log) {
 
 			// remember the thread
-			thread[entry.getWorkItem()] = i;
+			thread[entry.getTask()] = i;
 
 			// process the timestamp (convert to ms)
 			auto timestamp = (entry.getTimestamp() - startTime) / 1000000;
@@ -262,11 +262,11 @@ std::vector<Activity> extractActivities(const std::vector<ProfileLog>& logs, con
 				break;
 
 			case ProfileLogEntry::TaskStarted:
-				start[entry.getWorkItem()] = timestamp;
+				start[entry.getTask()] = timestamp;
 				break;
 
 			case ProfileLogEntry::TaskEnded:
-				end[entry.getWorkItem()] = timestamp;
+				end[entry.getTask()] = timestamp;
 				break;
 
 			case ProfileLogEntry::WorkerSuspended:

@@ -7,7 +7,7 @@
 #include <thread>
 #include <fstream>
 
-#include "allscale/api/core/impl/reference/work_item_id.h"
+#include "allscale/api/core/impl/reference/task_id.h"
 
 namespace allscale {
 namespace api {
@@ -48,13 +48,13 @@ namespace reference {
 
 		Kind kind;
 
-		WorkItemID workItem;
+		TaskID task;
 
 		ProfileLogEntry(uint64_t time, Kind kind)
 			: time(time), kind(kind) {}
 
-		ProfileLogEntry(uint64_t time, Kind kind, WorkItemID workItem)
-			: time(time), kind(kind), workItem(workItem) {}
+		ProfileLogEntry(uint64_t time, Kind kind, TaskID task)
+			: time(time), kind(kind), task(task) {}
 
 	public:
 
@@ -70,8 +70,8 @@ namespace reference {
 			return kind;
 		}
 
-		WorkItemID getWorkItem() const {
-			return workItem;
+		TaskID getTask() const {
+			return task;
 		}
 
 		// -- factories --
@@ -92,16 +92,16 @@ namespace reference {
 			return ProfileLogEntry(getCurrentTime(), WorkerResumed);
 		}
 
-		static ProfileLogEntry createTaskStolenEntry(const WorkItemID& workItemId) {
-			return ProfileLogEntry(getCurrentTime(), TaskStolen, workItemId);
+		static ProfileLogEntry createTaskStolenEntry(const TaskID& task) {
+			return ProfileLogEntry(getCurrentTime(), TaskStolen, task);
 		}
 
-		static ProfileLogEntry createTaskStartedEntry(const WorkItemID& workItemId) {
-			return ProfileLogEntry(getCurrentTime(), TaskStarted, workItemId);
+		static ProfileLogEntry createTaskStartedEntry(const TaskID& task) {
+			return ProfileLogEntry(getCurrentTime(), TaskStarted, task);
 		}
 
-		static ProfileLogEntry createTaskEndedEntry(const WorkItemID& workItemId) {
-			return ProfileLogEntry(getCurrentTime(), TaskEnded, workItemId);
+		static ProfileLogEntry createTaskEndedEntry(const TaskID& task) {
+			return ProfileLogEntry(getCurrentTime(), TaskEnded, task);
 		}
 
 		// -- utility functions --
@@ -123,10 +123,10 @@ namespace reference {
 			case WorkerDestroyed: return out << "Worker destroyed";
 
 			// task events
-			case TaskStolen:      return out << "Task " << entry.workItem << " stolen";
-			case TaskSplit:       return out << "Task " << entry.workItem << " split";
-			case TaskStarted:     return out << "Task " << entry.workItem << " started";
-			case TaskEnded:       return out << "Task " << entry.workItem << " ended";
+			case TaskStolen:      return out << "Task " << entry.task << " stolen";
+			case TaskSplit:       return out << "Task " << entry.task << " split";
+			case TaskStarted:     return out << "Task " << entry.task << " started";
+			case TaskEnded:       return out << "Task " << entry.task << " ended";
 
 			// everything else
 			default:              return out << "Unknown event!";

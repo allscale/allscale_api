@@ -33,14 +33,14 @@ namespace reference {
 
 		// add some entries
 		for(int i=0; i<N; ++i) {
-			log << ProfileLogEntry::createTaskStartedEntry(WorkItemID(i));
+			log << ProfileLogEntry::createTaskStartedEntry(TaskID(i));
 		}
 
 		// read the log
 		int i = 0;
 		for(auto& cur : log) {
 			EXPECT_EQ(cur.getKind(), ProfileLogEntry::TaskStarted);
-			EXPECT_EQ(i,cur.getWorkItem().getRootID());
+			EXPECT_EQ(i,cur.getTask().getRootID());
 			++i;
 		}
 
@@ -76,7 +76,7 @@ namespace reference {
 
 			// add some entries
 			for(int i=0; i<N; ++i) {
-				log << ProfileLogEntry::createTaskStartedEntry(WorkItemID(i));
+				log << ProfileLogEntry::createTaskStartedEntry(TaskID(i));
 			}
 
 			// store log
@@ -91,7 +91,7 @@ namespace reference {
 			int i = 0;
 			for(auto& cur : log) {
 				EXPECT_EQ(cur.getKind(), ProfileLogEntry::TaskStarted);
-				EXPECT_EQ(i,cur.getWorkItem().getRootID());
+				EXPECT_EQ(i,cur.getTask().getRootID());
 				++i;
 			}
 

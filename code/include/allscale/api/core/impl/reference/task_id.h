@@ -19,14 +19,14 @@ namespace reference {
 	 *
 	 * E.g. parent work item ID:
 	 *
-	 * 			WI-12.0.1.0.1
+	 * 			T-12.0.1.0.1
 	 *
 	 * 		child work items:
 	 *
-	 * 			WI-12.0.1.0.1.0 and WI-12.0.1.0.1.1
+	 * 			T-12.0.1.0.1.0 and WI-12.0.1.0.1.1
 	 *
 	 */
-	class WorkItemID {
+	class TaskID {
 
 		std::uint64_t id;
 		std::uint64_t path;
@@ -34,9 +34,9 @@ namespace reference {
 
 	public:
 
-		WorkItemID() = default;
+		TaskID() = default;
 
-		WorkItemID(std::uint64_t id)
+		TaskID(std::uint64_t id)
 			: id(id),path(0),length(0) {}
 
 
@@ -52,15 +52,15 @@ namespace reference {
 
 		// -- utility functions --
 
-		bool operator==(const WorkItemID& other) const {
+		bool operator==(const TaskID& other) const {
 			return id == other.id && path == other.path && length == other.length;
 		}
 
-		bool operator!=(const WorkItemID& other) const {
+		bool operator!=(const TaskID& other) const {
 			return !(*this == other);
 		}
 
-		bool operator<(const WorkItemID& other) const {
+		bool operator<(const TaskID& other) const {
 			// check id
 			if (id < other.id) return true;
 			if (id > other.id) return false;
@@ -80,11 +80,11 @@ namespace reference {
 			return pA < pB;
 		}
 
-		bool isParentOf(const WorkItemID& child) const {
+		bool isParentOf(const TaskID& child) const {
 			return id == child.id && length < child.length && (path == child.path >> (child.length-length));
 		}
 
-		WorkItemID getLeftChild() const {
+		TaskID getLeftChild() const {
 			assert_lt(length,sizeof(path)*8);
 			auto res = *this;
 			res.path = res.path << 1;
@@ -92,14 +92,14 @@ namespace reference {
 			return res;
 		}
 
-		WorkItemID getRightChild() const {
+		TaskID getRightChild() const {
 			auto res = getLeftChild();
 			res.path = res.path + 1;
 			return res;
 		}
 
-		friend std::ostream& operator<<(std::ostream& out, const WorkItemID& id) {
-			out << "WI-" << id.id;
+		friend std::ostream& operator<<(std::ostream& out, const TaskID& id) {
+			out << "T-" << id.id;
 
 			std::uint64_t p = id.path;
 			for(std::uint8_t i =0; i<id.length; ++i) {

@@ -301,7 +301,7 @@ namespace reference {
 	private:
 
 		// for debugging -- give each task an ID
-		unsigned id;
+		TaskID id;
 
 		// the current state of this task
 		std::atomic<State> state;
@@ -348,7 +348,7 @@ namespace reference {
 
 		// -- observers --
 
-		unsigned getId() const {
+		TaskID getId() const {
 			return id;
 		}
 
@@ -1844,9 +1844,9 @@ namespace reference {
 
 		void Worker::runTask(const TaskBasePtr& task) {
 			LOG_SCHEDULE("Starting task " << task);
-			logProfilerEvent(ProfileLogEntry::createTaskStartedEntry(WorkItemID(task->getId())));
+			logProfilerEvent(ProfileLogEntry::createTaskStartedEntry(task->getId()));
 			task->run();
-			logProfilerEvent(ProfileLogEntry::createTaskEndedEntry(WorkItemID(task->getId())));
+			logProfilerEvent(ProfileLogEntry::createTaskEndedEntry(task->getId()));
 			LOG_SCHEDULE("Finished task " << task);
 		}
 
