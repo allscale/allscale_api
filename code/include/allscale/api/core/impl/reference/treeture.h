@@ -352,6 +352,17 @@ namespace reference {
 			return id;
 		}
 
+		void setId(const TaskID& id) {
+			this->id = id;
+			if (substitute) substitute->setId(id);
+			if (left) left->setId(id.getLeftChild());
+			if (right) right->setId(id.getRightChild());
+		}
+
+		std::size_t getDepth() const {
+			return id.getDepth();
+		}
+
 		State getState() const {
 			return state;
 		}
@@ -547,6 +558,9 @@ namespace reference {
 			assert_false(substitute);
 			assert_true(newSub);
 			substitute = std::move(newSub);
+
+			// update id of substitute
+			substitute->setId(this->getId());
 
 			// enable sub-task (bring task to ready state if necessary, without scheduling)
 			if (substitute->state == TaskBase::State::New) substitute->setState(TaskBase::State::Ready);
@@ -1177,6 +1191,7 @@ namespace reference {
 
 		// decompose this task
 		subTask = decompose().toTask();
+		assert_true(subTask);
 		assert_true(subTask->state == TaskBase::State::New || subTask->state == TaskBase::State::Done);
 
 		// mutate to new task
