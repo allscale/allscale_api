@@ -17,6 +17,7 @@
 
 #include "allscale/api/core/impl/reference/lock.h"
 #include "allscale/api/core/impl/reference/profiling.h"
+#include "allscale/api/core/impl/reference/runtime_predictor.h"
 
 namespace allscale {
 namespace api {
@@ -535,6 +536,10 @@ namespace reference {
 			return splitable;
 		}
 
+		bool isSplit() const {
+			return (bool)left;
+		}
+
 	protected:
 
 		// Ready -> Running -> Done
@@ -596,10 +601,6 @@ namespace reference {
 			return state.compare_exchange_strong(from,to,std::memory_order_relaxed,std::memory_order_relaxed);
 		}
 
-		bool isSplit() const {
-			return (bool)left;
-		}
-
 		void childDone(const TaskBase& child) {
 
 			// check whether it is the substitute
@@ -650,10 +651,9 @@ namespace reference {
 				// aggregate result
 				aggregate();
 
-				// TODO: figure out a way to clean up memory safely
-//				// delete sub-tasks
-//				left.reset();
-//				right.reset();
+				// delete sub-tasks
+				left.reset();
+				right.reset();
 
 				// log completion
 				LOG( "Aggregating task " << *this << " complete" );
@@ -1618,6 +1618,8 @@ namespace reference {
 
 		struct Worker {
 
+			using duration = RuntimePredictor::duration;
+
 			WorkerPool& pool;
 
 			volatile bool alive;
@@ -1633,6 +1635,8 @@ namespace reference {
 			unsigned id;
 
 			unsigned random_seed;
+
+			RuntimePredictor predictions;
 
 		public:
 
@@ -1678,6 +1682,12 @@ namespace reference {
 			void run();
 
 			void runTask(const TaskBasePtr& task);
+
+			void splitTask(const TaskBasePtr& task);
+
+			duration estimateRuntime(const TaskBasePtr& task) {
+				return predictions.predictTime(task->getDepth());
+			}
 
 		public:
 
@@ -1860,9 +1870,31 @@ namespace reference {
 		void Worker::runTask(const TaskBasePtr& task) {
 			LOG_SCHEDULE("Starting task " << task);
 			logProfilerEvent(ProfileLogEntry::createTaskStartedEntry(task->getId()));
-			task->run();
+
+			if (task->isSplit()) {
+				task->run();
+			} else {
+				// take the time to make predictions
+				auto start = std::chrono::high_resolution_clock::now();
+				task->run();
+				auto time = std::chrono::high_resolution_clock::now() - start;
+				predictions.registerTime(task->getDepth(),time);
+			}
+
 			logProfilerEvent(ProfileLogEntry::createTaskEndedEntry(task->getId()));
 			LOG_SCHEDULE("Finished task " << task);
+		}
+
+		void Worker::splitTask(const TaskBasePtr& task) {
+			using namespace std::chrono_literals;
+
+			// the threshold for estimated task to be split
+			static auto taskTimeThreshold = 1ms;
+
+			// only split the task if it is estimated to exceed a threshold
+			if (task->isSplitable() && estimateRuntime(task) > taskTimeThreshold) {
+				task->split();
+			}
 		}
 
 		inline void Worker::schedule(TaskBasePtr&& task) {
@@ -1907,7 +1939,7 @@ namespace reference {
 					LOG_SCHEDULE( "Splitting tasks @ queue size: " << queue.size() << "/" << queue.capacity );
 
 					// split task
-					t->split();
+					splitTask(t);
 				}
 
 				// process this task
@@ -1920,8 +1952,10 @@ namespace reference {
 
 				LOG_SCHEDULE( "Retrieving unblocked task from list of blocked tasks.");
 
+				// split task the task (since there is not enough work in the queue)
+				splitTask(t);
+
 				// process this task
-				t->split();
 				runTask(t);
 				return true;	// successfully completed a task
 			}
@@ -1943,7 +1977,11 @@ namespace reference {
 				logProfilerEvent(ProfileLogEntry::createTaskStolenEntry(t->getId()));
 
 				LOG_SCHEDULE( "Stolen task: " << t );
-				t->split();
+
+				// split task the task (since there is not enough work in the queue)
+				splitTask(t);
+
+				// process task
 				runTask(t);
 				return true;	// successfully completed a task
 			}
