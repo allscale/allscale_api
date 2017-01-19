@@ -13,18 +13,6 @@ namespace allscale {
 namespace api {
 namespace core {
 
-	TEST(PickRandom, SimpleTest) {
-
-		std::vector<int> data;
-		std::srand(1);
-		for(int i =0; i<20; i++) {
-			data.push_back(detail::pickRandom(1,2,3,4,5));
-		}
-
-		EXPECT_EQ(std::vector<int>({5,2,3,4,5,2,2,2,2,2,1,2,4,5,5,3,4,3,1,4}), data);
-
-	}
-
 	TEST(RecOps, IsFunDef) {
 
 		auto a = [](){return false;};
@@ -224,6 +212,35 @@ namespace core {
 				[](int x, const auto& f) {
 					return add( f(x-1), f(x-2) );
 				}
+		);
+
+		EXPECT_EQ( 0,fib(0).get());
+		EXPECT_EQ( 1,fib(1).get());
+		EXPECT_EQ( 1,fib(2).get());
+		EXPECT_EQ( 2,fib(3).get());
+		EXPECT_EQ( 3,fib(4).get());
+		EXPECT_EQ( 5,fib(5).get());
+		EXPECT_EQ( 8,fib(6).get());
+		EXPECT_EQ(13,fib(7).get());
+		EXPECT_EQ(21,fib(8).get());
+		EXPECT_EQ(34,fib(9).get());
+
+	}
+
+
+	TEST(RecOps, FibShortLazyAlternative) {
+
+		auto fib = prec(
+				[](int x)->bool { return x < 2; },
+				[](int x)->int { return fib_seq(x); },
+				pick(
+					[](int x, const auto& f) {
+						return add( f(x-1), f(x-2) );
+					},
+					[](int x, const auto& f) {
+						return add( f(x-2), f(x-1) );
+					}
+				)
 		);
 
 		EXPECT_EQ( 0,fib(0).get());

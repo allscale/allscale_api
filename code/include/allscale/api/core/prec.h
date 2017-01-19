@@ -16,47 +16,6 @@ namespace core {
 
 	namespace detail {
 
-		int rand(int x) {
-			return (std::rand()/(float)RAND_MAX) * x;
-		}
-
-		template<typename T>
-		T pickRandom(const T& t) {
-			return t;
-		}
-
-		template<typename T, typename ... Others>
-		T pickRandom(const T& first, const Others& ... others) {
-			if (rand(sizeof...(Others)+1) == 0) return first;
-			return pickRandom(others...);
-		}
-
-		template<unsigned L>
-		struct random_caller {
-
-			template<
-				typename Res,
-				typename ... Versions,
-				typename ... Args
-			>
-			Res callRandom(unsigned pos, const std::tuple<Versions...>& version, const Args& ... args) {
-				if (pos == L) return std::get<L>(version)(args...);
-				return random_caller<L-1>().template callRandom<Res>(pos,version,args...);
-			}
-
-			template<
-				typename Res,
-				typename ... Versions,
-				typename ... Args
-			>
-			Res callRandom(const std::tuple<Versions...>& version, const Args& ... args) {
-				int index = rand(sizeof...(Versions));
-				return callRandom<Res>(index, version, args...);
-			}
-
-		};
-
-
 		template<typename Out, typename In>
 		struct result_wrapper {
 
@@ -98,25 +57,14 @@ namespace core {
 		struct result_wrapper<impl::reference::unreleased_treeture<T>,T> : public result_wrapper<detail::completed_task<T>,T> {};
 
 
-		template<>
-		struct random_caller<0> {
-			template<
-				typename Res,
-				typename ... Versions,
-				typename ... Args
-			>
-			Res callRandom(unsigned, const std::tuple<Versions...>& versions, const Args& ... args) {
-				using res_type = decltype(std::get<0>(versions)(args...));
-				result_wrapper<Res,res_type> wrap;
-				return wrap([&](){ return std::get<0>(versions)(args...); });
-			}
+		struct call_first {
 
 			template<
 				typename Res,
 				typename ... Versions,
 				typename ... Args
 			>
-			Res callRandom(const std::tuple<Versions...>& versions, const Args& ... args) {
+			Res call(const std::tuple<Versions...>& versions, const Args& ... args) {
 				using res_type = decltype(std::get<0>(versions)(args...));
 				result_wrapper<Res,res_type> wrap;
 				return wrap([&](){ return std::get<0>(versions)(args...); });
@@ -124,7 +72,32 @@ namespace core {
 
 		};
 
+		struct call_last {
+
+			template<
+				typename Res,
+				typename ... Versions,
+				typename ... Args
+			>
+			Res call(const std::tuple<Versions...>& versions, const Args& ... args) {
+				using res_type = decltype(std::get<sizeof...(Versions)-1>(versions)(args...));
+				result_wrapper<Res,res_type> wrap;
+				return wrap([&](){ return std::get<sizeof...(Versions)-1>(versions)(args...); });
+			}
+
+		};
+
 	} // end namespace detail
+
+
+	// ----- option handling handling ----------
+
+
+	template<typename ... Options>
+	std::tuple<Options...> pick(Options&& ... options) {
+		return std::make_tuple(std::move(options)...);
+	}
+
 
 	// ----- function handling ----------
 
@@ -168,11 +141,11 @@ namespace core {
 		impl::sequential::unreleased_treeture<O> sequentialCall(impl::sequential::dependencies&& deps, const I& in, const Funs& ... funs) const {
 			// check for the base case, producing a value to be wrapped
 			if (bc_test(in)) {
-				return impl::sequential::spawn(std::move(deps),[&]{ return detail::random_caller<sizeof...(BaseCases)-1>().template callRandom<O>(base, in); });
+				return impl::sequential::spawn(std::move(deps),[&]{ return detail::call_first().template call<O>(base, in); });
 			}
 
 			// run sequential step case producing an immediate value
-			return detail::random_caller<sizeof...(StepCases)-1>().template callRandom<impl::sequential::unreleased_treeture<O>>(step, in, funs.sequential_call()...);
+			return detail::call_last().template call<impl::sequential::unreleased_treeture<O>>(step, in, funs.sequential_call()...);
 		}
 
 
@@ -182,7 +155,7 @@ namespace core {
 			const auto& base = this->base;
 			if (bc_test(in)) {
 				return impl::reference::spawn(std::move(deps), [=] {
-					return detail::random_caller<sizeof...(BaseCases)-1>().template callRandom<O>(base, in);
+					return detail::call_first().template call<O>(base, in);
 				});
 			}
 
@@ -192,9 +165,9 @@ namespace core {
 					// the dependencies of the new task
 					std::move(deps),
 					// the process version (sequential):
-					[=] { return detail::random_caller<sizeof...(StepCases)-1>().template callRandom<impl::sequential::unreleased_treeture<O>>(step, in, funs.sequential_call()...).get(); },
+					[=] { return detail::call_last().template call<impl::sequential::unreleased_treeture<O>>(step, in, funs.sequential_call()...).get(); },
 					// the split version (parallel):
-					[=] { return detail::random_caller<sizeof...(StepCases)-1>().template callRandom<impl::reference::unreleased_treeture<O>>(step, in, funs.parallel_call()...); }
+					[=] { return detail::call_first().template call<impl::reference::unreleased_treeture<O>>(step, in, funs.parallel_call()...); }
 			);
 		}
 
