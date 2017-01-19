@@ -589,17 +589,23 @@ namespace user {
 				// apply the body operation to every element in the remaining range
 				r.range.forEach(body);
 			},
-			[](const range& r, const auto& nested) {
-				// in the step case we split the range and process sub-ranges recursively
-				auto fragments = r.range.split();
-				auto& left = fragments.first;
-				auto& right = fragments.second;
-				auto dep = r.dependencies.split(left,right);
-				return parallel(
-					nested(core::after(dep.left), range{left, dep.left} ),
-					nested(core::after(dep.right),range{right,dep.right})
-				);
-			}
+			core::pick(
+				[](const range& r, const auto& nested) {
+					// in the step case we split the range and process sub-ranges recursively
+					auto fragments = r.range.split();
+					auto& left = fragments.first;
+					auto& right = fragments.second;
+					auto dep = r.dependencies.split(left,right);
+					return parallel(
+						nested(core::after(dep.left), range{left, dep.left} ),
+						nested(core::after(dep.right),range{right,dep.right})
+					);
+				},
+				[body](const range& r, const auto&) {
+					// the alternative is processing the step sequentially
+					r.range.forEach(body);
+				}
+			)
 		)(core::after(dependency),range{r,dependency}) };
 	}
 
@@ -617,16 +623,22 @@ namespace user {
 				// apply the body operation to every element in the remaining range
 				r.forEach(body);
 			},
-			[](const range& r, const auto& nested) {
-				// in the step case we split the range and process sub-ranges recursively
-				auto fragments = r.split();
-				auto& left = fragments.first;
-				auto& right = fragments.second;
-				return parallel(
-					nested(left),
-					nested(right)
-				);
-			}
+			core::pick(
+				[](const range& r, const auto& nested) {
+					// in the step case we split the range and process sub-ranges recursively
+					auto fragments = r.split();
+					auto& left = fragments.first;
+					auto& right = fragments.second;
+					return parallel(
+						nested(left),
+						nested(right)
+					);
+				},
+				[body](const range& r, const auto&) {
+					// the alternative is processing the step sequentially
+					r.forEach(body);
+				}
+			)
 		)(r) };
 	}
 
