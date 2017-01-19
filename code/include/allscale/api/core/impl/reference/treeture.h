@@ -1571,9 +1571,16 @@ namespace reference {
 					return res;
 				}
 
-				// 2) look for a splitable task
+				// 2) look for the largest splitable task
+				auto min = std::numeric_limits<std::size_t>::max();
 				for(auto& cur : pool) {
 					if (!cur->isSplitable()) continue;
+					min = std::min(cur->getDepth(), min);
+				}
+
+				// 3) split the largest splitable task and return it
+				for(auto& cur : pool) {
+					if (cur->getDepth() != min || !cur->isSplitable()) continue;
 
 					// found a splitable one, split it
 					TaskBasePtr res = std::move(cur);
@@ -1628,7 +1635,7 @@ namespace reference {
 			SimpleQueue<TaskBasePtr,16> queue;
 
 			// list of blocked tasks
-			SimpleTaskPool blocked;
+			SimpleTaskPool& blocked;
 
 			std::thread thread;
 
@@ -1640,8 +1647,8 @@ namespace reference {
 
 		public:
 
-			Worker(WorkerPool& pool, unsigned id)
-				: pool(pool), alive(true), id(id), random_seed(id) { }
+			Worker(WorkerPool& pool, SimpleTaskPool& blockedTasks, unsigned id)
+				: pool(pool), alive(true), blocked(blockedTasks), id(id), random_seed(id) { }
 
 			Worker(const Worker&) = delete;
 			Worker(Worker&&) = delete;
@@ -1697,7 +1704,6 @@ namespace reference {
 
 		};
 
-
 		class WorkerPool {
 
 			std::vector<Worker*> workers;
@@ -1705,6 +1711,9 @@ namespace reference {
 			// tools for managing idle threads
 			std::mutex m;
 			std::condition_variable cv;
+
+			// a global pool of blocked tasks
+			SimpleTaskPool blockedTasks;
 
 		public:
 
@@ -1723,7 +1732,7 @@ namespace reference {
 
 				// create workers
 				for(int i=0; i<numWorkers; ++i) {
-					workers.push_back(new Worker(*this,i));
+					workers.push_back(new Worker(*this,blockedTasks,i));
 				}
 
 				// start additional workers (worker 0 is main thread)
