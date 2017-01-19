@@ -22,6 +22,7 @@ bool exists(const std::string& file) {
 struct EventCounters {
 	int numTasksStarted = 0;
 	int numTasksStolen = 0;
+	int maxTaskDepth = 0;
 };
 
 
@@ -162,7 +163,10 @@ std::vector<EventCounters> extractEventCounters(const std::vector<ProfileLog>& l
 			auto time = normalize(event.getTimestamp());
 
 			switch(event.getKind()) {
-			case ProfileLogEntry::TaskStarted: res[time].numTasksStarted++; break;
+			case ProfileLogEntry::TaskStarted:
+				res[time].numTasksStarted++;
+				res[time].maxTaskDepth = std::max<std::size_t>(res[time].maxTaskDepth,event.getTask().getDepth());
+				break;
 			case ProfileLogEntry::TaskStolen:  res[time].numTasksStolen++;  break;
 			default: break;
 			}
@@ -334,9 +338,14 @@ void createReport(const AnalysisResult& result) {
 	)";
 
 	// print chart data
-	out << "['time','tasks started','tasks stolen'],\n";
+	out << "['time','tasks started','tasks stolen','max_task_depth'],\n";
 	for(std::size_t t = 0; t<result.counters.size(); t++) {
-		out << "[" << (t/1000.0) << "," << result.counters[t].numTasksStarted << "," << result.counters[t].numTasksStolen << "],\n";
+		out << "["
+				<< (t/1000.0) << ","
+				<< result.counters[t].numTasksStarted << ","
+				<< result.counters[t].numTasksStolen << ","
+				<< result.counters[t].maxTaskDepth
+			<< "],\n";
 	}
 
 	out << R"(]);
