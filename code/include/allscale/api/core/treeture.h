@@ -162,120 +162,227 @@ namespace core {
 
 	// --- control flow ---
 
+
+	namespace detail {
+
+		/**
+		 * Different implementations utilized by this reference implementation.
+		 */
+
+		struct DoneImpl {
+
+			template<typename T>
+			auto convertParameter(completed_task<T>&& a) const {
+				return std::move(a);
+			}
+
+			template<typename A, typename B>
+			auto sequential(completed_task<A>&&,completed_task<B>&&) {
+				return done();
+			}
+
+			template<typename D, typename A, typename B>
+			auto sequential(const D&, completed_task<A>&&,completed_task<B>&&) {
+				return done();
+			}
+
+			template<typename A, typename B>
+			auto parallel(completed_task<A>&&,completed_task<B>&&) {
+				return done();
+			}
+
+			template<typename D, typename A, typename B>
+			auto parallel(const D&, completed_task<A>&&,completed_task<B>&&) {
+				return done();
+			}
+
+			template<typename A, typename B, typename M>
+			auto combine(completed_task<A>&& a, completed_task<B>&& b, M&& m, bool) {
+				return done(m(a.get(),b.get()));
+			}
+
+			template<typename D, typename A, typename B, typename M>
+			auto combine(const D&, completed_task<A>&& a, completed_task<B>&& b, M&& m, bool) {
+				return done(m(a.get(),b.get()));
+			}
+
+		};
+
+		struct SequentialImpl {
+
+			template<typename T>
+			auto convertParameter(completed_task<T>&& a) const {
+				return impl::sequential::done(a.get());
+			}
+
+			template<typename T, typename FT>
+			auto convertParameter(impl::sequential::lazy_unreleased_treeture<T,FT>&& a) const {
+				return std::move(a);
+			}
+
+			template<typename A, typename FA, typename B, typename FB>
+			auto sequential(impl::sequential::lazy_unreleased_treeture<A,FA>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b) {
+				return impl::sequential::sequential(std::move(a),std::move(b));
+			}
+
+			template<typename A, typename FA, typename B, typename FB>
+			auto sequential(impl::sequential::dependencies&& deps, impl::sequential::lazy_unreleased_treeture<A,FA>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b) {
+				return impl::sequential::sequential(std::move(deps),std::move(a),std::move(b));
+			}
+
+			template<typename A, typename FA, typename B, typename FB>
+			auto parallel(impl::sequential::lazy_unreleased_treeture<A,FA>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b) {
+				return impl::sequential::parallel(std::move(a),std::move(b));
+			}
+
+			template<typename A, typename FA, typename B, typename FB>
+			auto parallel(impl::sequential::dependencies&& deps, impl::sequential::lazy_unreleased_treeture<A,FA>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b) {
+				return impl::sequential::parallel(std::move(deps),std::move(a),std::move(b));
+			}
+
+			template<typename A, typename FA, typename B, typename FB, typename M>
+			auto combine(impl::sequential::lazy_unreleased_treeture<A,FA>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b, M&& m, bool parallel) {
+				return impl::sequential::combine(std::move(a),std::move(b),std::move(m), parallel);
+			}
+
+			template<typename A, typename FA, typename B, typename FB, typename M>
+			auto combine(impl::sequential::dependencies&& deps, impl::sequential::lazy_unreleased_treeture<A,FA>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b, M&& m, bool parallel) {
+				return impl::sequential::combine(std::move(deps),std::move(a),std::move(b),std::move(m), parallel);
+			}
+		};
+
+		struct ReferenceImpl {
+
+			template<typename T>
+			auto convertParameter(completed_task<T>&& a) const {
+				return impl::reference::done(a.get());
+			}
+
+			template<typename T>
+			auto convertParameter(impl::reference::unreleased_treeture<T>&& a) const {
+				return std::move(a);
+			}
+
+			template<typename A, typename B>
+			auto sequential(impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b) {
+				return impl::reference::sequential(std::move(a),std::move(b));
+			}
+
+			template<typename A, typename B>
+			auto sequential(impl::reference::dependencies&& deps, impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b) {
+				return impl::reference::sequential(std::move(deps),std::move(a),std::move(b));
+			}
+
+			template<typename A, typename B>
+			auto parallel(impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b) {
+				return impl::reference::parallel(std::move(a),std::move(b));
+			}
+
+			template<typename A, typename B>
+			auto parallel(impl::reference::dependencies&& deps, impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b) {
+				return impl::reference::parallel(std::move(deps),std::move(a),std::move(b));
+			}
+
+			template<typename A, typename B, typename M>
+			auto combine(impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b, M&& m, bool parallel) {
+				return impl::reference::combine(std::move(a),std::move(b),std::move(m), parallel);
+			}
+
+			template<typename A, typename B, typename M>
+			auto combine(impl::reference::dependencies&& deps, impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b, M&& m, bool parallel) {
+				return impl::reference::combine(std::move(deps),std::move(a),std::move(b),std::move(m), parallel);
+			}
+		};
+
+
+		/**
+		 * A mapping of parameter combinations to implementations:
+		 *
+		 *   done, done -> done
+		 *
+		 *   seq , seq  -> seq
+		 *   seq , done -> seq
+		 *   done, seq  -> seq
+		 *
+		 *   ref , ref  -> ref
+		 *   ref , done -> ref
+		 *   done, ref  -> ref
+		 *
+		 * others are illegal
+		 */
+
+		template<typename A, typename B>
+		struct implementation;
+
+		template<typename A, typename B>
+		struct implementation<completed_task<A>,completed_task<B>> : public DoneImpl {};
+
+		template<typename A, typename FA, typename B, typename FB>
+		struct implementation<impl::sequential::lazy_unreleased_treeture<A,FA>,impl::sequential::lazy_unreleased_treeture<B,FB>> : public SequentialImpl {};
+
+		template<typename A, typename FA, typename B>
+		struct implementation<impl::sequential::lazy_unreleased_treeture<A,FA>,completed_task<B>> : public SequentialImpl {};
+
+		template<typename A, typename B, typename FB>
+		struct implementation<completed_task<A>,impl::sequential::lazy_unreleased_treeture<B,FB>> : public SequentialImpl {};
+
+		template<typename A, typename B>
+		struct implementation<impl::reference::unreleased_treeture<A>,impl::reference::unreleased_treeture<B>> : public ReferenceImpl {};
+
+		template<typename A, typename B>
+		struct implementation<impl::reference::unreleased_treeture<A>,completed_task<B>> : public ReferenceImpl {};
+
+		template<typename A, typename B>
+		struct implementation<completed_task<A>,impl::reference::unreleased_treeture<B>> : public ReferenceImpl {};
+
+	}
+
+
 	// -- sequential --
 
-	template<typename ... Args>
-	auto sequential(impl::sequential::dependencies&& deps, impl::sequential::unreleased_treeture<Args>&& ... args) {
-		return impl::sequential::sequential(std::move(deps),std::move(args)...);
+	template<typename D, typename A, typename B>
+	auto sequential(D&& deps, A&& a, B&& b) {
+		detail::implementation<A,B> impl;
+		return impl.sequential(std::move(deps),impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)));
 	}
 
-	template<typename F, typename ... R>
-	auto sequential(impl::sequential::unreleased_treeture<F>&& f, impl::sequential::unreleased_treeture<R>&& ... rest) {
-		return impl::sequential::sequential(std::move(f),std::move(rest)...);
-	}
-
-	template<typename ... Args, typename ... Impls>
-	auto sequential(impl::sequential::dependencies&& deps, impl::sequential::lazy_unreleased_treeture<Args,Impls>&& ... args) {
-		return impl::sequential::sequential(std::move(deps),std::move(args)...);
-	}
-
-	template<typename F, typename I, typename ... R, typename ... Impls>
-	auto sequential(impl::sequential::lazy_unreleased_treeture<F,I>&& f, impl::sequential::lazy_unreleased_treeture<R,Impls>&& ... rest) {
-		return impl::sequential::sequential(std::move(f),std::move(rest)...);
-	}
-
-	template<typename ... Args>
-	auto sequential(impl::reference::dependencies&& deps, impl::reference::unreleased_treeture<Args>&& ... args) {
-		return impl::reference::sequential(std::move(deps),std::move(args)...);
-	}
-
-	template<typename F, typename ... R>
-	auto sequential(impl::reference::unreleased_treeture<F>&& f, impl::reference::unreleased_treeture<R>&& ... rest) {
-		return impl::reference::sequential(std::move(f),std::move(rest)...);
+	template<typename A, typename B>
+	auto sequential(A&& a, B&& b) {
+		detail::implementation<A,B> impl;
+		return impl.sequential(impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)));
 	}
 
 
 	// -- parallel --
 
-	template<typename ... Args>
-	auto parallel(impl::sequential::dependencies&& deps, impl::sequential::unreleased_treeture<Args>&& ... args) {
-		return impl::sequential::parallel(std::move(deps),std::move(args)...);
+	template<typename D, typename A, typename B>
+	auto parallel(D&& deps, A&& a, B&& b) {
+		detail::implementation<A,B> impl;
+		return impl.parallel(std::move(deps),impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)));
 	}
 
-	template<typename F, typename ... R>
-	auto parallel(impl::sequential::unreleased_treeture<F>&& f, impl::sequential::unreleased_treeture<R>&& ... rest) {
-		return impl::sequential::parallel(std::move(f),std::move(rest)...);
+	template<typename A, typename B>
+	auto parallel(A&& a, B&& b) {
+		detail::implementation<A,B> impl;
+		return impl.parallel(impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)));
 	}
-
-	template<typename ... Args, typename ... Impls>
-	auto parallel(impl::sequential::dependencies&& deps, impl::sequential::lazy_unreleased_treeture<Args,Impls>&& ... args) {
-		return impl::sequential::parallel(std::move(deps),std::move(args)...);
-	}
-
-	template<typename F, typename I, typename ... R, typename ... Impls>
-	auto parallel(impl::sequential::lazy_unreleased_treeture<F,I>&& f, impl::sequential::lazy_unreleased_treeture<R,Impls>&& ... rest) {
-		return impl::sequential::parallel(std::move(f),std::move(rest)...);
-	}
-
-	template<typename ... Args>
-	auto parallel(impl::reference::dependencies&& deps, impl::reference::unreleased_treeture<Args>&& ... args) {
-		return impl::reference::parallel(std::move(deps),std::move(args)...);
-	}
-
-	template<typename F, typename ... R>
-	auto parallel(impl::reference::unreleased_treeture<F>&& f, impl::reference::unreleased_treeture<R>&& ... rest) {
-		return impl::reference::parallel(std::move(f),std::move(rest)...);
-	}
-
-
 
 
 	// --- aggregation ---
 
-	template<typename A, typename FA, typename B, typename FB, typename M>
-	auto combine(impl::sequential::dependencies&& deps, impl::sequential::lazy_unreleased_treeture<A,FA>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b, M&& m, bool parallel = true) {
-		return impl::sequential::combine(std::move(deps), std::move(a),std::move(b),std::move(m),parallel);
-	}
 
-	template<typename A, typename FA, typename B, typename FB, typename M>
-	auto combine(impl::sequential::lazy_unreleased_treeture<A,FA>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b, M&& m, bool parallel = true) {
-		return impl::sequential::combine(std::move(a),std::move(b),std::move(m),parallel);
+	template<typename D, typename A, typename B, typename M>
+	auto combine(D&& deps, A&& a, B&& b, M&& m, bool parallel = true) {
+		detail::implementation<A,B> impl;
+		return impl.combine(std::move(deps),impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)), std::move(m), parallel);
 	}
 
 	template<typename A, typename B, typename M>
-	auto combine(impl::reference::dependencies&& deps, impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b, M&& m, bool parallel = true) {
-		return impl::reference::combine(std::move(deps), std::move(a),std::move(b),std::move(m),parallel);
+	auto combine(A&& a, B&& b, M&& m, bool parallel = true) {
+		detail::implementation<A,B> impl;
+		return impl.combine(impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)), std::move(m), parallel);
 	}
 
-	template<typename A, typename B, typename M>
-	auto combine(impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b, M&& m, bool parallel = true) {
-		return impl::reference::combine(std::move(a),std::move(b),std::move(m),parallel);
-	}
-
-	template<typename A, typename B, typename M>
-	auto combine(detail::completed_task<A>&& a, detail::completed_task<B>&& b, M&& m, bool = true) {
-		return done(m(a.get(),b.get()));
-	}
-
-	template<typename A, typename B, typename FB, typename M>
-	auto combine(detail::completed_task<A>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b, M&& m, bool parallel = true) {
-		return core::combine(impl::sequential::done(a.get()), std::move(b), std::move(m), parallel);
-	}
-
-	template<typename A, typename FA, typename B, typename M>
-	auto combine(impl::sequential::lazy_unreleased_treeture<A,FA>&& a, detail::completed_task<B>&& b, M&& m, bool parallel = true) {
-		return core::combine(std::move(a), impl::sequential::done(b.get()), std::move(m), parallel);
-	}
-
-	template<typename A, typename B, typename M>
-	auto combine(detail::completed_task<A>&& a, impl::reference::unreleased_treeture<B>&& b, M&& m, bool parallel = true) {
-		return core::combine(impl::reference::done(a.get()), std::move(b), std::move(m), parallel);
-	}
-
-	template<typename A, typename B, typename M>
-	auto combine(impl::reference::unreleased_treeture<A>&& a, detail::completed_task<B>&& b, M&& m, bool parallel = true) {
-		return core::combine(std::move(a), impl::reference::done(b.get()), std::move(m), parallel);
-	}
 
 } // end namespace core
 } // end namespace api
