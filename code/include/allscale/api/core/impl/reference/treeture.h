@@ -651,9 +651,10 @@ namespace reference {
 				// aggregate result
 				aggregate();
 
-				// delete sub-tasks
-				left.reset();
-				right.reset();
+				// TODO: figure out a way to clean up memory safely
+//				// delete sub-tasks
+//				left.reset();
+//				right.reset();
 
 				// log completion
 				LOG( "Aggregating task " << *this << " complete" );
