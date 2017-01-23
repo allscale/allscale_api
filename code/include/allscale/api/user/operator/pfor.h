@@ -597,8 +597,8 @@ namespace user {
 					auto& right = fragments.second;
 					auto dep = r.dependencies.split(left,right);
 					return parallel(
-						nested(core::after(dep.left), range{left, dep.left} ),
-						nested(core::after(dep.right),range{right,dep.right})
+						nested(dep.left, range{left, dep.left} ),
+						nested(dep.right,range{right,dep.right})
 					);
 				},
 				[body](const range& r, const auto&) {
@@ -606,7 +606,7 @@ namespace user {
 					r.range.forEach(body);
 				}
 			)
-		)(core::after(dependency),range{r,dependency}) };
+		)(dependency,range{r,dependency}) };
 	}
 
 	template<typename Iter, typename Body>
@@ -654,8 +654,8 @@ namespace user {
 		one_on_one_dependency(const detail::iteration_reference<Iter>& loop)
 			: loop(loop) {}
 
-		operator core::task_reference() const {
-			return loop;
+		operator core::dependencies() const {
+			return loop.getHandle();
 		}
 
 		detail::SubDependencies<one_on_one_dependency<Iter>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
@@ -692,8 +692,12 @@ namespace user {
 		neighborhood_sync_dependency(const detail::iteration_reference<Iter>& loop)
 			: deps({ loop }) {}
 
-		operator std::vector<core::task_reference>() const {
-			return std::vector<core::task_reference>(deps.begin(),deps.end());
+		operator core::dependencies() const {
+			core::dependencies res;
+			for(const auto& cur : deps) {
+				res.add(cur);
+			}
+			return res;
 		}
 
 		detail::SubDependencies<neighborhood_sync_dependency<Iter>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {

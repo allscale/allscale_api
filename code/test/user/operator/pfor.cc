@@ -48,11 +48,6 @@ namespace user {
 			data[i]++;
 		});
 
-		// check that non so far has been updated
-		for(const auto& cur : data) {
-			EXPECT_EQ(1,cur);
-		}
-
 		// trigger execution
 		As.wait();
 
@@ -80,11 +75,6 @@ namespace user {
 		}
 
 		auto As = pfor(data,[](int& x) { x = 20; });
-
-		// check state
-		for(const auto& cur : data) {
-			EXPECT_EQ(10,cur);
-		}
 
 		As.wait();
 

@@ -105,28 +105,79 @@ namespace core {
 
 	// --- dependencies ---
 
+	/**
+	 * A class aggregating task dependencies.
+	 */
+	class dependencies {
+
+		impl::reference::dependencies par_deps;
+
+	public:
+
+		dependencies() {}
+
+		dependencies(const impl::sequential::task_reference&) {}
+
+		dependencies(const impl::reference::task_reference& dep) {
+			par_deps.push_back(dep);
+		}
+
+		dependencies(dependencies&& other) = default;
+
+		dependencies& operator=(dependencies&& other) = default;
+
+		// -- mutators --
+
+		dependencies& add(const impl::sequential::task_reference&) {
+			// can be ignored, since sequential dependencies are always satisfied
+			return *this;
+		}
+
+		dependencies& add(const impl::reference::task_reference& dep) {
+			par_deps.push_back(dep);
+			return *this;
+		}
+
+		// -- implicit and explicit converters --
+
+		operator impl::sequential::dependencies() const {
+			return impl::sequential::dependencies();
+		}
+
+		impl::sequential::dependencies toSequentialDependencies() const {
+			return *this;
+		}
+
+		operator impl::reference::dependencies&&() && {
+			return std::move(par_deps);
+		}
+
+		impl::reference::dependencies&& toReferenceDependencies() && {
+			return std::move(par_deps);
+		}
+
+	};
+
+	// -- no dependencies --
+
+	inline dependencies after() {
+		return dependencies();
+	}
+
+
 	// -- sequential --
 
 	template<typename ... Rest>
-	impl::sequential::dependencies after(const impl::sequential::task_reference& f, Rest ... rest) {
-		return impl::sequential::after(std::move(f),std::move(rest)...);
+	dependencies after(Rest ... rest, const impl::sequential::task_reference& dep) {
+		return after(rest...).add(dep);
 	}
-
-	inline impl::sequential::dependencies after(const std::vector<impl::sequential::task_reference>& deps) {
-		return impl::sequential::after(deps);
-	}
-
 
 
 	// -- reference --
 
 	template<typename ... Rest>
-	impl::reference::dependencies after(const impl::reference::task_reference& f, Rest ... rest) {
-		return impl::reference::after(std::move(f),std::move(rest)...);
-	}
-
-	inline impl::reference::dependencies after(const std::vector<impl::reference::task_reference>& deps) {
-		return impl::reference::after(deps);
+	dependencies after(Rest ... rest, const impl::reference::task_reference& dep) {
+		return after(rest...).add(dep);
 	}
 
 

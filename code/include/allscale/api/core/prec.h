@@ -261,29 +261,16 @@ namespace core {
 			struct SequentialCallable {
 				rec_defs<Defs...> defs;
 
-				auto operator()(impl::sequential::dependencies&& deps, const I& in) const {
+				auto operator()(core::dependencies&& deps, const I& in) const {
 					return impl::sequential::make_lazy_unreleased_treeture([=](){
-						return defs.template sequentialCall<i,O,I>(impl::sequential::dependencies(deps),in);
-					});
-				}
-
-				auto operator()(__unused impl::reference::dependencies&& deps, const I& in) const {
-
-					// at this point all dependencies should be completed
-					assert_true(std::all_of(deps.begin(),deps.end(),[](const auto& cur){
-						return cur.isDone();
-					}));
-
-					// This is the hand-over between the parallel and sequential implementation
-					return impl::sequential::make_lazy_unreleased_treeture([=](){
-
-						return defs.template sequentialCall<i,O,I>(impl::sequential::after(),in);
-
+						return defs.template sequentialCall<i,O,I>(deps.toSequentialDependencies(),in);
 					});
 				}
 
 				auto operator()(const I& in) const {
-					return operator()(impl::sequential::after(), in);
+					return impl::sequential::make_lazy_unreleased_treeture([=](){
+						return defs.template sequentialCall<i,O,I>(impl::sequential::dependencies(),in);
+					});
 				}
 
 			};
@@ -296,12 +283,12 @@ namespace core {
 			struct ParallelCallable {
 				rec_defs<Defs...> defs;
 
-				auto operator()(impl::reference::dependencies&& deps, const I& in) const {
-					return defs.template parallelCall<i,O,I>(std::move(deps),in);
+				auto operator()(core::dependencies&& deps, const I& in) const {
+					return defs.template parallelCall<i,O,I>(std::move(deps).toReferenceDependencies(),in);
 				}
 
 				auto operator()(const I& in) const {
-					return operator()(impl::reference::after(), in);
+					return operator()(after(), in);
 				}
 
 			};
@@ -412,12 +399,12 @@ namespace core {
 
 			rec_defs<Defs...> defs;
 
-			treeture<O> operator()(impl::reference::dependencies&& deps, const I& in) {
-				return defs.template parallelCall<i,O,I>(std::move(deps),in);
+			treeture<O> operator()(dependencies&& deps, const I& in) {
+				return defs.template parallelCall<i,O,I>(std::move(deps).toReferenceDependencies(),in);
 			}
 
 			treeture<O> operator()(const I& in) {
-				return (*this)(impl::reference::after(),in);
+				return (*this)(after(),in);
 			}
 		};
 
