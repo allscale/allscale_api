@@ -169,7 +169,7 @@ namespace core {
 
 	template<typename ... Rest>
 	dependencies after(Rest ... rest, const impl::sequential::task_reference& dep) {
-		return after(rest...).add(dep);
+		return std::move(after(rest...).add(dep));
 	}
 
 
@@ -177,7 +177,7 @@ namespace core {
 
 	template<typename ... Rest>
 	dependencies after(Rest ... rest, const impl::reference::task_reference& dep) {
-		return after(rest...).add(dep);
+		return std::move(after(rest...).add(dep));
 	}
 
 
