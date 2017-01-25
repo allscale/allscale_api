@@ -326,7 +326,7 @@ namespace core {
 			}
 			template<bool root, typename O, typename F, typename I, typename D, typename ... Args>
 			impl::reference::unreleased_treeture<O> parallelCall(const F& f, impl::reference::dependencies&& deps, const I& i, const D& d, const Args& ... args) const {
-				return f.parallelCall<root>(std::move(deps),i,createCallable<0>(d),args...);
+				return f.template parallelCall<root>(std::move(deps),i,createCallable<0>(d),args...);
 			}
 		};
 

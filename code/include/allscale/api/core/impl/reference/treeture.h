@@ -1506,7 +1506,7 @@ namespace reference {
 	inline unreleased_treeture<void> done(dependencies&& deps) {
 		auto res = std::make_shared<Task<void>>();
 		res->addDependencies(deps);
-		return res;
+		return std::move(res);
 	}
 
 	inline unreleased_treeture<void> done() {
@@ -1517,7 +1517,7 @@ namespace reference {
 	unreleased_treeture<T> done(dependencies&& deps, const T& value) {
 		auto res = std::make_shared<Task<T>>(value);
 		res->addDependencies(deps);
-		return res;
+		return std::move(res);
 	}
 
 	template<typename T>
@@ -1541,7 +1541,7 @@ namespace reference {
 		}
 
 		// done
-		return res;
+		return std::move(res);
 	}
 
 	template<bool root, typename Action>
@@ -1564,7 +1564,7 @@ namespace reference {
 		}
 
 		// done
-		return res;
+		return std::move(res);
 	}
 
 	template<bool root, typename Action, typename Split>
