@@ -22,6 +22,11 @@ namespace reference {
 		return !a.isParentOf(b);
 	}
 
+	TEST(TaskPath, TypeProperties) {
+		EXPECT_EQ(0, TaskPath::Left);
+		EXPECT_EQ(1, TaskPath::Right);
+	}
+
 	TEST(TaskID, TypeProperties) {
 
 		EXPECT_TRUE(std::is_default_constructible<TaskID>::value);
@@ -53,7 +58,19 @@ namespace reference {
 		EXPECT_EQ("T-12.0",toString(c));
 		EXPECT_EQ("T-12.1",toString(d));
 
+		EXPECT_EQ("T-12.1.0.0",toString(d.getLeftChild().getLeftChild()));
 		EXPECT_EQ("T-12.1.0.1",toString(d.getLeftChild().getRightChild()));
+		EXPECT_EQ("T-12.1.1.0",toString(d.getRightChild().getLeftChild()));
+		EXPECT_EQ("T-12.1.1.1",toString(d.getRightChild().getRightChild()));
+
+		EXPECT_EQ("T-12.1.0.0.0",toString(d.getLeftChild().getLeftChild().getLeftChild()));
+		EXPECT_EQ("T-12.1.0.0.1",toString(d.getLeftChild().getLeftChild().getRightChild()));
+		EXPECT_EQ("T-12.1.0.1.0",toString(d.getLeftChild().getRightChild().getLeftChild()));
+		EXPECT_EQ("T-12.1.0.1.1",toString(d.getLeftChild().getRightChild().getRightChild()));
+		EXPECT_EQ("T-12.1.1.0.0",toString(d.getRightChild().getLeftChild().getLeftChild()));
+		EXPECT_EQ("T-12.1.1.0.1",toString(d.getRightChild().getLeftChild().getRightChild()));
+		EXPECT_EQ("T-12.1.1.1.0",toString(d.getRightChild().getRightChild().getLeftChild()));
+		EXPECT_EQ("T-12.1.1.1.1",toString(d.getRightChild().getRightChild().getRightChild()));
 
 		EXPECT_PRED2(isNotParentOf,a,a);
 		EXPECT_PRED2(isNotParentOf,a,b);

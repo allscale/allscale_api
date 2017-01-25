@@ -18,16 +18,13 @@ namespace reference {
 		EXPECT_FALSE(queue.full());
 		EXPECT_EQ(0, queue.size());
 
-		std::cout << queue << "\n";
 
 		EXPECT_TRUE(queue.push_front(12));
-		std::cout << queue << "\n";
 		EXPECT_FALSE(queue.empty());
 		EXPECT_FALSE(queue.full());
 		EXPECT_EQ(1, queue.size());
 
 		EXPECT_EQ(12, queue.pop_front());
-		std::cout << queue << "\n";
 
 		EXPECT_TRUE(queue.empty());
 		EXPECT_FALSE(queue.full());
@@ -39,9 +36,7 @@ namespace reference {
 		EXPECT_FALSE(queue.full());
 		EXPECT_EQ(1, queue.size());
 
-		std::cout << queue << "\n";
 		EXPECT_EQ(12, queue.pop_back());
-		std::cout << queue << "\n";
 
 	}
 
@@ -176,7 +171,7 @@ namespace reference {
 	}
 
 	TEST(Runtime, SimpleTask) {
-		treeture<int> future = spawn([]{ return 12; });
+		treeture<int> future = spawn<false>([]{ return 12; });
 		EXPECT_EQ(12,future.get());
 	}
 
@@ -197,16 +192,16 @@ namespace reference {
 		EXPECT_EQ(10, d.get());
 
 		// build a simple task
-		auto f = spawn([](){ return 12; });
+		auto f = spawn<false>([](){ return 12; });
 
 		// compute with futures
 		EXPECT_EQ(5, add(done(2),done(3)).get());
 
 		// build a splitable task
-		auto g = spawn(
+		auto g = spawn<false>(
 				[](){ return 6 + 8; },
 				[](){ return add(
-						spawn([](){ return 8; }),
+						spawn<false>([](){ return 8; }),
 						done(6)
 					);
 				}
@@ -231,14 +226,14 @@ namespace reference {
 		EXPECT_EQ(0,y);
 		EXPECT_EQ(0,z);
 
-		treeture<void> a = spawn(
+		treeture<void> a = spawn<false>(
 			[&]{ x++; }
 		);
 
 		EXPECT_EQ(0,y);
 		EXPECT_EQ(0,z);
 
-		treeture<void> b = spawn(
+		treeture<void> b = spawn<false>(
 			[&]{ y++; }
 		);
 
@@ -268,7 +263,7 @@ namespace reference {
 		EXPECT_EQ(0,y);
 		EXPECT_EQ(0,z);
 
-		spawn(
+		spawn<false>(
 			[&]{ z++; }
 		).get();
 
@@ -287,11 +282,11 @@ namespace reference {
 			EXPECT_EQ(0,y);
 			EXPECT_EQ(0,z);
 
-			treeture<void> t = spawn(
+			treeture<void> t = spawn<false>(
 				[&]{ x++; },
 				[&]{ return parallel(
-						spawn([&]{ y++; }),
-						spawn([&]{ z++; })
+						spawn<false>([&]{ y++; }),
+						spawn<false>([&]{ z++; })
 					);
 				}
 			);
@@ -345,7 +340,7 @@ namespace reference {
 
 		// handle single step case
 		if (begin + 1 == end) {
-			return spawn(
+			return spawn<false>(
 					[=]{
 						body(begin);
 					}
@@ -354,7 +349,7 @@ namespace reference {
 
 		// handle rest
 		int mid = (begin + end) / 2;
-		return spawn(
+		return spawn<false>(
 				[=]() {
 					for(int i=begin; i<end; i++) body(i);
 				},
@@ -420,7 +415,7 @@ namespace reference {
 
 		// handle single step case
 		if (begin + 1 == end) {
-			return spawn(
+			return spawn<false>(
 					[=]{
 						body(begin);
 					}
@@ -429,7 +424,7 @@ namespace reference {
 
 		// handle rest
 		int mid = (begin + end) / 2;
-		return spawn(
+		return spawn<false>(
 				[=]() {
 					for(int i=begin; i<end; i++) body(i);
 				},
@@ -540,7 +535,7 @@ namespace reference {
 
 	unreleased_treeture<unsigned> fib_split(unsigned n) {
 		if (n <= 1) return done(n);
-		return spawn(
+		return spawn<false>(
 				[=](){ return fib(n); },
 				[=](){ return add(fib_split(n-1), fib_split(n-2)); }
 		);
