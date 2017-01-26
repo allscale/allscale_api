@@ -2105,6 +2105,9 @@ namespace reference {
 
 		void Worker::runTask(const TaskBasePtr& task) {
 
+			// the splitting of a task may provide a done substitute => skip those
+			if (task->isDone()) return;
+
 			// assert that this task is ready to run
 			assert_true(task->isReady());
 
