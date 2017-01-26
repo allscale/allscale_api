@@ -168,16 +168,16 @@ namespace core {
 	// -- sequential --
 
 	template<typename ... Rest>
-	dependencies after(Rest ... rest, const impl::sequential::task_reference& dep) {
-		return std::move(after(rest...).add(dep));
+	dependencies after(const impl::sequential::task_reference& dep, const Rest& ... rest) {
+		return std::move(allscale::api::core::after(rest...).add(dep));
 	}
 
 
 	// -- reference --
 
 	template<typename ... Rest>
-	dependencies after(Rest ... rest, const impl::reference::task_reference& dep) {
-		return std::move(after(rest...).add(dep));
+	dependencies after(const impl::reference::task_reference& dep, const Rest& ... rest) {
+		return std::move(allscale::api::core::after(rest...).add(dep));
 	}
 
 
