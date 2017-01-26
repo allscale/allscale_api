@@ -527,7 +527,7 @@ namespace reference {
 		bool parallel;
 
 		// for the processing of split tasks
-		TaskBase* parent;                      // < a pointer to the parent to be notified upon completion
+		TaskBasePtr parent;                    // < a pointer to the parent to be notified upon completion
 		std::atomic<int> alive_child_counter;  // < the number of active child tasks
 
 		// for the mutation from a simple to a split task
@@ -538,7 +538,8 @@ namespace reference {
 		TaskBase(bool done = true)
 			: family(), path(),
 			  state(done ? State::Done : State::New),
-			  num_active_dependencies(0),
+			  // one initial control flow dependency, released by treeture release
+			  num_active_dependencies(1),
 			  splitable(false), parallel(false), parent(nullptr) {
 
 			LOG_TASKS( "Created " << *this );
@@ -548,7 +549,8 @@ namespace reference {
 			: family(),
 			  path(),
 			  state(State::New),
-			  num_active_dependencies(0),
+			  // one initial control flow dependency, released by treeture release
+			  num_active_dependencies(1),
 			  splitable(false),
 			  left(std::move(left)), right(std::move(right)), parallel(parallel),
 			  parent(nullptr), alive_child_counter(0) {
@@ -560,7 +562,7 @@ namespace reference {
 
 		virtual ~TaskBase() {
 			LOG_TASKS( "Destroying Task " << *this );
-			assert_true(isDone()) << getId();
+			assert_true(isDone()) << getId() << " - " << getState();
 		};
 
 		// -- observers --
@@ -714,20 +716,23 @@ namespace reference {
 					return;
 				}
 
+				// get a shared pointer to this task to be passed as a parent
+				TaskBasePtr thisTask = this->shared_from_this();
+
 				// backup right since if left finishes quickly it will be reset
 				TaskBasePtr r = right;
 
 				// schedule left (if necessary)
 				if (left->state == State::New) {
 					LOG_TASKS( "Starting child " << *left << " of " << *this );
-					left->parent = this;
+					left->parent = thisTask;
 					left->start();
 				}
 
 				// schedule right (if necessary)
 				if (r->state == State::New) {
 					LOG_TASKS( "Starting child " << *r << " of " << *this );
-					r->parent = this;
+					r->parent = thisTask;
 					r->start();
 				}
 
@@ -808,20 +813,7 @@ namespace reference {
 			return (bool)left;
 		}
 
-		void dependencyDone() {
-			// decrease number of active dependencies
-			assert_gt(num_active_dependencies, 0);
-
-			// decrease the number of active dependencies
-			if (num_active_dependencies.fetch_sub(1) != 1) return;
-
-			// this was the last dependency => enqueue task if blocked
-			if (state != State::Blocked) return;
-
-			// enqueue task
-			// TODO: switch to a push-based enqueuing fo the task
-//			assert_not_implemented() << "Enqueing of tasks not implemented";
-		}
+		void dependencyDone();
 
 	protected:
 
@@ -854,7 +846,7 @@ namespace reference {
 			if (substitute->state == TaskBase::State::New) substitute->setState(TaskBase::State::Ready);
 
 			// connect substitute to parent
-			substitute->parent = this;
+			substitute->parent = this->shared_from_this();
 		}
 
 	private:
@@ -952,6 +944,7 @@ namespace reference {
 			// notify parent
 			if (parent) {
 				parent->childDone(*this);
+				parent.reset();
 			}
 		}
 
@@ -1526,22 +1519,30 @@ namespace reference {
 	}
 
 
-	template<bool root, typename Action, typename T = std::result_of_t<Action()>>
-	unreleased_treeture<T> spawn(dependencies&& deps, Action&& op) {
+	namespace detail {
 
-		// create the task
-		auto res = TaskPtr<T>(std::make_shared<SimpleTask<Action>>(std::move(op)));
+		template<bool root, typename T>
+		unreleased_treeture<T> init(dependencies&& deps, TaskPtr<T>&& task) {
 
-		// add dependencies
-		res->addDependencies(deps);
+			// add dependencies
+			task->addDependencies(deps);
 
-		// create task family if requested
-		if (root) {
-			res->adopt(createFamily());
+			// create task family if requested
+			if (root) {
+				task->adopt(createFamily());
+			}
+
+			// done
+			return std::move(task);
 		}
 
-		// done
-		return std::move(res);
+	}
+
+
+	template<bool root, typename Action, typename T = std::result_of_t<Action()>>
+	unreleased_treeture<T> spawn(dependencies&& deps, Action&& op) {
+		// create and initialize the task
+		return detail::init<root>(std::move(deps), TaskPtr<T>(std::make_shared<SimpleTask<Action>>(std::move(op))));
 	}
 
 	template<bool root, typename Action>
@@ -1551,20 +1552,8 @@ namespace reference {
 
 	template<bool root, typename Action, typename Split, typename T = std::result_of_t<Action()>>
 	unreleased_treeture<T> spawn(dependencies&& deps, Action&& op, Split&& split) {
-
-		// create the task
-		auto res = TaskPtr<T>(std::make_shared<SplitableTask<Action,Split>>(std::move(op),std::move(split)));
-
-		// add dependencies
-		res->addDependencies(deps);
-
-		// create task family if requested
-		if (root) {
-			res->adopt(createFamily());
-		}
-
-		// done
-		return std::move(res);
+		// create and initialize the task
+		return detail::init<root>(std::move(deps), TaskPtr<T>(std::make_shared<SplitableTask<Action,Split>>(std::move(op),std::move(split))));
 	}
 
 	template<bool root, typename Action, typename Split>
@@ -1889,9 +1878,6 @@ namespace reference {
 			// list of tasks ready to run
 			SimpleQueue<TaskBasePtr,16> queue;
 
-			// list of blocked tasks
-			SimpleTaskPool& blocked;
-
 			std::thread thread;
 
 			unsigned id;
@@ -1902,8 +1888,8 @@ namespace reference {
 
 		public:
 
-			Worker(WorkerPool& pool, SimpleTaskPool& blockedTasks, unsigned id)
-				: pool(pool), alive(true), blocked(blockedTasks), id(id), random_seed(id) { }
+			Worker(WorkerPool& pool, unsigned id)
+				: pool(pool), alive(true), id(id), random_seed(id) { }
 
 			Worker(const Worker&) = delete;
 			Worker(Worker&&) = delete;
@@ -1959,9 +1945,6 @@ namespace reference {
 			std::mutex m;
 			std::condition_variable cv;
 
-			// a global pool of blocked tasks
-			SimpleTaskPool blockedTasks;
-
 		public:
 
 			WorkerPool() {
@@ -1979,7 +1962,7 @@ namespace reference {
 
 				// create workers
 				for(int i=0; i<numWorkers; ++i) {
-					workers.push_back(new Worker(*this,blockedTasks,i));
+					workers.push_back(new Worker(*this,i));
 				}
 
 				// start additional workers (worker 0 is main thread)
@@ -2042,12 +2025,6 @@ namespace reference {
 				for(const auto& cur : workers) {
 					cur->dumpState(out);
 				}
-
-				out << "Blocked Tasks:\n";
-				for(const auto& cur : blockedTasks.getSnapshot()) {
-					out << "\t" << *cur << "\n";
-				}
-
 			}
 
 		protected:
@@ -2103,18 +2080,15 @@ namespace reference {
 
 					// if there was no work for quite some time
 					if(idle_cycles > 100000) {
-						// if there may be no work at all ..
-						if(blocked.empty()) {
 
-							// report sleep event
-							logProfilerEvent(ProfileLogEntry::createWorkerSuspendedEntry());
+						// report sleep event
+						logProfilerEvent(ProfileLogEntry::createWorkerSuspendedEntry());
 
-							// wait for work by putting thread to sleep
-							pool.waitForWork();
+						// wait for work by putting thread to sleep
+						pool.waitForWork();
 
-							// report awakening
-							logProfilerEvent(ProfileLogEntry::createWorkerResumedEntry());
-						}
+						// report awakening
+						logProfilerEvent(ProfileLogEntry::createWorkerResumedEntry());
 				
 						// reset cycles counter
 						idle_cycles = 0;
@@ -2130,6 +2104,10 @@ namespace reference {
 		}
 
 		void Worker::runTask(const TaskBasePtr& task) {
+
+			// assert that this task is ready to run
+			assert_true(task->isReady());
+
 			LOG_SCHEDULE("Starting task " << task);
 			logProfilerEvent(ProfileLogEntry::createTaskStartedEntry(task->getId()));
 
@@ -2162,10 +2140,7 @@ namespace reference {
 		inline void Worker::schedule(TaskBasePtr&& task) {
 
 			// check whether task has unfinished dependencies
-			if (!task->isReady()) {
-				blocked.addTask(std::move(task));
-				return;
-			}
+			if (!task->isReady()) return;
 
 			// add task to queue
 			LOG_SCHEDULE( "Queue size before: " << queue.size() << "/" << queue.capacity );
@@ -2195,6 +2170,9 @@ namespace reference {
 			// process a task from the local queue
 			if (TaskBasePtr t = queue.pop_front()) {
 
+				// check precondition of task
+				assert_true(t->isReady());
+
 				// if the queue is not full => create more tasks
 				if (queue.size() < (queue.capacity*3)/4) {
 
@@ -2207,19 +2185,6 @@ namespace reference {
 				// process this task
 				runTask(t);
 				return true;
-			}
-
-			// no task in queue, check the pool
-			if (TaskBasePtr t = blocked.getReadyTask()) {
-
-				LOG_SCHEDULE( "Retrieving unblocked task from list of blocked tasks.");
-
-				// split task the task (since there is not enough work in the queue)
-				splitTask(t);
-
-				// process this task
-				runTask(t);
-				return true;	// successfully completed a task
 			}
 
 			// check that there are other workers
@@ -2278,10 +2243,38 @@ namespace reference {
 		// move to next state
 		setState(State::Blocked);
 
-		// schedule task
-		runtime::getCurrentWorker().schedule(this->shared_from_this());
+		// split tasks by default up to a given level
+//		// TODO: make this depth hardware dependent
+//		if (!isOrphan() && isSplitable() && getDepth() < 4) {
+//
+//			// split this task
+//			split();
+//
+//			// now it should be ready
+//			assert_true(isReady());
+//		}
+
+		// release dummy-dependency to get task started
+		dependencyDone();
 	}
 
+	void TaskBase::dependencyDone() {
+		// decrease number of active dependencies
+		assert_gt(num_active_dependencies, 0);
+
+		// decrease the number of active dependencies
+		if (num_active_dependencies.fetch_sub(1) != 1) return;
+
+		// this was the last dependency => enqueue task if blocked
+		if (state != State::Blocked) return;
+
+
+		// TODO: actively distribute initial tasks, by assigning
+		// them to different workers;
+
+		// enqueue task
+		runtime::getCurrentWorker().schedule(this->shared_from_this());
+	}
 
 	inline bool TaskBase::isReady() {
 		// should only be called if blocked or ready
@@ -2294,9 +2287,6 @@ namespace reference {
 
 		// if already identified as ready before, that's it
 		if (state == State::Ready) return true;
-
-		// upgrade new to blocked
-		if (state == State::New) setState(State::Blocked);
 
 		// check if there are alive dependencies
 		if (num_active_dependencies != 0) return false;
