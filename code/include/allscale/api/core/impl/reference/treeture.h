@@ -126,12 +126,12 @@ namespace reference {
 	// -----------------------------------------------------------------
 
 
-	const bool ENABLE_MONITORING = false;
+	const bool MONITORING_ENABLED = false;
 
 	namespace monitoring {
 
 		enum class EventType {
-			Run, Split, Wait
+			Run, RunDirect, Split, Wait, DependencyWait
 		};
 
 		struct Event {
@@ -140,8 +140,10 @@ namespace reference {
 
 			const TaskBase* task;
 
+			TaskID taskId;
+
 			bool operator==(const Event& other) const {
-				return other.type == type && other.task == task;
+				return other.type == type && other.task == task && other.taskId == taskId;
 			}
 
 			friend std::ostream& operator<<(std::ostream& out, const Event& e);
@@ -168,13 +170,13 @@ namespace reference {
 			~ThreadState() {
 				assert_true(eventStack.empty());
 
-				guard g(getStateLock());
-				auto& list = getStates();
-				auto it = std::find(list.begin(),list.end(),this);
-				if (it != list.end()) {
-					std::swap(*it,list.back());
-					list.pop_back();
-				}
+//				guard g(getStateLock());
+//				auto& list = getStates();
+//				auto it = std::find(list.begin(),list.end(),this);
+//				if (it != list.end()) {
+//					std::swap(*it,list.back());
+//					list.pop_back();
+//				}
 			}
 
 			void pushEvent(const Event& e) {
@@ -195,12 +197,23 @@ namespace reference {
 				for(const auto& cur : eventStack) {
 					out << "\t\t" << cur << "\n";
 				}
+				out << "\t\t -- top of stack --\n";
 				out << "\n";
 			}
 
 			static void dumpStates(std::ostream& out) {
 				// lock states
 				std::lock_guard<std::mutex> g(getStateLock());
+
+				// provide a hint if there is no information
+				if (getStates().empty()) {
+					out << "No thread states recorded.";
+					if (!MONITORING_ENABLED) {
+						out << " You can enable it by setting the MONITORING_ENABLED flag in the code base.";
+					}
+					out << "\n";
+					return;
+				}
 
 				// print all current states
 				for(const auto& cur : getStates()) {
@@ -255,8 +268,15 @@ namespace reference {
 		};
 
 		Action log(EventType type, const TaskBase* task) {
-			if (!ENABLE_MONITORING) return {};
-			return Event{type,task};
+			assert_true(type != EventType::DependencyWait);
+			if (!MONITORING_ENABLED) return {};
+			return Event{type,task,TaskID()};
+		}
+
+		Action log(EventType type, const TaskID& task) {
+			assert_true(type == EventType::DependencyWait);
+			if (!MONITORING_ENABLED) return {};
+			return Event{type,nullptr,task};
 		}
 
 	}
@@ -395,7 +415,7 @@ namespace reference {
 
 		static unsigned getNextID() {
 			static std::atomic<int> counter(0);
-			return (DEBUG || DEBUG_SCHEDULE || DEBUG_TASKS || ENABLE_MONITORING || PROFILING_ENABLED) ? ++counter : 0;
+			return (DEBUG || DEBUG_SCHEDULE || DEBUG_TASKS || MONITORING_ENABLED || PROFILING_ENABLED) ? ++counter : 0;
 		}
 
 	};
@@ -516,6 +536,7 @@ namespace reference {
 		std::atomic<State> state;
 
 		// the number of tasks still active before this tasks can be released
+		// + 1 dependency for the release of tasks (tasks are released once this counter goes to 0)
 		std::atomic<std::size_t> num_active_dependencies;
 
 		// indicates whether this task can be split
@@ -524,6 +545,8 @@ namespace reference {
 		// split task data
 		TaskBasePtr left;
 		TaskBasePtr right;
+
+		// TODO: get rid of this
 		bool parallel;
 
 		// for the processing of split tasks
@@ -533,6 +556,10 @@ namespace reference {
 		// for the mutation from a simple to a split task
 		TaskBasePtr substitute;
 
+		// a flag to remember that this task got a substitute, even after the
+		// substitute got cut lose
+		bool substituted;
+
 	public:
 
 		TaskBase(bool done = true)
@@ -540,7 +567,8 @@ namespace reference {
 			  state(done ? State::Done : State::New),
 			  // one initial control flow dependency, released by treeture release
 			  num_active_dependencies(1),
-			  splitable(false), parallel(false), parent(nullptr) {
+			  splitable(false), parallel(false), parent(nullptr),
+			  substituted(false) {
 
 			LOG_TASKS( "Created " << *this );
 		}
@@ -553,7 +581,8 @@ namespace reference {
 			  num_active_dependencies(1),
 			  splitable(false),
 			  left(std::move(left)), right(std::move(right)), parallel(parallel),
-			  parent(nullptr), alive_child_counter(0) {
+			  parent(nullptr), alive_child_counter(0),
+			  substituted(false) {
 
 			LOG_TASKS( "Created " << *this );
 			assert(this->left);
@@ -589,6 +618,8 @@ namespace reference {
 		}
 
 		State getState() const {
+			// the substitute takes over the control of the state
+			if (substitute) return substitute->state;
 			return state;
 		}
 
@@ -651,41 +682,40 @@ namespace reference {
 		// New -> Blocked
 		void start();
 
-		// Blocked -> Blocked or Blocked -> Ready transition
-		bool isReady();
+		// Blocked -> Ready transition is triggered by the last dependency
 
-		// Ready -> Running -> Done
+		// Ready -> Running - finish() ->  Done
 		void run() {
+
+			// make sure this task is alive until the end of this function
+			auto anker = this->shared_from_this();
+
 			// log this event
 			auto action = monitoring::log(monitoring::EventType::Run, this);
+
+			// process substituted tasks
+			if (substituted) {
+
+				// just wait for this task to finish (and thus the substitute)
+				wait();
+
+				// the finish and cleanup is conducted by the callback of the substitute
+				assert_eq(State::Done, state);
+				assert_false(substitute);
+
+				// done
+				return;
+			}
+
 
 			LOG_TASKS( "Running Task " << *this );
 
 			// check that it is allowed to run
 			assert_eq(state, State::Ready);
+			assert_eq(0,num_active_dependencies);
 
 			// update state
 			setState(State::Running);
-
-			// forward call to substitute if present
-			if (substitute) {
-				if (!substitute->isDone()) {
-
-					// run substitute
-					substitute->run();
-
-					// wait for the substitute to be finish
-					substitute->wait();
-
-					// at this point, the job should be done as well
-					assert_true(isDone());
-
-				} else {
-					finish();
-				}
-
-				return;
-			}
 
 			// process split tasks
 			if (isSplit()) {					// if there is a left, it is a split task
@@ -697,10 +727,21 @@ namespace reference {
 
 				// run task sequentially if requested
 				if (!parallel) {
-					left->runInline();
-					right->runInline();
+
+					// TODO: implement sequential execution dependency based
+
+					// process left first
+					left->start();
+					left->wait();
+
+					// continue with the right child
+					right->start();
+					right->wait();
+
+					// finish this task
 					finish();
 					return;
+
 				}
 
 				// count number of sub-tasks to be started
@@ -739,57 +780,55 @@ namespace reference {
 				// wait until this task is completed
 				wait();
 
-				// done
-				return;
+				// the finish call is covered by the child-task callback
+				assert_true(isDone());		// after the wait, it should be done
+
+				// processing complete
+
+			} else {
+
+				// run computation
+				execute();
+
+				// finish task
+				finish();
+
 			}
-
-			// run computation
-			execute();
-
-			// finish task
-			finish();
 		}
 
-		void runInline() {
-			// forward call to substitute if present
-			if (substitute) {
-				substitute->runInline();
-				return;
-			}
-
-			// skip done tasks
-			if (isDone()) return;
-
-			// set to ready without going through the worker pool
-			setState(TaskBase::State::Ready);
-
-			// run the task
-			run();
-		}
+//		void runInline() {
+//			// this feature is faulty since it may skip dependencies
+//			assert_not_implemented();
+//
+//			// forward call to substitute if present
+//			if (substitute) {
+//				substitute->runInline();
+//				return;
+//			}
+//
+//			// skip done tasks
+//			if (isDone()) return;
+//
+//			// set to ready without going through the worker pool
+//			setState(TaskBase::State::Ready);
+//
+//			// run the task
+//			run();
+//		}
 
 		// Ready -> Split (if supported, otherwise remains Ready)
 		virtual void split() {
-			// log this event
-			auto action = monitoring::log(monitoring::EventType::Split, this);
-
-			// forward call to substitute if present
-			if (substitute) {
-				substitute->split();
-				return;
-			}
-
-			// this task must not be running yet
-			assert_lt(state,State::Running);
-
 			// by default, no splitting is supported
+			assert_fail() << "This should not be reachable!";
 		}
 
 		// wait for the task completion
 		void wait();
 
 		bool isDone() const {
-			// forward call to substitute if present
-			if (substitute) return substitute->isDone();
+//			// forward call to substitute if present
+//			if (substitute) return substitute->isDone();
+			// simply check the state of this task
 			return state == State::Done;
 		}
 
@@ -813,50 +852,102 @@ namespace reference {
 			return (bool)left;
 		}
 
+		bool isSubstituted() const {
+			return substituted;
+		}
+
+		bool isReady() const {
+			if (substitute) return substitute->isReady();
+			return state == State::Ready;
+		}
+
 		void dependencyDone();
 
 	protected:
 
-		// Ready -> Running -> Done
+		/**
+		 * A hook to define the operations to be conducted by this
+		 * task instance. This function will only be triggered
+		 * for non-split tasks.
+		 */
 		virtual void execute() =0;
 
-		// Split -> Done
-		virtual void aggregate() {
-			// nothing to do by default
-		}
+		/**
+		 * A hook to define post-operation operations triggered after
+		 * the completion of this task or the completion of its child
+		 * tasks. It should be utilized to retrieve results from
+		 * substitutes or child tasks and aggregate those.
+		 */
+		virtual void aggregate() =0;
 
 		void setSplitable(bool value = true) {
 			splitable = value;
 		}
 
 		void setSubstitute(TaskBasePtr&& newSub) {
+
 			// can only happen if this task is in blocked or ready state
 			assert_true(state == State::Blocked || state == State::Ready)
 					<< "Actual state: " << state;
 
 			// must only be set once!
 			assert_false(substitute);
+
+			// and the substitute must be valid
 			assert_true(newSub);
-			substitute = std::move(newSub);
+
+			// the substitute must be new
+			assert_true(newSub->state == State::New || newSub->state == State::Done);
 
 			// adapt substitute
-			substitute->adopt(this->family, this->path);
-
-			// enable sub-task (bring task to ready state if necessary, without scheduling)
-			if (substitute->state == TaskBase::State::New) substitute->setState(TaskBase::State::Ready);
+			newSub->adopt(this->family, this->path);
 
 			// connect substitute to parent
-			substitute->parent = this->shared_from_this();
+			newSub->parent = this->shared_from_this();
+
+			// link substitute -- with this responsibilities are transfered
+			substitute = std::move(newSub);
+
+			// remember that a substitute has been assigned
+			substituted = true;
+
+			// forget remaining dependencies
+			num_active_dependencies = 0;
+
+			// and update this state to ready
+			if (state == State::Blocked) setState(State::Ready);
+
+			// since the substitute may be processed any time, this may finish
+			// any time => thus it is in the running state
+			setState(State::Running);
+
+			// if the split task is done, this one is done
+			if (substitute->isDone()) {
+
+				// finish this task
+				finish();
+
+				// now this task should be done
+				assert_eq(State::Done, state);
+
+				// and the substitute already gone
+				assert_false(substitute);
+
+			} else {
+
+				// start the substitute
+				substitute->start();
+
+			}
+
 		}
 
 	private:
 
 		bool isValidTransition(State from, State to) {
-			return (from == State::New         && to == State::Ready       ) ||
-				   (from == State::New         && to == State::Blocked     ) ||
+			return (from == State::New         && to == State::Blocked     ) ||
 				   (from == State::Blocked     && to == State::Ready       ) ||
 				   (from == State::Ready       && to == State::Running     ) ||
-				   (from == State::Running     && to == State::Done        ) ||
 				   (from == State::Running     && to == State::Aggregating ) ||
 				   (from == State::Aggregating && to == State::Done        ) ;
 		}
@@ -866,30 +957,46 @@ namespace reference {
 			assert_true(isValidTransition(state,newState))
 				<< "Illegal state transition from " << state << " to " << newState;
 
+			// make sure that the task is not released with active dependencies
+			assert_true(newState != State::Ready || num_active_dependencies == 0 || substituted)
+				<< "Active dependencies: " << num_active_dependencies;
+
+//			// a substituted task may only reach the ready state
+//			assert_true(newState <= State::Ready || !substitute)
+//				<< "Invalid state for task with substitution!";
+
+			// update the state
 			state = newState;
 			LOG_TASKS( "Updated state: " << *this );
-		}
-
-		bool switchState(State from, State to) {
-			assert_true(isValidTransition(from,to))
-				<< "Illegal state transition from " << from << " to " << to;
-			return state.compare_exchange_strong(from,to,std::memory_order_relaxed,std::memory_order_relaxed);
 		}
 
 		void childDone(const TaskBase& child) {
 
 			// check whether it is the substitute
 			if (substitute.get() == &child) {
+
+				// check state of this task
+				assert_true(State::Ready == state || State::Running == state)
+					<< "Actual state: " << state;
+
+				// log state change
 				LOG_TASKS( "Substitute " << substitute << " of " << *this << " done");
+
+				// trigger completion of task
 				finish();
 				return;
 			}
+
+			// make sure this task is still running
+			assert_eq(State::Running, state)
+				<< "\tis substitute:  " << (substitute.get() == &child) << "\n"
+				<< "\tis child left:  " << (left.get() == &child) << "\n"
+				<< "\tis child right: " << (right.get() == &child) << "\n";
 
 			// process a split-child
 			LOG_TASKS( "Child " << child << " of " << *this << " done" );
 
 			// this one must be a split task
-			assert_true(isSplit());
 			assert_true(left.get() == &child || right.get() == &child) << *this;
 
 			// decrement active child count
@@ -901,12 +1008,13 @@ namespace reference {
 			// check whether this was the last child
 			if (old_child_count != 1) return;
 
-			// finish this task
+			// the last child finished => finish this task
 			finish();
 
 			// LOG_TASKS( "Child " << child << " of " << *this << " done - processing complete" );
 		}
 
+		// Running -> Aggregating -> Done
 		void finish() {
 
 			LOG_TASKS( "Finishing task " << *this );
@@ -915,30 +1023,30 @@ namespace reference {
 			assert_true(state == State::Running)
 					<< "Actual State: " << state << "\nTask: " << *this;
 
-			// if it is a split, finish it by aggregating results
-			if (isSplit()) {
-				// update state
-				setState(State::Aggregating);
 
-				// log aggregation step
-				LOG( "Aggregating task " << *this );
+			// update state to aggregation
+			setState(State::Aggregating);
 
-				// aggregate result
-				aggregate();
+			// log aggregation step
+			LOG( "Aggregating task " << *this );
 
-				// TODO: figure out a way to clean up memory safely
-//				// delete sub-tasks
-//				left.reset();
-//				right.reset();
+			// aggregate result (collect results)
+			aggregate();
 
-				// log completion
-				LOG( "Aggregating task " << *this << " complete" );
-			}
+			// cut lose children
+			left.reset();
+			right.reset();
+
+			// cut lose substitutes
+			substitute.reset();
+
+			// log completion
+			LOG( "Aggregating task " << *this << " complete" );
 
 			// job is done
 			setState(State::Done);
 
-			// mark as done
+			// inform the family that the job is done
 			if (family) family->markDone(path);
 
 			// notify parent
@@ -971,9 +1079,15 @@ namespace reference {
 			// in all other cases, just print the id
 			out << task.getId() << " : " << task.state;
 
+			// get the total number of dependencies
 			std::size_t numDependencies = task.num_active_dependencies;
+
+			// remove release dependency
+			if (task.state == State::New) numDependencies -= 1;
+
+			// print number of task dependencies
 			if (numDependencies > 0) {
-				std::cout << " waiting for " << numDependencies << " task(s)";
+				out << " waiting for " << numDependencies << " task(s)";
 			}
 
 			return out;
@@ -1092,7 +1206,8 @@ namespace reference {
 		virtual ~Task(){};
 
 		const T& getValue() const {
-			if (substitute) return substitute->getValue();
+			// there must not be a substitute at this time
+			assert_false(substitute);
 			return value;
 		}
 
@@ -1106,8 +1221,22 @@ namespace reference {
 			value = computeAggregate();
 		}
 
-		virtual T computeValue() { return value; };
-		virtual T computeAggregate() { return value; };
+		virtual T computeValue() {
+			// the default does nothing
+			return value;
+		};
+
+		virtual T computeAggregate() {
+			// the default harvests the value of a potential substitute
+			if (substitute) {
+				// get the value
+				value = std::move(substitute->value);
+				// clear link
+				substitute = nullptr;
+			}
+			// done
+			return value;
+		};
 
 		void setSubstitute(TaskPtr<T>&& substitute) {
 			this->substitute = substitute.get();
@@ -1176,32 +1305,23 @@ namespace reference {
 		Process task;
 		Split decompose;
 
-		TaskPtr<R> subTask;
+		Task<R>* subTask;
 
 	public:
 
 		SplitableTask(const Process& c, const Split& d)
-			: Task<R>(), task(c), decompose(d) {
+			: Task<R>(), task(c), decompose(d), subTask(nullptr) {
 			// mark this task as one that can be split
 			TaskBase::setSplitable();
 		}
 
 		R computeValue() override {
-			// if split
-			if (subTask) {
-				// compute sub-task
-				subTask->runInline();
-				return subTask->getValue();
-			}
+			// this should not be called if split
+			assert_false(subTask);
 			return task();
 		}
 
 		void split() override;
-
-		R computeAggregate() override {
-			assert(subTask);
-			return subTask->getValue();
-		}
 
 	};
 
@@ -1228,7 +1348,6 @@ namespace reference {
 			return {};
 		}
 
-		// Split -> Done
 		R computeAggregate() override {
 			return merge(left.getValue(),right.getValue());
 		}
@@ -1247,7 +1366,6 @@ namespace reference {
 			assert_fail() << "Should always be split!";
 		}
 
-		// Split -> Done
 		void computeAggregate() override {
 			// nothing to do
 		}
@@ -1405,20 +1523,19 @@ namespace reference {
 				<< "Actual state: " << this->state;
 
 		// decompose this task
-		subTask = decompose().toTask();
-		assert_true(subTask);
-		assert_true(subTask->state == TaskBase::State::New || subTask->state == TaskBase::State::Done);
+		TaskPtr<R> substitute = decompose().toTask();
+		assert_true(substitute);
+		assert_true(substitute->state == TaskBase::State::New || substitute->state == TaskBase::State::Done);
+
+		// record reference to sub-task
+		subTask = substitute.get();
 
 		// mutate to new task
-		Task<R>::setSubstitute(std::move(subTask));
+		Task<R>::setSubstitute(std::move(substitute));
 
 		// mark as no longer splitable
 		TaskBase::setSplitable(false);
 
-		// also, mark as ready for being processed
-		if (this->state != TaskBase::State::Ready) {
-			TaskBase::setState(TaskBase::State::Ready);
-		}
 	}
 
 
@@ -1656,6 +1773,106 @@ namespace reference {
 		static Worker& getCurrentWorker();
 
 
+		template<typename T>
+		class SimpleUnboundQueue {
+
+			using guard = std::lock_guard<SpinLock>;
+
+			mutable SpinLock lock;
+
+			std::list<T> data;
+
+			std::atomic<std::size_t> num_entries;
+
+		public:
+
+			SimpleUnboundQueue() : lock(), num_entries(0) {}
+
+			void push_front(const T& t) {
+				guard g(lock);
+				data.push_front(t);
+				++num_entries;
+			}
+
+			void push_back(const T& t) {
+				guard g(lock);
+				data.push_back(t);
+				++num_entries;
+			}
+
+		private:
+
+			T pop_front_internal() {
+				if (data.empty()) {
+					return T();
+				}
+				T res(std::move(data.front()));
+				data.pop_front();
+				--num_entries;
+				return res;
+			}
+
+			T pop_back_internal() {
+				if (data.empty()) {
+					return T();
+				}
+				T res(std::move(data.back()));
+				data.pop_back();
+				--num_entries;
+				return res;
+			}
+
+		public:
+
+			T pop_front() {
+				guard g(lock);
+				return pop_front_internal();
+			}
+
+			T try_pop_front() {
+				if (!lock.try_lock()) {
+					return {};
+				}
+				const T& res = pop_front_internal();
+				lock.unlock();
+				return res;
+			}
+
+			T pop_back() {
+				guard g(lock);
+				return pop_back_internal();
+			}
+
+			T try_pop_back() {
+				if (!lock.try_lock()) {
+					return {};
+				}
+				const T& res = pop_back_internal();
+				lock.unlock();
+				return res;
+			}
+
+			bool empty() const {
+				return num_entries == 0;
+			}
+
+			size_t size() const {
+				return num_entries;
+			}
+
+			std::vector<T> getSnapshot() const {
+				guard g(lock);
+				return std::vector<T>(data.begin(),data.end());
+			}
+
+//			friend std::ostream& operator<<(std::ostream& out, const SimpleQueue& queue) {
+//				guard g(queue.lock);
+//				return out << "[" << queue.data << "," << queue.front << " - " << queue.back << "]";
+//			}
+
+		};
+
+
 		template<typename T, size_t Capacity>
 		class SimpleQueue {
 
@@ -1871,12 +2088,17 @@ namespace reference {
 
 			using duration = RuntimePredictor::duration;
 
+			// the targeted maximum queue length
+			// (more like a guideline, may be exceeded due to high demand)
+			enum { max_queue_length = 16 };
+
 			WorkerPool& pool;
 
 			volatile bool alive;
 
 			// list of tasks ready to run
-			SimpleQueue<TaskBasePtr,16> queue;
+//			SimpleQueue<TaskBasePtr,max_queue_length> queue;
+			SimpleUnboundQueue<TaskBasePtr> queue;
 
 			std::thread thread;
 
@@ -2109,7 +2331,10 @@ namespace reference {
 			if (task->isDone()) return;
 
 			// assert that this task is ready to run
-			assert_true(task->isReady());
+//			assert_true(
+//				( task->isSubstituted() && task->getState() >= TaskBase::State::Running) ||
+//				(!task->isSubstituted() && task->isReady())
+//			) << "Task state: " << task->getState() << " - substituted: " << task->isSubstituted();
 
 			LOG_SCHEDULE("Starting task " << task);
 			logProfilerEvent(ProfileLogEntry::createTaskStartedEntry(task->getId()));
@@ -2136,35 +2361,48 @@ namespace reference {
 
 			// only split the task if it is estimated to exceed a threshold
 			if (task->isSplitable() && estimateRuntime(task) > taskTimeThreshold) {
+
+				// split this task
 				task->split();
+
 			}
 		}
 
 		inline void Worker::schedule(TaskBasePtr&& task) {
 
-			// check whether task has unfinished dependencies
-			if (!task->isReady()) return;
+			// assert that task has no unfinished dependencies
+			assert_true(task->isReady());
 
 			// add task to queue
-			LOG_SCHEDULE( "Queue size before: " << queue.size() << "/" << queue.capacity );
+			LOG_SCHEDULE( "Queue size before: " << queue.size() );
 
-			// enqueue task into work queue
-			if (queue.push_back(task)) {
-				// signal available work
-				if (queue.size() > queue.capacity/2) {
-					pool.workAvailable();
-				}
+//			// enqueue task into work queue
+//			if (queue.push_back(task)) {
+//				// signal available work
+//				if (queue.size() > max_queue_length/2) {
+//					pool.workAvailable();
+//				}
+//
+//				// that's it
+//				return;
+//			}
 
-				// that's it
-				return;
+			// add task to queue
+			queue.push_back(task);
+
+			// signal available work
+			if (queue.size() > max_queue_length/2) {
+				pool.workAvailable();
 			}
 
 			// log new queue length
-			LOG_SCHEDULE( "Queue size after: " << queue.size() << "/" << queue.capacity );
+			LOG_SCHEDULE( "Queue size after: " << queue.size() );
 
-
-			// since queue is full, process directly
-			runTask(task);
+//			// log the direct processing
+//			auto action = monitoring::log(monitoring::EventType::RunDirect, task.get());
+//
+//			// since queue is full, process directly
+//			runTask(task);
 		}
 
 
@@ -2177,9 +2415,9 @@ namespace reference {
 				assert_true(t->isReady());
 
 				// if the queue is not full => create more tasks
-				if (queue.size() < (queue.capacity*3)/4) {
+				if (queue.size() < (max_queue_length*3)/4) {
 
-					LOG_SCHEDULE( "Splitting tasks @ queue size: " << queue.size() << "/" << queue.capacity );
+					LOG_SCHEDULE( "Splitting tasks @ queue size: " << queue.size() );
 
 					// split task
 					splitTask(t);
@@ -2227,9 +2465,11 @@ namespace reference {
 
 		inline std::ostream& operator<<(std::ostream& out, const Event& e) {
 			switch(e.type) {
-			case EventType::Run:    return out << "Running task     " << *e.task;
-			case EventType::Split:  return out << "Splitting task   " << *e.task;
-			case EventType::Wait:   return out << "Waiting for task " << *e.task;
+			case EventType::Run:    		return out << "Running task            " << *e.task;
+			case EventType::RunDirect:  	return out << "Running direct task     " << *e.task;
+			case EventType::Split:  		return out << "Splitting task          " << *e.task;
+			case EventType::Wait:   		return out << "Waiting for task        " << *e.task;
+			case EventType::DependencyWait: return out << "Waiting for dependency: " << e.taskId;
 			}
 			return out << "Unknown Event";
 		}
@@ -2247,60 +2487,48 @@ namespace reference {
 		setState(State::Blocked);
 
 		// split tasks by default up to a given level
-//		// TODO: make this depth hardware dependent
-//		if (!isOrphan() && isSplitable() && getDepth() < 4) {
-//
-//			// split this task
-//			split();
-//
-//			// now it should be ready
-//			assert_true(isReady());
-//		}
+		// TODO: make this depth hardware dependent
+		if (!isOrphan() && isSplitable() && getDepth() < 6) {
+
+			// split this task
+			split();
+
+			// if the task is done, we are fine (some split end up in completed tasks)
+			if (isDone()) return;
+		}
 
 		// release dummy-dependency to get task started
 		dependencyDone();
 	}
 
 	void TaskBase::dependencyDone() {
-		// decrease number of active dependencies
+
+		// if there is a substitute, ignore those dependency release messages
+		// (a split task's former dependencies got invalidated by the split)
+		if (substituted) return;
+
+		// make sure that this is never reached when there is no dependency left
 		assert_gt(num_active_dependencies, 0);
 
 		// decrease the number of active dependencies
 		if (num_active_dependencies.fetch_sub(1) != 1) return;
 
-		// this was the last dependency => enqueue task if blocked
-		if (state != State::Blocked) return;
+		// at this point the state must not be new
+		assert_ne(State::New, state)
+			<< "A new task must not reach a state where its last dependency is released.";
 
+		// actually, every task here must be in blocked state
+		assert_eq(State::Blocked, state);
+
+		// update the state to ready
+		// (this can only be reached by one thread)
+		setState(State::Ready);
 
 		// TODO: actively distribute initial tasks, by assigning
 		// them to different workers;
 
-		// enqueue task
+		// enqueue task to be processed
 		runtime::getCurrentWorker().schedule(this->shared_from_this());
-	}
-
-	inline bool TaskBase::isReady() {
-		// should only be called if blocked or ready
-		assert_true(state == State::Blocked || state == State::Ready) << "Actual State:" << state;
-
-		// if substituted, check substitute
-		if (substitute) {
-			return substitute->isReady();
-		}
-
-		// if already identified as ready before, that's it
-		if (state == State::Ready) return true;
-
-		// check if there are alive dependencies
-		if (num_active_dependencies != 0) return false;
-
-		LOG_TASKS( "Preconditions satisfied, task ready: " << *this );
-
-		// Update state from new to ready
-		setState(State::Ready);
-
-		// return result
-		return true;
 	}
 
 	inline void TaskBase::wait() {
@@ -2312,12 +2540,7 @@ namespace reference {
 		// check that this task has been started before
 		assert_lt(State::New,state);
 
-		// forward call to substitute, if present
-		if (substitute) {
-			substitute->wait();
-			return;
-		}
-
+		// wait until this task is finished
 		while(!isDone()) {
 			// make some progress
 			runtime::getCurrentWorker().schedule_step();
@@ -2325,6 +2548,9 @@ namespace reference {
 	}
 
 	inline void task_reference::wait() const {
+		// log this event
+		auto action = monitoring::log(monitoring::EventType::DependencyWait, TaskID(family->getId(),path));
+
 		// keep narrowing scope until done (implicit in isDone)
 		while(!isDone()) {
 			runtime::getCurrentWorker().schedule_step();
@@ -2339,8 +2565,10 @@ namespace reference {
 
 
 void __dumpRuntimeState() {
+	std::cout << "\n ------------------------- Runtime State Dump -------------------------\n";
 	allscale::api::core::impl::reference::monitoring::ThreadState::dumpStates(std::cout);
 	allscale::api::core::impl::reference::runtime::WorkerPool::getInstance().dumpState(std::cout);
+	std::cout << "\n ----------------------------------------------------------------------\n";
 }
 
 

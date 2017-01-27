@@ -134,6 +134,9 @@ namespace user {
 		const int N = 10000;
 		const bool enable_log = false;
 
+//		const int N = 10;
+//		const bool enable_log = true;
+
 		std::mutex outLock;
 		auto log = [&](const std::string& str, int i) {
 			if (!enable_log) return;

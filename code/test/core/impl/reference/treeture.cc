@@ -158,7 +158,7 @@ namespace reference {
 
 	// --- benchmark ---
 
-	const int N = 32;
+	const int N = 16;
 
 	template<int x>
 	struct c_fib {
