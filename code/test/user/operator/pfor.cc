@@ -341,6 +341,79 @@ namespace user {
 		}
 	}
 
+	// --- stencil variants --.
+
+	const int N = 10000;
+	const int T = 100;
+
+	TEST(Pfor, Stencil_Barrier) {
+
+		int* A = new int[N];
+		int* B = new int[N];
+
+		// start with an initialization
+		pfor(0,N,[A,B](int i){
+			A[i] = 0;
+			B[i] = -1;
+		});
+
+		// run the time loop
+	    for(int t=0; t<T; ++t) {
+	        pfor(1,N-1,[A,B,t](int i) {
+
+	        	if (i != 1)  EXPECT_EQ(t,A[i-1]);
+	        	EXPECT_EQ(t,A[i]);
+	        	if (i != N-2) EXPECT_EQ(t,A[i+1]);
+
+	        	EXPECT_EQ(t-1,B[i]);
+
+	        	B[i]=t+1;
+
+	        });
+	        std::swap(A,B);
+	    }
+
+	    // check the final state
+	    pfor(1,N-1,[A](int i){
+	    	EXPECT_EQ(T,A[i]);
+	    });
+
+	}
+
+	TEST(Pfor, Stencil_Fine_Grained) {
+
+		int* A = new int[N];
+		int* B = new int[N];
+
+		// start with an initialization
+		auto ref = pfor(0,N,[A,B](int i){
+			A[i] = 0;
+			B[i] = -1;
+		});
+
+		// run the time loop
+	    for(int t=0; t<T; ++t) {
+	        ref = pfor(1,N-1,[A,B,t](int i) {
+
+	        	if (i != 1)  EXPECT_EQ(t,A[i-1]);
+	        	EXPECT_EQ(t,A[i]);
+	        	if (i != N-2) EXPECT_EQ(t,A[i+1]);
+
+	        	EXPECT_EQ(t-1,B[i]);
+
+	        	B[i]=t+1;
+
+	        },neighborhood_sync(ref));
+	        std::swap(A,B);
+	    }
+
+	    // check the final state
+	    pfor(1,N-1,[A](int i){
+	    	EXPECT_EQ(T,A[i]);
+	    },neighborhood_sync(ref));
+
+	}
+
 	TEST(Range,GrowAndShrink) {
 
 		using range = detail::range<int>;

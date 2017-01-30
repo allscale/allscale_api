@@ -169,14 +169,6 @@ namespace reference {
 
 			~ThreadState() {
 				assert_true(eventStack.empty());
-
-//				guard g(getStateLock());
-//				auto& list = getStates();
-//				auto it = std::find(list.begin(),list.end(),this);
-//				if (it != list.end()) {
-//					std::swap(*it,list.back());
-//					list.pop_back();
-//				}
 			}
 
 			void pushEvent(const Event& e) {
@@ -368,7 +360,9 @@ namespace reference {
 	 */
 	class TaskFamily {
 
-		using DependencyManager = TaskDependencyManager<12>;
+		// TODO: make task dependency manager depth target system dependent
+
+		using DependencyManager = TaskDependencyManager<6>;
 
 		// the unique ID of this family (for debugging)
 		std::size_t id;
@@ -532,6 +526,10 @@ namespace reference {
 		// the position of this task within its family
 		TaskPath path;
 
+		// A cached version of the task ID. This id
+		// is only valid if this task is not an orphan
+		TaskID id;
+
 		// the current state of this task
 		std::atomic<State> state;
 
@@ -605,8 +603,7 @@ namespace reference {
 		}
 
 		TaskID getId() const {
-			auto familyId = (family) ? family->getId() : 0;
-			return TaskID(familyId,path);
+			return id;
 		}
 
 		bool isOrphan() const {
@@ -666,6 +663,9 @@ namespace reference {
 			// join the family
 			this->family = family;
 			this->path = path;
+
+			// update the id
+			this->id = TaskID(family->getId(),path);
 
 			// mark as complete, if already complete
 			if(isDone()) family->markDone(path);
@@ -2090,7 +2090,7 @@ namespace reference {
 
 			// the targeted maximum queue length
 			// (more like a guideline, may be exceeded due to high demand)
-			enum { max_queue_length = 16 };
+			enum { max_queue_length = 8 };
 
 			WorkerPool& pool;
 
@@ -2330,26 +2330,35 @@ namespace reference {
 			// the splitting of a task may provide a done substitute => skip those
 			if (task->isDone()) return;
 
-			// assert that this task is ready to run
-//			assert_true(
-//				( task->isSubstituted() && task->getState() >= TaskBase::State::Running) ||
-//				(!task->isSubstituted() && task->isReady())
-//			) << "Task state: " << task->getState() << " - substituted: " << task->isSubstituted();
-
 			LOG_SCHEDULE("Starting task " << task);
-			logProfilerEvent(ProfileLogEntry::createTaskStartedEntry(task->getId()));
 
 			if (task->isSplit()) {
 				task->run();
 			} else {
-				// take the time to make predictions
-				auto start = std::chrono::high_resolution_clock::now();
-				task->run();
-				auto time = std::chrono::high_resolution_clock::now() - start;
-				predictions.registerTime(task->getDepth(),time);
+
+				logProfilerEvent(ProfileLogEntry::createTaskStartedEntry(task->getId()));
+
+				// check whether this run needs to be sampled
+				auto level = task->getDepth();
+				if (level == 0) {
+
+					// level 0 does not need to be recorded (orphans)
+					task->run();
+
+				} else {
+
+					// take the time to make predictions
+					auto start = RuntimePredictor::clock::now();
+					task->run();
+					auto time = RuntimePredictor::clock::now() - start;
+					predictions.registerTime(level,time);
+
+				}
+
+				logProfilerEvent(ProfileLogEntry::createTaskEndedEntry(task->getId()));
+
 			}
 
-			logProfilerEvent(ProfileLogEntry::createTaskEndedEntry(task->getId()));
 			LOG_SCHEDULE("Finished task " << task);
 		}
 
@@ -2357,10 +2366,10 @@ namespace reference {
 			using namespace std::chrono_literals;
 
 			// the threshold for estimated task to be split
-			static auto taskTimeThreshold = 1ms;
+			static const auto taskTimeThreshold = CycleCount(3*1000*1000);
 
 			// only split the task if it is estimated to exceed a threshold
-			if (task->isSplitable() && estimateRuntime(task) > taskTimeThreshold) {
+			if (task->isSplitable() && (task->getDepth() == 0 || estimateRuntime(task) > taskTimeThreshold)) {
 
 				// split this task
 				task->split();
@@ -2386,6 +2395,19 @@ namespace reference {
 //				// that's it
 //				return;
 //			}
+
+			// if the queue is full, run task directly
+			//    NOTE: to avoid deadlocks due to invalid introduced dependencies
+			//          only non-split tasks may be processed directly
+			if (queue.size() > max_queue_length && !task->isSplit()) {
+
+				// run task directly, avoiding to build up to long queues
+				runTask(task);
+
+				// done
+				return;
+			}
+
 
 			// add task to queue
 			queue.push_back(task);
@@ -2488,7 +2510,7 @@ namespace reference {
 
 		// split tasks by default up to a given level
 		// TODO: make this depth hardware dependent
-		if (!isOrphan() && isSplitable() && getDepth() < 6) {
+		if (!isOrphan() && isSplitable() && getDepth() < 4) {
 
 			// split this task
 			split();
@@ -2527,8 +2549,28 @@ namespace reference {
 		// TODO: actively distribute initial tasks, by assigning
 		// them to different workers;
 
-		// enqueue task to be processed
-		runtime::getCurrentWorker().schedule(this->shared_from_this());
+		// TODO: do the following only for top-level tasks!!
+		if (getDepth() < 4) {
+
+			// actively select the worker to issue the task to
+			auto& pool = runtime::WorkerPool::getInstance();
+			int num_workers = pool.getNumWorkers();
+
+			auto path = getTaskPath().getPath();
+			auto depth = getDepth();
+
+			auto trgWorker = (depth==0) ? 0 : (path * num_workers) / (1 << depth);
+
+			// submit this task to the selected worker
+			pool.getWorker(trgWorker).schedule(this->shared_from_this());
+
+		} else {
+
+			// enqueue task to be processed by local worker
+			runtime::getCurrentWorker().schedule(this->shared_from_this());
+
+		}
+
 	}
 
 	inline void TaskBase::wait() {
@@ -2549,7 +2591,7 @@ namespace reference {
 
 	inline void task_reference::wait() const {
 		// log this event
-		auto action = monitoring::log(monitoring::EventType::DependencyWait, TaskID(family->getId(),path));
+		// auto action = monitoring::log(monitoring::EventType::DependencyWait, TaskID(family->getId(),path));
 
 		// keep narrowing scope until done (implicit in isDone)
 		while(!isDone()) {

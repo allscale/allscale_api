@@ -6,11 +6,93 @@
 #include <chrono>
 #include <ostream>
 
+#include <x86intrin.h>
+
 namespace allscale {
 namespace api {
 namespace core {
 namespace impl {
 namespace reference {
+
+	/**
+	 * A type to represent a type save cycle count.
+	 */
+	class CycleCount {
+
+		using time_t = unsigned long long;
+
+		time_t value;
+
+	public:
+
+		CycleCount() {}
+
+		CycleCount(time_t value) : value(value) {}
+
+		bool operator==(const CycleCount& other) const {
+			return value == other.value;
+		}
+
+		bool operator!=(const CycleCount& other) const {
+			return value != other.value;
+		}
+
+		bool operator<(const CycleCount& other) const {
+			return value < other.value;
+		}
+
+		bool operator>(const CycleCount& other) const {
+			return value > other.value;
+		}
+
+		CycleCount operator+(const CycleCount& other) const {
+			return value + other.value;
+		}
+
+		CycleCount operator-(const CycleCount& other) const {
+			return value - other.value;
+		}
+
+		time_t count() const {
+			return value;
+		}
+
+		static CycleCount zero() {
+			return 0;
+		}
+
+		static CycleCount max() {
+			return std::numeric_limits<time_t>::max();
+		}
+
+	};
+
+	CycleCount operator*(long unsigned int f, const CycleCount& count) {
+		return f * count.count();
+	}
+
+	CycleCount operator*(const CycleCount& count, long unsigned int f) {
+		return count.count() * f;
+	}
+
+	CycleCount operator/(const CycleCount& count, long unsigned int div) {
+		return count.count() / div;
+	}
+
+	/**
+	 * A cycle clock for the time prediction.
+	 */
+	struct CycleClock {
+
+		using time_point = CycleCount;
+		using duration = CycleCount;
+
+		static time_point now() {
+			return __rdtsc();
+		}
+
+	};
+
 
 	/**
 	 * A utility to estimate the execution time of tasks on different
@@ -20,7 +102,7 @@ namespace reference {
 
 	public:
 
-		using clock = std::chrono::high_resolution_clock;
+		using clock = CycleClock;
 
 		using duration = clock::duration;
 
@@ -97,8 +179,8 @@ namespace reference {
 		friend std::ostream& operator<<(std::ostream& out, const RuntimePredictor& pred) {
 			out << "Predictions:\n";
 			for(int i = 0; i<MAX_LEVELS; i++) {
-				auto us = std::chrono::duration_cast<std::chrono::microseconds>(pred.times[i]).count();
-				out << "\t" << i << ": " << us << "us\n";
+				auto us = pred.times[i].count();
+				out << "\t" << i << ": " << us << "\n";
 				if (us == 0) return out;
 			}
 			return out;
