@@ -2222,7 +2222,7 @@ namespace reference {
 			// if the queue is full, run task directly
 			//    NOTE: to avoid deadlocks due to invalid introduced dependencies
 			//          only non-split tasks may be processed directly
-			if (queue.size() > max_queue_length && !task->isSplit()) {
+			if (pool.getNumWorkers() == 1 || (queue.size() > max_queue_length && !task->isSplit())) {
 
 				// run task directly, avoiding to build up to long queues
 				runTask(task);
@@ -2279,7 +2279,7 @@ namespace reference {
 			}
 
 			// try to steal a task from another queue
-			if (TaskBasePtr t = other.queue.try_pop_front()) {
+			if (TaskBasePtr t = other.queue.try_pop_back()) {
 
 				// log creation of worker event
 				logProfilerEvent(ProfileLogEntry::createTaskStolenEntry(t->getId()));
@@ -2381,7 +2381,7 @@ namespace reference {
 		// them to different workers;
 
 		// TODO: do the following only for top-level tasks!!
-		if (getDepth() < 4) {
+		if (!isOrphan() && getDepth() < 4) {
 
 			// actively select the worker to issue the task to
 			auto& pool = runtime::WorkerPool::getInstance();
