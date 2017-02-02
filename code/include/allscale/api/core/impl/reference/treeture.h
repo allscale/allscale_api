@@ -13,7 +13,6 @@
 #include <pthread.h>
 
 #include "allscale/utils/assert.h"
-#include "allscale/utils/printer/arrays.h"
 
 #include "allscale/api/core/impl/reference/lock.h"
 #include "allscale/api/core/impl/reference/profiling.h"

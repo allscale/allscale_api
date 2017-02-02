@@ -3,6 +3,11 @@
 #include <atomic>
 #include <list>
 #include <mutex>
+#include <string>
+#include <ostream>
+
+#include "allscale/utils/printer/arrays.h"
+#include "allscale/api/core/impl/reference/lock.h"
 
 namespace allscale {
 namespace api {
