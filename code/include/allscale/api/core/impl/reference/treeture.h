@@ -56,7 +56,7 @@ namespace reference {
 	/**
 	 * A class to model task dependencies
 	 */
-	using dependencies = std::vector<task_reference>;
+	class dependencies;
 
 
 
@@ -406,8 +406,9 @@ namespace reference {
 			dependencies.markComplete(x);
 		}
 
-	private:
-
+		/**
+		 * A family ID generator.
+		 */
 		static unsigned getNextID() {
 			static std::atomic<int> counter(0);
 			return (DEBUG || DEBUG_SCHEDULE || DEBUG_TASKS || MONITORING_ENABLED || PROFILING_ENABLED) ? ++counter : 0;
@@ -481,6 +482,66 @@ namespace reference {
 
 		const TaskPath& getPath() const {
 			return path;
+		}
+
+	};
+
+
+	/**
+	 * A class to aggregate task dependencies.
+	 */
+	class dependencies {
+
+		using list_type = std::vector<task_reference>;
+
+		list_type* list;
+
+	public:
+
+		dependencies() : list(nullptr) {}
+
+		dependencies(std::vector<task_reference>&& deps)
+			: list(new list_type(std::move(deps))) {}
+
+		dependencies(const dependencies&) = delete;
+
+		dependencies(dependencies&& other) : list(other.list){
+			other.list = nullptr;
+		}
+
+		~dependencies() {
+			delete list;
+		}
+
+		dependencies& operator=(const dependencies&) = delete;
+
+		dependencies& operator=(dependencies&& other) {
+			if (list == other.list) return *this;
+			delete list;
+			list = other.list;
+			other.list = nullptr;
+			return *this;
+		}
+
+		bool empty() const {
+			return list == nullptr;
+		}
+
+		std::size_t size() const {
+			return (list) ? list->size() : 0;
+		}
+
+		void add(const task_reference& ref) {
+			if (!list) list = new list_type();
+			list->push_back(ref);
+		}
+
+		const task_reference* begin() const {
+			return (list) ? &list->front() : nullptr;
+		}
+
+		const task_reference* end() const {
+			return (list) ? (&list->back()) + 1 : nullptr;
 		}
 
 	};
@@ -562,7 +623,7 @@ namespace reference {
 	public:
 
 		TaskBase(bool done = true)
-			: family(), path(TaskPath::root()),
+			: family(), path(TaskPath::root()), id(TaskFamily::getNextID()),
 			  state(done ? State::Done : State::New),
 			  // one initial control flow dependency, released by treeture release
 			  num_active_dependencies(1),
@@ -574,7 +635,7 @@ namespace reference {
 
 		TaskBase(TaskBasePtr&& left, TaskBasePtr&& right, bool parallel)
 			: family(),
-			  path(TaskPath::root()),
+			  path(TaskPath::root()), id(TaskFamily::getNextID()),
 			  state(State::New),
 			  // one initial control flow dependency, released by treeture release
 			  num_active_dependencies(1),
@@ -1605,12 +1666,12 @@ namespace reference {
 	template<typename ... Rest>
 	dependencies after(const task_reference& r, const Rest& ... rest) {
 		auto res = after(std::move(rest)...);
-		res.push_back(r);
+		res.add(r);
 		return res;
 	}
 
-	dependencies after(const std::vector<task_reference>& refs) {
-		return refs;
+	dependencies after(std::vector<task_reference>&& refs) {
+		return std::move(refs);
 	}
 
 

@@ -119,7 +119,7 @@ namespace core {
 		dependencies(const impl::sequential::task_reference&) {}
 
 		dependencies(const impl::reference::task_reference& dep) {
-			par_deps.push_back(dep);
+			par_deps.add(dep);
 		}
 
 		dependencies(dependencies&& other) = default;
@@ -134,7 +134,7 @@ namespace core {
 		}
 
 		dependencies& add(const impl::reference::task_reference& dep) {
-			par_deps.push_back(dep);
+			par_deps.add(dep);
 			return *this;
 		}
 
