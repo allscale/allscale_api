@@ -378,6 +378,8 @@ namespace user {
 	    	EXPECT_EQ(T,A[i]);
 	    });
 
+	    delete [] A;
+		delete [] B;
 	}
 
 	TEST(Pfor, Stencil_Fine_Grained) {
@@ -412,6 +414,8 @@ namespace user {
 	    	EXPECT_EQ(T,A[i]);
 	    },neighborhood_sync(ref));
 
+	    delete [] A;
+	    delete [] B;
 	}
 
 	TEST(Range,GrowAndShrink) {

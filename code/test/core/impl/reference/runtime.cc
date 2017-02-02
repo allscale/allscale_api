@@ -291,10 +291,6 @@ namespace reference {
 				}
 			);
 
-			EXPECT_EQ(0,x);
-			EXPECT_EQ(0,y);
-			EXPECT_EQ(0,z);
-
 			t.get();
 
 			if (x == 0) {
@@ -507,7 +503,7 @@ namespace reference {
 		EXPECT_EQ(144, fib(12));
 		EXPECT_EQ(6765, fib(20));
 
-		EXPECT_EQ(STRESS_RES, fib(STRESS_N));
+//		EXPECT_EQ(STRESS_RES, fib(STRESS_N));
 
 	}
 

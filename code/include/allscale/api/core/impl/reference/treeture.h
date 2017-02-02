@@ -535,7 +535,7 @@ namespace reference {
 
 		// the number of tasks still active before this tasks can be released
 		// + 1 dependency for the release of tasks (tasks are released once this counter goes to 0)
-		std::atomic<std::size_t> num_active_dependencies;
+		std::atomic<int> num_active_dependencies;
 
 		// indicates whether this task can be split
 		bool splitable;
@@ -2525,15 +2525,28 @@ namespace reference {
 
 	void TaskBase::dependencyDone() {
 
-		// if there is a substitute, ignore those dependency release messages
-		// (a split task's former dependencies got invalidated by the split)
-		if (substituted) return;
-
-		// make sure that this is never reached when there is no dependency left
-		assert_gt(num_active_dependencies, 0);
 
 		// decrease the number of active dependencies
-		if (num_active_dependencies.fetch_sub(1) != 1) return;
+		int oldValue = num_active_dependencies.fetch_sub(1);
+
+		// react based on old value
+		if (oldValue < 0) {
+
+			// this task was previously substituted, thus no dependencies are present
+			assert_true(substituted);
+
+			// reset number of dependencies counter
+			num_active_dependencies = 0;
+
+			// done
+			return;
+		}
+
+		// if the old value was not 1, the new one is not 0, thus there are dependencies left
+		if (oldValue != 1) return;
+
+		// make sure that this is never reached when there is a dependency left
+		assert_eq(num_active_dependencies, 0);
 
 		// at this point the state must not be new
 		assert_ne(State::New, state)
