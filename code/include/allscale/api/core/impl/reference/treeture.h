@@ -1931,7 +1931,8 @@ namespace reference {
 			volatile bool alive;
 
 			// list of tasks ready to run
-			UnboundQueue<TaskBasePtr> queue;
+			OptimisticUnboundQueue<TaskBasePtr> queue;
+//			UnboundQueue<TaskBasePtr> queue;
 
 			std::thread thread;
 
