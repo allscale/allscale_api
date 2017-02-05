@@ -449,7 +449,7 @@ namespace user {
 
 			static std::pair<rng,rng> split(const rng& r) {
 
-				const detail::volume<std::array<Iter,dims>> volume;
+				__unused const detail::volume<std::array<Iter,dims>> volume;
 				const detail::volume<Iter> distance;
 
 				const auto& begin = r.begin();
