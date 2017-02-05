@@ -108,6 +108,7 @@ namespace user {
 		testIntegral<uint32_t>();
 		testIntegral<uint64_t>();
 
+		testIntegral<std::size_t>();
 	}
 
 	TEST(PFor,Container) {
