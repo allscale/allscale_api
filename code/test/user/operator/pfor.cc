@@ -58,6 +58,58 @@ namespace user {
 
 	}
 
+	template<typename Iter>
+	void testIntegral() {
+		const int N = 100;
+
+		std::vector<int> data(N);
+		for(std::size_t i = 0; i<N; ++i) {
+			data[i] = 0;
+		}
+
+		for(std::size_t i = 0; i<N; ++i) {
+			EXPECT_EQ(0,data[i]);
+		}
+
+		pfor(Iter(0),Iter(100),[&](Iter i){
+			data[i] = 1;
+		});
+
+		for(std::size_t i = 0; i<N; ++i) {
+			EXPECT_EQ(1,data[i]);
+		}
+	}
+
+	TEST(PFor,Integrals) {
+
+		testIntegral<char>();
+		testIntegral<short>();
+		testIntegral<int>();
+		testIntegral<long>();
+		testIntegral<long long>();
+
+		testIntegral<unsigned char>();
+		testIntegral<unsigned short>();
+		testIntegral<unsigned int>();
+		testIntegral<unsigned long>();
+		testIntegral<unsigned long long>();
+
+		testIntegral<char16_t>();
+		testIntegral<char32_t>();
+		testIntegral<wchar_t>();
+
+		testIntegral<int8_t>();
+		testIntegral<int16_t>();
+		testIntegral<int32_t>();
+		testIntegral<int64_t>();
+
+		testIntegral<uint8_t>();
+		testIntegral<uint16_t>();
+		testIntegral<uint32_t>();
+		testIntegral<uint64_t>();
+
+	}
+
 	TEST(PFor,Container) {
 		const int N = 200;
 

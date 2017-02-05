@@ -237,23 +237,31 @@ namespace user {
 
 		// -- distances between begin and end of iterators --
 
-		template<typename Iter>
-		size_t volume(const Iter& a, const Iter& b) {
-			return std::distance(a,b);
-		}
+		template<typename Iter,typename filter = bool>
+		struct volume {
+			size_t operator()(const Iter& a, const Iter& b) const {
+				return std::distance(a,b);
+			}
+		};
 
-		size_t volume(int a, int b) {
-			return (a < b) ? b-a : 0;
-		}
+		template<typename Int>
+		struct volume<Int,std::enable_if_t<std::template is_integral<Int>::value,bool>> {
+			size_t operator()(Int a, Int b) const {
+				return (a < b) ? b-a : 0;
+			}
+		};
 
 		template<typename Iter,size_t dims>
-		size_t volume(const std::array<Iter,dims>& a, const std::array<Iter,dims>& b) {
-			size_t res = 1;
-			for(size_t i = 0; i<dims; i++) {
-				res *= volume(a[i],b[i]);
+		struct volume<std::array<Iter,dims>> {
+			size_t operator()(const std::array<Iter,dims>& a, const std::array<Iter,dims>& b) const {
+				volume<Iter> inner;
+				size_t res = 1;
+				for(size_t i = 0; i<dims; i++) {
+					res *= inner(a[i],b[i]);
+				}
+				return res;
 			}
-			return res;
-		}
+		};
 
 
 		// -- coverage --
@@ -373,7 +381,7 @@ namespace user {
 			}
 
 			size_t size() const {
-				return detail::volume(_begin,_end);
+				return detail::volume<Iter>()(_begin,_end);
 			}
 
 			bool empty() const {
@@ -441,14 +449,17 @@ namespace user {
 
 			static std::pair<rng,rng> split(const rng& r) {
 
+				const detail::volume<std::array<Iter,dims>> volume;
+				const detail::volume<Iter> distance;
+
 				const auto& begin = r.begin();
 				const auto& end = r.end();
 
 				// get the longest dimension
 				size_t maxDim = 0;
-				size_t maxDist = detail::volume(begin[0],end[0]);
+				size_t maxDist = distance(begin[0],end[0]);
 				for(size_t i = 1; i<dims;++i) {
-					size_t curDist = detail::volume(begin[i],end[i]);
+					size_t curDist = distance(begin[i],end[i]);
 					if (curDist > maxDist) {
 						maxDim = i;
 						maxDist = curDist;
