@@ -305,6 +305,58 @@ namespace utils {
 
 	}
 
+	TEST(Intervals,Invert) {
+
+		Intervals i;
+		EXPECT_EQ("{}",toString(i));
+
+		i.invert();
+		EXPECT_EQ("{[0-18446744073709551615]}",toString(i));
+
+
+		i = Intervals::fromRange(100,200);
+		EXPECT_EQ("{[100-200]}",toString(i));
+
+		i.invert();
+		EXPECT_EQ("{[0-100],[200-18446744073709551615]}",toString(i));
+
+
+		i.invert();
+		EXPECT_EQ("{[100-200]}",toString(i));
+
+
+		i.add(300,400);
+		EXPECT_EQ("{[100-200],[300-400]}",toString(i));
+
+		i.invert();
+		EXPECT_EQ("{[0-100],[200-300],[400-18446744073709551615]}",toString(i));
+
+		i.invert();
+		EXPECT_EQ("{[100-200],[300-400]}",toString(i));
+
+	}
+
+	TEST(Intervals,Retain) {
+
+		Intervals a;
+		a.add(100,200);
+		a.add(300,400);
+
+		Intervals b;
+		b.add(150,250);
+
+
+		EXPECT_EQ("{[100-200],[300-400]}",toString(a));
+		EXPECT_EQ("{[150-250]}",toString(b));
+
+		Intervals c = a;
+		c.retain(b);
+		EXPECT_EQ("{[150-200]}",toString(c));
+
+
+
+	}
+
 	TEST(LargeArray, Basic) {
 
 		// create a large array
@@ -426,6 +478,76 @@ namespace utils {
 			// release old section
 			a.free(low,hig);
 		}
+
+	}
+
+
+	struct InstanceCounted {
+
+		static int num_instances;
+
+		InstanceCounted() {
+			num_instances++;
+		}
+
+		~InstanceCounted() {
+			num_instances--;
+		}
+
+	};
+
+	int InstanceCounted::num_instances = 0;
+
+	TEST(LargeArray,CtorsAndDtors) {
+
+		// ----- test the Instance Counted class --------
+
+		// start with assuming that there are no instances
+		EXPECT_EQ(0,InstanceCounted::num_instances);
+
+		// check that the constructor works as expected
+		{
+			InstanceCounted a;
+			EXPECT_EQ(1,InstanceCounted::num_instances);
+		}
+
+		// also check that the destructor works as expected
+		EXPECT_EQ(0,InstanceCounted::num_instances);
+
+
+		// ---------- test the Large Array ---------------
+
+		{
+			// create a large array instance
+			LargeArray<InstanceCounted> a(10000);
+
+			// so far, there should not be any instances alive
+			EXPECT_EQ(0,InstanceCounted::num_instances);
+
+			// allocate some elements
+			a.allocate(100,200);
+
+			// now there should be 100 instances
+			EXPECT_EQ(100,InstanceCounted::num_instances);
+
+			// free parts of the allocated elements
+			a.free(150,250);
+
+			// now there should be 50 instances left
+			EXPECT_EQ(50,InstanceCounted::num_instances);
+
+			// re-allocated an overlapping area
+			a.allocate(120,160);
+
+			// now there should be a few more active instances
+			EXPECT_EQ(60,InstanceCounted::num_instances);
+
+
+			// the destructor of the array should kill the rest
+		}
+
+		// there should be none left now
+		EXPECT_EQ(0,InstanceCounted::num_instances);
 
 	}
 

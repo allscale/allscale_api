@@ -34,6 +34,16 @@ namespace utils {
 		public:
 
 			/**
+			 * A factory function creating a list of intervals consisting of a single,
+			 * closed range [begin,end).
+			 */
+			static Intervals fromRange(std::size_t begin, std::size_t end) {
+				Intervals res;
+				res.add(begin,end);
+				return res;
+			}
+
+			/**
 			 * Adds a new interval to the covered intervals.
 			 * @param from the start (inclusive) of the interval to be added
 			 * @param to the end (exclusive) of the interval to be added
@@ -194,6 +204,58 @@ namespace utils {
 			}
 
 			/**
+			 * Removes the given intervals from the covered range.
+			 * @param other the intervals to be removed
+			 */
+			void remove(const Intervals& other) {
+				// iteratively remove the elements of the given interval
+				for(std::size_t i =0; i<other.data.size(); i+=2) {
+					remove(other.data[i],other.data[i+1]);
+				}
+			}
+
+			/**
+			 * Inverts the range covered by this instance.
+			 */
+			void invert() {
+
+				// add new start and end value
+				data.insert(data.begin(), std::numeric_limits<std::size_t>::min());
+				data.insert(data.end(), std::numeric_limits<std::size_t>::max());
+
+				// remove first pair if it is empty
+				if (data[0] == data[1]) {
+					for(std::size_t i = 0; i<data.size()-2; ++i) {
+						data[i] = data[i+2];
+					}
+					data.pop_back();
+					data.pop_back();
+				}
+
+				// if the list is empty now, we are done
+				if (data.empty()) return;
+
+				// remove the last pair if it is empty
+				if (data[data.size()-2] == data[data.size()-1]) {
+					data.pop_back();
+					data.pop_back();
+				}
+
+			}
+
+
+			/**
+			 * Removes all elements of this range that are not covered by the given range.
+			 * @param other the range of entries to be retained
+			 */
+			void retain(const Intervals& other) {
+				invert();
+				auto tmp = other;
+				tmp.remove(*this);
+				swap(tmp);
+			}
+
+			/**
 			 * Tests whether the given point is covered by this intervals.
 			 */
 			bool covers(std::size_t idx) const {
@@ -235,6 +297,22 @@ namespace utils {
 			}
 
 			/**
+			 * Invokes the given function for each index in the covered intervals.
+			 */
+			template<typename Fun>
+			void forEach(const Fun& fun) const {
+				// iterate through the individual intervals
+				for(std::size_t i =0; i<data.size(); i+=2) {
+					// iterate through the elements of this interval
+					auto begin = data[i];
+					auto end = data[i+1];
+					for(std::size_t j = begin; j < end; ++j) {
+						fun(j);
+					}
+				}
+			}
+
+			/**
 			 * Enables the printing of the list of intervals.
 			 */
 			friend std::ostream& operator<<(std::ostream& out, const Intervals& cur) {
@@ -257,9 +335,6 @@ namespace utils {
 	 */
 	template<typename T>
 	class LargeArray {
-
-		// check that the element type is a trivial type
-		static_assert(std::is_trivial<T>::value, "Current implementation of LargeArray only supports trivial element types.");
 
 		/**
 		 * A pointer to the first element of the array.
@@ -308,6 +383,14 @@ namespace utils {
 		 * Destroys this array.
 		 */
 		~LargeArray() {
+
+			// call the destructor for the remaining objects (if required)
+			if (!std::is_trivially_destructible<T>::value) {
+				active_ranges.forEach([this](std::size_t i){
+					data[i].~T();
+				});
+			}
+
 			// free the data
 			if (data != nullptr) munmap(data,sizeof(T)*size);
 		}
@@ -338,8 +421,24 @@ namespace utils {
 			// check for emptiness
 			if (start >= end) return;
 			assert_le(end, size) << "Invalid range " << start << " - " << end << " for array of size " << size;
+
+
+			// invoke the constructor for the released objects (if required)
+			if (!std::is_trivially_constructible<T>::value) {
+
+				// compute the ranges of new elements
+				auto newElements = detail::Intervals::fromRange(start,end);
+				newElements.remove(active_ranges);
+
+
+				// initialize the newly allocated elements
+				newElements.forEach([this](std::size_t i){
+					new (&data[i]) T();
+				});
+			}
+
+			// add to active range
 			active_ranges.add(start,end);
-			// TODO: record allocated range
 		}
 
 		/**
@@ -351,6 +450,20 @@ namespace utils {
 			// check for emptiness
 			if (start >= end) return;
 			assert_le(end, size) << "Invalid range " << start << " - " << end << " for array of size " << size;
+
+			// invoke the destructor for the released objects (if required)
+			if (!std::is_trivially_destructible<T>::value) {
+
+				// compute the elements to be removed
+				auto removedElements = detail::Intervals::fromRange(start,end);
+				removedElements.retain(active_ranges);
+
+				// delete elements to be removed
+				removedElements.forEach([this](std::size_t i){
+					data[i].~T(); // explicit destrutor call
+				});
+
+			}
 
 			// remove range from active ranges
 			active_ranges.remove(start,end);
