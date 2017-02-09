@@ -21,7 +21,7 @@ namespace data {
 	// ---------------------------------------------------------------------------------
 
 
-	using coordinate_type = std::size_t;
+	using coordinate_type = std::int64_t;
 
 	template<unsigned Dims>
 	using GridPoint = Vector<coordinate_type,Dims>;
