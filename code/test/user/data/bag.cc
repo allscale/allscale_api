@@ -131,8 +131,8 @@ namespace data {
 
 		EXPECT_EQ(10, b.size());
 
-		// filter out all even numbers
-		b.filter([](int i) { return (i % 2) == 0; });
+		// filter out all odd numbers
+		b.filter([](int i) { return (i % 2) == 1; });
 
 		EXPECT_EQ(5, b.size());
 
@@ -143,7 +143,7 @@ namespace data {
 		// increase all by one and filter even values
 		b.updateFilter([](int& cur) {
 			cur++;
-			return (cur % 3) == 0;
+			return (cur % 3) != 0;
 		});
 
 		EXPECT_EQ(4, b.size());
