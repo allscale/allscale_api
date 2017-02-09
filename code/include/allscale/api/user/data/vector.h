@@ -130,6 +130,15 @@ namespace data {
 		return pointwise(a,b,[](const T& a, const T& b) { return std::max<T>(a,b); });
 	}
 
+	template<typename T>
+	Vector<T,3> crossProduct(const Vector<T,3>& a, const Vector<T,3>& b) {
+		return Vector<T,3>{
+			a[2] * b[3] - a[3] * b[2],
+			a[3] * b[1] - a[1] * b[3],
+			a[1] * b[2] - a[2] * b[1]
+		};
+	}
+
 } // end namespace data
 } // end namespace user
 } // end namespace api
