@@ -613,6 +613,15 @@ namespace data {
 
 	}
 
+	TEST(Grid2D, Size) {
+
+		Grid<int,2> grid({10,20});
+
+		EXPECT_EQ("[10,20]",toString(grid.size()));
+
+
+	}
+
 
 	TEST(Grid2D,ExampleManagement) {
 

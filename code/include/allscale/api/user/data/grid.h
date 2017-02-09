@@ -601,6 +601,10 @@ namespace data {
 			return size;
 		}
 
+		const point& totalSize() const {
+			return size.getTotal();
+		}
+
 		void resize(const region_type& newSize) {
 			assert_eq(size.getTotal(),newSize.getTotal());
 
@@ -700,6 +704,13 @@ namespace data {
 		 * Creates a new map covering the given region.
 		 */
 		Grid(const coordinate_type& size) : owned(std::make_unique<GridFragment<T,Dims>>(size)), base(*owned) {}
+
+		/**
+		 * Obtains the full size of this grid.
+		 */
+		coordinate_type size() const {
+			return base.totalSize();
+		}
 
 		/**
 		 * Provides read/write access to one of the values stored within this grid.
