@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstring>
+#include <memory>
 
 #include "allscale/api/core/data.h"
 #include "allscale/api/user/data/vector.h"
