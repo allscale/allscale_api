@@ -681,7 +681,7 @@ namespace data {
 		/**
 		 * A reference to the fragment instance operating on, referencing the owned fragment or an externally managed one.
 		 */
-		GridFragment<T,Dims>& base;
+		GridFragment<T,Dims>* base;
 
 		/**
 		 * Enables fragments to use the private constructor below.
@@ -691,7 +691,7 @@ namespace data {
 		/**
 		 * The constructor to be utilized by the fragment to create a facade for an existing fragment.
 		 */
-		Grid(GridFragment<T,Dims>& base) : base(base) {}
+		Grid(GridFragment<T,Dims>& base) : base(&base) {}
 
 	public:
 
@@ -701,29 +701,55 @@ namespace data {
 		using coordinate_type = GridPoint<Dims>;
 
 		/**
+		 * The type of region utilized by this type.
+		 */
+		using region_type = GridRegion<Dims>;
+
+		/**
 		 * Creates a new map covering the given region.
 		 */
-		Grid(const coordinate_type& size) : owned(std::make_unique<GridFragment<T,Dims>>(size)), base(*owned) {}
+		Grid(const coordinate_type& size)
+			: owned(std::make_unique<GridFragment<T,Dims>>(region_type(size,0,size))), base(owned.get()) {}
+
+		/**
+		 * Disable copy construction.
+		 */
+		Grid(const Grid&) = delete;
+
+		/**
+		 * Enable move construction.
+		 */
+		Grid(Grid&&) = default;
+
+		/**
+		 * Disable copy-assignments.
+		 */
+		Grid& operator=(const Grid&) = delete;
+
+		/**
+		 * Enable move assignments.
+		 */
+		Grid& operator=(Grid&&) = default;
 
 		/**
 		 * Obtains the full size of this grid.
 		 */
 		coordinate_type size() const {
-			return base.totalSize();
+			return base->totalSize();
 		}
 
 		/**
 		 * Provides read/write access to one of the values stored within this grid.
 		 */
 		T& operator[](const coordinate_type& index) {
-			return base[index];
+			return (*base)[index];
 		}
 
 		/**
 		 * Provides read access to one of the values stored within this grid.
 		 */
 		const T& operator[](const coordinate_type& index) const {
-			return base[index];
+			return (*base)[index];
 		}
 
 	};

@@ -392,6 +392,9 @@ namespace utils {
 		 */
 		~LargeArray() {
 
+			// if there is no data, nothing to do
+			if (data == nullptr) return;
+
 			// call the destructor for the remaining objects (if required)
 			if (!std::is_trivially_destructible<T>::value) {
 				active_ranges.forEach([this](std::size_t i){
@@ -400,7 +403,7 @@ namespace utils {
 			}
 
 			// free the data
-			if (data != nullptr) munmap(data,sizeof(T)*size);
+			munmap(data,sizeof(T)*size);
 		}
 
 		/**

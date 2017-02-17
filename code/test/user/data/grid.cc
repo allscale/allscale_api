@@ -622,6 +622,107 @@ namespace data {
 
 	}
 
+	struct InstanceCounted {
+
+		static int num_instances;
+
+		InstanceCounted() {
+			num_instances++;
+		}
+
+		~InstanceCounted() {
+			num_instances--;
+		}
+
+	};
+
+	int InstanceCounted::num_instances = 0;
+
+
+	TEST(Grid2D, ElementCtorAndDtor) {
+
+
+		// ----- test the Instance Counted class --------
+
+		// start with assuming that there are no instances
+		EXPECT_EQ(0,InstanceCounted::num_instances);
+
+		// check that the constructor works as expected
+		{
+			InstanceCounted a;
+			EXPECT_EQ(1,InstanceCounted::num_instances);
+		}
+
+		// also check that the destructor works as expected
+		EXPECT_EQ(0,InstanceCounted::num_instances);
+
+
+		// ---------- test the Large Array ---------------
+
+		{
+
+			// create a large array
+			Grid<InstanceCounted,2> a({10,20});
+
+			// now there should be a lot of instances
+			EXPECT_EQ(200,InstanceCounted::num_instances);
+
+			// here they should get destroyed
+		}
+
+		// check that there are none left
+		EXPECT_EQ(0,InstanceCounted::num_instances);
+	}
+
+	TEST(Grid2D, ComplexDataStructureCtorDtor) {
+
+		// create a large array
+		Grid<std::vector<int>,2> a({10,20});
+
+		// initialize each value
+		for(int i=0; i<10; i++) {
+			for(int j=0; j<10; j++) {
+				a[{i,j}].push_back(i*j);
+			}
+		}
+	}
+
+	TEST(Grid2D, Move) {
+
+		// create a large array
+		Grid<std::vector<int>,2> a({10,20});
+
+		// initialize each value
+		for(int i=0; i<10; i++) {
+			for(int j=0; j<10; j++) {
+				a[{i,j}].push_back(i*j);
+			}
+		}
+
+		// move the data to a new instance
+		Grid<std::vector<int>,2> b(std::move(a));
+
+		// check the content
+		for(int i=0; i<10; i++) {
+			for(int j=0; j<10; j++) {
+				EXPECT_EQ(1,(b[{i,j}].size()));
+				EXPECT_EQ(i*j,(b[{i,j}].front()));
+			}
+		}
+
+		// now move-assign the values
+		a = std::move(b);
+
+		// check the content
+		for(int i=0; i<10; i++) {
+			for(int j=0; j<10; j++) {
+				EXPECT_EQ(1,(a[{i,j}].size()));
+				EXPECT_EQ(i*j,(a[{i,j}].front()));
+			}
+		}
+	}
+
+
 
 	TEST(Grid2D,ExampleManagement) {
 

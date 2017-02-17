@@ -380,6 +380,38 @@ namespace utils {
 
 	}
 
+	TEST(LargeArray, Move) {
+
+		// create a large array
+		LargeArray<std::vector<int>> a(10);
+
+		// allocate the full range
+		a.allocate(0,10);
+
+		// initialize each value
+		for(int i=0; i<10; i++) {
+			a[i].push_back(i);
+		}
+
+		// move the data to a new instance
+		LargeArray<std::vector<int>> b(std::move(a));
+
+		// check the content
+		for(int i=0; i<10; i++) {
+			EXPECT_EQ(1,b[i].size());
+			EXPECT_EQ(i,b[i].front());
+		}
+
+		// now move-assign the values
+		a = std::move(b);
+
+		// check the content
+		for(int i=0; i<10; i++) {
+			EXPECT_EQ(1,a[i].size());
+			EXPECT_EQ(i,a[i].front());
+		}
+	}
+
 	TEST(LargeArray, Huge) {
 
 		// allocate 1 GiB
