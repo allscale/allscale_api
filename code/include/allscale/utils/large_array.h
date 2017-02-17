@@ -44,6 +44,13 @@ namespace utils {
 			}
 
 			/**
+			 * Checks whether this is interval is empty.
+			 */
+			bool empty() const {
+				return data.empty();
+			}
+
+			/**
 			 * Adds a new interval to the covered intervals.
 			 * @param from the start (inclusive) of the interval to be added
 			 * @param to the end (exclusive) of the interval to be added
@@ -376,6 +383,7 @@ namespace utils {
 		 */
 		LargeArray(LargeArray&& other)
 			: data(other.data), size(other.size), active_ranges(std::move(other.active_ranges)) {
+			assert_true(other.active_ranges.empty());
 			other.data = nullptr;
 		}
 
@@ -406,10 +414,9 @@ namespace utils {
 		LargeArray& operator=(LargeArray&& other) {
 			assert_ne(data,other.data);
 			if (data) munmap(data, sizeof(T)*size);
-			data = other.data;
+			std::swap(data,other.data);
 			size = other.size;
 			active_ranges.swap(other.active_ranges);
-			other.data = nullptr;
 			return *this;
 		}
 
