@@ -105,79 +105,82 @@ namespace core {
 
 	// --- dependencies ---
 
-	/**
-	 * A class aggregating task dependencies.
-	 */
-	class dependencies {
-
-		impl::reference::dependencies par_deps;
+	class no_dependencies {
 
 	public:
 
-		dependencies() {}
-
-		dependencies(const impl::sequential::task_reference&) {}
-
-		dependencies(const impl::reference::task_reference& dep) {
-			par_deps.add(dep);
-		}
-
-		dependencies(dependencies&& other) = default;
-
-		dependencies& operator=(dependencies&& other) = default;
-
-		// -- mutators --
-
-		dependencies& add(const impl::sequential::task_reference&) {
-			// can be ignored, since sequential dependencies are always satisfied
-			return *this;
-		}
-
-		dependencies& add(const impl::reference::task_reference& dep) {
-			par_deps.add(dep);
-			return *this;
-		}
-
-		// -- implicit and explicit converters --
-
 		operator impl::sequential::dependencies() const {
-			return impl::sequential::dependencies();
+			return impl::sequential::after();
 		}
 
-		impl::sequential::dependencies toSequentialDependencies() const {
-			return *this;
-		}
-
-		operator impl::reference::dependencies&&() && {
-			return std::move(par_deps);
-		}
-
-		impl::reference::dependencies&& toReferenceDependencies() && {
-			return std::move(par_deps);
+		operator impl::reference::dependencies<impl::reference::fixed_sized<0>>() const {
+			return impl::reference::after();
 		}
 
 	};
 
+
+//	/**
+//	 * A class aggregating task dependencies.
+//	 */
+//	template<typename DependencyList>
+//	class dependencies {
+//
+//		DependencyList deps;
+//
+//	public:
+//
+//		dependencies() {}
+//
+//		dependencies(const impl::reference::task_reference& dep) {
+//			par_deps.add(dep);
+//		}
+//
+//		dependencies(dependencies&& other) = default;
+//
+//		dependencies& operator=(dependencies&& other) = default;
+//
+//
+//		// -- implicit and explicit converters --
+//
+//		operator impl::sequential::dependencies() const {
+//			return impl::sequential::dependencies();
+//		}
+//
+//		impl::sequential::dependencies toSequentialDependencies() const {
+//			return *this;
+//		}
+//
+//		operator RefDependencies&&() && {
+//			return std::move(par_deps);
+//		}
+//
+//		RefDependencies&& toReferenceDependencies() && {
+//			return std::move(par_deps);
+//		}
+//
+//	};
+
 	// -- no dependencies --
 
-	inline dependencies after() {
-		return dependencies();
+	inline auto after() {
+		return no_dependencies();
 	}
 
 
 	// -- sequential --
 
 	template<typename ... Rest>
-	dependencies after(Rest ... rest, const impl::sequential::task_reference& dep) {
-		return after(rest...).add(dep);
+	auto after(const impl::sequential::task_reference& first, Rest ... rest) {
+		return impl::sequential::after(first, rest...);
 	}
 
 
 	// -- reference --
 
 	template<typename ... Rest>
-	dependencies after(Rest ... rest, const impl::reference::task_reference& dep) {
-		return after(rest...).add(dep);
+	auto after(const impl::reference::task_reference& first, Rest ... rest) {
+		return impl::reference::after(first, rest...);
 	}
 
 
@@ -319,8 +322,8 @@ namespace core {
 				return impl::reference::sequential(std::move(a),std::move(b));
 			}
 
-			template<typename A, typename B>
-			auto sequential(impl::reference::dependencies&& deps, impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b) {
+			template<typename DepsKind, typename A, typename B>
+			auto sequential(impl::reference::dependencies<DepsKind>&& deps, impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b) {
 				return impl::reference::sequential(std::move(deps),std::move(a),std::move(b));
 			}
 
@@ -329,8 +332,8 @@ namespace core {
 				return impl::reference::parallel(std::move(a),std::move(b));
 			}
 
-			template<typename A, typename B>
-			auto parallel(impl::reference::dependencies&& deps, impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b) {
+			template<typename DepsKind, typename A, typename B>
+			auto parallel(impl::reference::dependencies<DepsKind>&& deps, impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b) {
 				return impl::reference::parallel(std::move(deps),std::move(a),std::move(b));
 			}
 
@@ -339,8 +342,8 @@ namespace core {
 				return impl::reference::combine(std::move(a),std::move(b),std::move(m), parallel);
 			}
 
-			template<typename A, typename B, typename M>
-			auto combine(impl::reference::dependencies&& deps, impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b, M&& m, bool parallel) {
+			template<typename DepsKind, typename A, typename B, typename M>
+			auto combine(impl::reference::dependencies<DepsKind>&& deps, impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b, M&& m, bool parallel) {
 				return impl::reference::combine(std::move(deps),std::move(a),std::move(b),std::move(m), parallel);
 			}
 		};

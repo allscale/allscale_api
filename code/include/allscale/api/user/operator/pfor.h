@@ -597,8 +597,8 @@ namespace user {
 					auto& right = fragments.second;
 					auto dep = r.dependencies.split(left,right);
 					return parallel(
-						nested(dep.left, range{left, dep.left} ),
-						nested(dep.right,range{right,dep.right})
+						nested(dep.left.toCoreDependencies(), range{left, dep.left} ),
+						nested(dep.right.toCoreDependencies(),range{right,dep.right})
 					);
 				},
 				[body](const range& r, const auto&) {
@@ -606,7 +606,7 @@ namespace user {
 					r.range.forEach(body);
 				}
 			)
-		)(dependency,range{r,dependency}) };
+		)(dependency.toCoreDependencies(),range{r,dependency}) };
 	}
 
 	template<typename Iter, typename Body>
@@ -654,8 +654,8 @@ namespace user {
 		one_on_one_dependency(const detail::iteration_reference<Iter>& loop)
 			: loop(loop) {}
 
-		operator core::dependencies() const {
-			return loop.getHandle();
+		auto toCoreDependencies() const {
+			return core::after(loop.getHandle());
 		}
 
 		detail::SubDependencies<one_on_one_dependency<Iter>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
@@ -682,29 +682,27 @@ namespace user {
 	template<typename Iter>
 	class neighborhood_sync_dependency : public detail::loop_dependency {
 
-		std::vector<detail::iteration_reference<Iter>> deps;
+		std::array<detail::iteration_reference<Iter>,3> deps;
 
-		neighborhood_sync_dependency(std::vector<detail::iteration_reference<Iter>>&& deps)
-			: deps(std::move(deps)) {}
+		std::size_t size;
+
+		neighborhood_sync_dependency(std::array<detail::iteration_reference<Iter>,3>&& deps)
+			: deps(std::move(deps)), size(3) {}
 
 	public:
 
 		neighborhood_sync_dependency(const detail::iteration_reference<Iter>& loop)
-			: deps({ loop }) {}
+			: deps({ loop }), size(1) {}
 
-		operator core::dependencies() const {
-			core::dependencies res;
-			for(const auto& cur : deps) {
-				res.add(cur);
-			}
-			return res;
+		auto toCoreDependencies() const {
+			return core::after(deps[0],deps[1],deps[2]);
 		}
 
 		detail::SubDependencies<neighborhood_sync_dependency<Iter>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
 			using iter_dependency = detail::iteration_reference<Iter>;
 
 			// check for the root case
-			if (deps.size() == 1) {
+			if (size == 1) {
 				const auto& dependency = deps.front();
 
 				// split the dependency
@@ -722,7 +720,7 @@ namespace user {
 			}
 
 			// split up input dependencies
-			assert(deps.size() == 3);
+			assert(size == 3);
 
 			// those dependencies form a closed range
 			assert_true(deps[0].getRange().end() == deps[1].getRange().begin());

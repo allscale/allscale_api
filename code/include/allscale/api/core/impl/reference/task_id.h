@@ -34,6 +34,10 @@ namespace reference {
 			return TaskPath{0,0};
 		}
 
+		bool isRoot() const {
+			return length == 0;
+		}
+
 		path_t getPath() const {
 			return path;
 		}
