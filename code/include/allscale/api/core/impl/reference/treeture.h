@@ -291,11 +291,15 @@ namespace reference {
 
 		enum { num_entries = 1<<(max_depth+1) };
 
+		// an epoch counter to facilitate re-use
+		std::atomic<std::size_t> epoch;
+
+		// the container for storing task dependencies
 		cell_type data[num_entries];
 
 	public:
 
-		TaskDependencyManager() {
+		TaskDependencyManager(std::size_t epoch = 0) : epoch(epoch) {
 			for(auto& cur : data) cur = nullptr;
 		}
 
@@ -310,6 +314,25 @@ namespace reference {
 
 		TaskDependencyManager& operator=(const TaskDependencyManager&) = delete;
 		TaskDependencyManager& operator=(TaskDependencyManager&&) = delete;
+
+		std::size_t getEpoch() const {
+			return epoch.load(std::memory_order_relaxed);
+		}
+
+		void startEpoch(std::size_t newEpoch) {
+			// make sure there is a change
+			assert_ne(epoch.load(),newEpoch);
+
+			// re-set state
+			epoch = newEpoch;
+			for(auto& cur : data) {
+				// there should not be any dependencies left
+				assert_true(cur == nullptr || isDone(cur));
+
+				// reset dependencies
+				cur = nullptr;
+			}
+		}
 
 
 		/**
@@ -363,14 +386,8 @@ namespace reference {
 
 		using DependencyManager = TaskDependencyManager<6>;
 
-		// the unique ID of this family (for reuse)
-		std::size_t id;
-
 		// the manager of all dependencies on members of this family
 		DependencyManager dependencies;
-
-//		// for forming lists of free families (for reuse)
-//		TaskFamily* next_free;
 
 		// the root task
 		std::unique_ptr<TaskBase> root;
@@ -380,7 +397,7 @@ namespace reference {
 		/**
 		 * Creates a new family, using a new ID.
 		 */
-		TaskFamily() : id(getNextID()) {}
+		TaskFamily() : dependencies(getNextID()) {}
 
 		/**
 		 * Registers the root task, which is kept alive until completion of all tasks.
@@ -391,10 +408,17 @@ namespace reference {
 		}
 
 		/**
+		 * Removes the ownership of the root task and hands it back to the caller.
+		 */
+		std::unique_ptr<TaskBase> removeRoot() {
+			return std::move(root);
+		}
+
+		/**
 		 * Obtain the family ID.
 		 */
 		std::size_t getId() const {
-			return id;
+			return dependencies.getEpoch();
 		}
 
 //		bool validateID(std::size_t id) const {
@@ -420,7 +444,7 @@ namespace reference {
 		 */
 		void markDone(const TaskPath& x) {
 			dependencies.markComplete(x);
-//			if (x.isRoot()) root.reset();
+			if (x.isRoot() && root) root.reset();
 		}
 
 		/**
@@ -428,51 +452,40 @@ namespace reference {
 		 */
 		static unsigned getNextID() {
 			static std::atomic<int> counter(0);
-			return (DEBUG || DEBUG_SCHEDULE || DEBUG_TASKS || MONITORING_ENABLED || PROFILING_ENABLED) ? ++counter : 0;
+			return ++counter;
+//			return (DEBUG || DEBUG_SCHEDULE || DEBUG_TASKS || MONITORING_ENABLED || PROFILING_ENABLED) ? ++counter : 0;
 		}
 
 	};
 
 
-//	class TaskFamilyReference {
-//
-//		// the id of the referenced family
-//		std::size_t id;
-//
-//		// a pointer to some family -- probably the one with the right ID
-//		TaskFamily* family;
-//
-//	public:
-//
-//		bool isComplete(const TaskPath& path) const {
-//			// look up result
-//			auto res = family->isComplete(path);
-//			// check whether the result is valid
-//			return !family->validateID(id) || res;
-//		}
-//
-//		void markDone(const TaskPath& path) {
-//
-//		}
-//
-//		void addDependency(const TaskBasePtr& x, const TaskPath& y) {
-//
-//
-//		}
-//
-//	};
-
-
 	// the pointer type to reference task families
-//	using TaskFamilyPtr = std::shared_ptr<TaskFamily>;
-
 	using TaskFamilyPtr = TaskFamily*;
+
+	/**
+	 * A manager keeping track of created families.
+	 */
+	class TaskFamilyManager {
+
+		SpinLock lock;
+
+		std::vector<std::unique_ptr<TaskFamily>> families;
+
+	public:
+
+		TaskFamilyPtr getFreshFamily() {
+			std::lock_guard<SpinLock> lease(lock);
+			families.push_back(std::make_unique<TaskFamily>());
+			return families.back().get();
+		}
+
+	};
 
 
 	// a factory for a new task family
 	TaskFamilyPtr createFamily() {
-		return new TaskFamily();
-//		return std::make_shared<TaskFamily>();
+		static TaskFamilyManager familyManager;
+		return familyManager.getFreshFamily();
 	}
 
 
@@ -584,7 +597,7 @@ namespace reference {
 	template<std::size_t Size>
 	class dependencies<fixed_sized<Size>> {
 
-		task_reference list[Size];
+		std::array<task_reference,Size> list;
 
 	public:
 
@@ -675,6 +688,48 @@ namespace reference {
 
 	};
 
+
+	// ---------------------------------------------------------------------------------------------
+	//										      promise
+	// ---------------------------------------------------------------------------------------------
+
+
+	/**
+	 * A promise, forming the connection between a task and a treeture
+	 * waiting for the task's result.
+	 */
+	template<typename T>
+	class Promise {
+
+		// a marker for delivered values
+		bool ready;
+
+		// the delivered value
+		T value;
+
+	public:
+
+		Promise() : ready(false) {}
+
+		Promise(const T& value)
+			: ready(true), value(value) {}
+
+		bool isReady() const {
+			return ready;
+		}
+
+		const T& getValue() const {
+			return value;
+		}
+
+		void setValue(const T& newValue) {
+			value = newValue;
+			ready = true;
+		}
+	};
+
+	template<typename T>
+	using PromisePtr = std::shared_ptr<Promise<T>>;
 
 
 	// ---------------------------------------------------------------------------------------------
@@ -1080,12 +1135,12 @@ namespace reference {
 
 		void setSubstitute(std::unique_ptr<TaskBase>&& newSub) {
 
+			// must only be set once!
+			assert_false(substitute);
+
 			// can only happen if this task is in blocked or ready state
 			assert_true(state == State::Blocked || state == State::Ready)
 					<< "Actual state: " << state;
-
-			// must only be set once!
-			assert_false(substitute);
 
 			// and the substitute must be valid
 			assert_true(newSub);
@@ -1093,20 +1148,33 @@ namespace reference {
 			// the substitute must be new
 			assert_true(newSub->state == State::New || newSub->state == State::Done);
 
-			// adapt substitute
-			newSub->adopt(this->family, this->path);
-
-			// connect substitute to parent
-			newSub->parent = this;
-
 			// link substitute -- with this responsibilities are transfered
 			substitute = std::move(newSub);
 
 			// remember that a substitute has been assigned
 			substituted = true;
 
-//			// forget remaining dependencies
-//			num_active_dependencies = 0;
+			// if the split task is done, this one is done
+			if (substitute->isDone()) {
+
+				// update state
+				if (state == State::Blocked) setState(State::Ready);
+
+				// pass through running
+				setState(State::Running);
+
+				// finish this task
+				finish();
+
+				// done
+				return;
+			}
+
+			// connect substitute to parent
+			substitute->parent = this;
+
+			// adapt substitute
+			substitute->adopt(this->family, this->path);
 
 			// and update this state to ready
 			if (state == State::Blocked) setState(State::Ready);
@@ -1115,24 +1183,8 @@ namespace reference {
 			// any time => thus it is in the running state
 			setState(State::Running);
 
-			// if the split task is done, this one is done
-			if (substitute->isDone()) {
-
-				// finish this task
-				finish();
-
-				// now this task should be done
-				assert_eq(State::Done, state);
-
-				// and the substitute already gone
-				assert_false(substitute);
-
-			} else {
-
-				// start the substitute
-				substitute->start();
-
-			}
+			// start the substitute
+			substitute->start();
 
 		}
 
@@ -1239,6 +1291,36 @@ namespace reference {
 			// job is done
 			setState(State::Done);
 
+
+			// ---- disconnection and destruction -----
+
+			// a local handle to avoid destruction during processing of this final phase
+			std::unique_ptr<TaskBase> tmpSelf;
+
+			// since the notification of the parent may result in the deletion of this
+			// task, we first check whether we need to keep this task alive
+			if (num_active_dependencies > 0) {
+
+				// this may only happen if this task is substituted
+				assert_true(substituted);
+
+				// this must be the root or a left or right child since on substitutes there should not be any dependencies
+				assert_true(path.isRoot() || parent->left.get() == this || parent->right.get() == this);
+
+				// increment by one more dependency to avoid destruction while processing the transfer of ownership
+				num_active_dependencies++;
+
+				// take over ownership
+				if (path.isRoot() && family) {
+					tmpSelf = std::move(family->removeRoot());
+				} else {
+					tmpSelf = (parent->left.get() == this) ? std::move(parent->left) : std::move(parent->right);
+				}
+			}
+
+			// copy parent pointer to stack, since the markDone may release this task
+			TaskBase* locParent = parent;
+
 			// inform the family that the job is done
 			if (!parent || parent->substitute.get() != this) {
 				// only due this if you are not the substitute
@@ -1246,40 +1328,21 @@ namespace reference {
 			}
 
 			// notify parent
-			if (parent) {
-
-				// a local handle to avoid destruction during processing of this final phase
-				std::unique_ptr<TaskBase> tmpSelf;
-
-				// since the notification of the parent may result in the deletion of this
-				// task, we first check whether we need to keep this task alive
-				if (num_active_dependencies > 0) {
-
-					// this may only happen if this task is substituted
-					assert_true(substituted);
-
-					// this must be a left or right child since on substitutes there should not be any dependencies
-					assert_true(parent->left.get() == this || parent->right.get() == this);
-
-					// increment by one more dependency to avoid destruction while processing the transfer of ownership
-					num_active_dependencies++;
-
-					// take over ownership
-					tmpSelf = (parent->left.get() == this) ? std::move(parent->left) : std::move(parent->right);
-				}
+			if (locParent) {
 
 				// notify parents
 				parent->childDone(*this);
 
-				// finish handling of life cycle
-				if (tmpSelf) {
+			}
 
-					// move ownership
-					self = std::move(tmpSelf);
+			// finish handling of life cycle
+			if (tmpSelf) {
 
-					// release the auxiliary dependency
-					dependencyDone();
-				}
+				// move ownership
+				self = std::move(tmpSelf);
+
+				// release the auxiliary dependency
+				dependencyDone();
 			}
 		}
 
@@ -1334,8 +1397,18 @@ namespace reference {
 		// locate entry
 		std::size_t pos = getPosition(y);
 
+		// load epoch
+		auto curEpoch = epoch.load();
+
 		// load the head
 		Entry* head = data[pos].load(std::memory_order_relaxed);
+
+		// check whether we are still in the same epoch
+		if (curEpoch != epoch.load()) {
+			// the epoch has changed, the previous is gone
+			x->dependencyDone();
+			return;
+		}
 
 		// check whether this task is already completed
 		if (isDone(head)) {
@@ -1417,15 +1490,17 @@ namespace reference {
 
 		T value;
 
+		mutable PromisePtr<T> promise;
+
 	public:
 
-		Task() : TaskBase(false) {}
+		Task() : TaskBase(false), promise(nullptr) {}
 
 		Task(const T& value)
-			: TaskBase(true), value(value) {}
+			: TaskBase(true), value(value), promise(nullptr) {}
 
 		Task(std::unique_ptr<TaskBase>&& left, std::unique_ptr<TaskBase>&& right, bool parallel)
-			: TaskBase(std::move(left),std::move(right), parallel) {}
+			: TaskBase(std::move(left),std::move(right), parallel), promise(nullptr) {}
 
 
 		virtual ~Task(){};
@@ -1433,6 +1508,18 @@ namespace reference {
 		const T& getValue() const {
 			assert_true(isDone()) << this->getState();
 			return value;
+		}
+
+		void setPromise(const PromisePtr<T>& newPromise) const {
+
+			// this task must not be started yet
+			assert_eq(State::New,this->getState());
+
+			// there must not be a previous promise
+			assert_false(promise);
+
+			// register promise
+			promise = newPromise;
 		}
 
 	protected:
@@ -1443,6 +1530,9 @@ namespace reference {
 
 		void aggregate() override {
 			value = computeAggregate();
+			if(promise) {
+				promise->setValue(value);
+			}
 		}
 
 		virtual T computeValue() {
@@ -1592,14 +1682,14 @@ namespace reference {
 
 	template<typename Deps, typename A, typename B, typename C, typename R = std::result_of_t<C(A,B)>>
 	std::unique_ptr<Task<R>> make_split_task(Deps&& deps, std::unique_ptr<Task<A>>&& left, std::unique_ptr<Task<B>>&& right, C&& merge, bool parallel) {
-		auto res = std::make_unique<SplitTask<R,A,B,C>>(std::move(left), std::move(right), std::move(merge), parallel);
+		std::unique_ptr<Task<R>> res = std::make_unique<SplitTask<R,A,B,C>>(std::move(left), std::move(right), std::move(merge), parallel);
 		res->addDependencies(deps.begin(), deps.end());
 		return res;
 	}
 
 	template<typename Deps>
 	std::unique_ptr<Task<void>> make_split_task(Deps&& deps, std::unique_ptr<TaskBase>&& left, std::unique_ptr<TaskBase>&& right, bool parallel) {
-		auto res = std::make_unique<SplitTask<void,void,void,void>>(std::move(left), std::move(right), parallel);
+		std::unique_ptr<Task<void>> res = std::make_unique<SplitTask<void,void,void,void>>(std::move(left), std::move(right), parallel);
 		res->addDependencies(deps.begin(), deps.end());
 		return res;
 	}
@@ -1680,15 +1770,24 @@ namespace reference {
 
 		friend class unreleased_treeture<T>;
 
-		const Task<T>* task;
+		PromisePtr<T> promise;
 
 	protected:
 
-		treeture(const Task<T>& task) : super(task),task(&task) {}
+		treeture(const Task<T>& task)
+			: super(task), promise(std::make_shared<Promise<T>>()) {
+
+			// make sure task has not been started yet
+			assert_eq(TaskBase::State::New, task.getState());
+
+			// register the promise
+			task.setPromise(promise);
+		}
 
 	public:
 
-		treeture(const T& value = T()) : super(), task(new Task<T>(value)) {}
+		treeture(const T& value = T())
+			: super(), promise(std::make_shared<Promise<T>>(value)) {}
 
 		treeture(const treeture&) = delete;
 		treeture(treeture&& other) = default;
@@ -1698,9 +1797,7 @@ namespace reference {
 
 		const T& get() {
 			super::wait();
-			assert_true(task->isDone());
-			// TODO: add promis
-			return task->getValue();
+			return promise->getValue();
 		}
 
 	};
@@ -1754,12 +1851,11 @@ namespace reference {
 		// record reference to sub-task
 		subTask = substitute.get();
 
-		// mutate to new task
-		Task<R>::setSubstitute(std::move(substitute));
-
 		// mark as no longer splitable
 		TaskBase::setSplitable(false);
 
+		// mutate to new task
+		Task<R>::setSubstitute(std::move(substitute));
 	}
 
 
@@ -2393,7 +2489,7 @@ namespace reference {
 			if (TaskBase* t = queue.pop_front()) {
 
 				// check precondition of task
-				assert_true(t->isReady());
+				assert_true(t->isReady()) << "Actual state: " << t->getState();
 
 				// if the queue is not full => create more tasks
 				if (queue.size() < (max_queue_length*3)/4) {
@@ -2474,8 +2570,11 @@ namespace reference {
 			// split this task
 			split();
 
-			// if the task is done, we are fine (some split end up in completed tasks)
-			if (isDone()) return;
+			// remove dummy dependency blocking this task from running
+			num_active_dependencies--;
+
+			// done
+			return;
 		}
 
 		// release dummy-dependency to get task started
@@ -2494,17 +2593,19 @@ namespace reference {
 		// if the old value was not 1, the new one is not 0, thus there are dependencies left
 		if (oldValue != 1) return;
 
-		// handle substituted instances
-		if (substituted) {
-			// release memory of this object
-			if (self) {
-				// copy unique pointer to stack (to avoid pointer deleting itself)
-				std::unique_ptr<TaskBase> tmpSelf = std::move(self);
-				// delete this object
-				tmpSelf.release();
-			}
+		// handle case where we are just waiting for the final dependencies to be completed
+		// before deleting this task
+		if (self) {
+
+			// copy unique pointer to stack to get deleted at return
+			std::unique_ptr<TaskBase> tmpSelf = std::move(self);
+
+			// done
 			return;
 		}
+
+		// handle substituted instances by ignoring the message
+		if (substituted) return;
 
 		// make sure that this is never reached when there is a dependency left
 		assert_eq(num_active_dependencies, 0);
