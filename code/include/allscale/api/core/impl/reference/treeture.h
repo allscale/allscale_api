@@ -2156,6 +2156,7 @@ namespace reference {
 
 		class WorkerPool;
 
+
 		struct Worker {
 
 			using duration = RuntimePredictor::duration;
@@ -2304,6 +2305,12 @@ namespace reference {
 
 			int getNumWorkers() const {
 				return workers.size();
+			}
+
+			std::size_t getInitialSplitDepthLimit() const {
+				auto num_workers = getNumWorkers();
+				// we go down to ~ 4 times the number of threads
+				return sizeof(num_workers) * 8 - __builtin_clz(num_workers) + 2;
 			}
 
 			Worker& getWorker(int i) {
@@ -2533,6 +2540,8 @@ namespace reference {
 
 			// no task found => wait a moment
 			cpu_relax();
+
+			// report back the failed steal attempt
 			return false;
 		}
 
@@ -2564,8 +2573,9 @@ namespace reference {
 		setState(State::Blocked);
 
 		// split tasks by default up to a given level
-		// TODO: make this depth hardware dependent
-		if (!isOrphan() && isSplitable() && getDepth() < 4) {
+		auto& pool = runtime::WorkerPool::getInstance();
+		auto depth_limit = pool.getInitialSplitDepthLimit();
+		if (!isOrphan() && isSplitable() && getDepth() < depth_limit) {
 
 			// split this task
 			split();
@@ -2621,16 +2631,19 @@ namespace reference {
 		// (this can only be reached by one thread)
 		setState(State::Ready);
 
-		// TODO: actively distribute initial tasks, by assigning
-		// them to different workers;
+		// actively distribute initial tasks, by assigning them to different workers
 
 		// TODO: do the following only for top-level tasks!!
-		if (!isOrphan() && getDepth() < 4) {
+		auto& pool = runtime::WorkerPool::getInstance();
+
+		// compute the decomposition limit
+		auto depth_limit = pool.getInitialSplitDepthLimit();
+
+		// decide whether an active decomposition shell be conducted
+		if (!isOrphan() && getDepth() < depth_limit) {
 
 			// actively select the worker to issue the task to
-			auto& pool = runtime::WorkerPool::getInstance();
 			int num_workers = pool.getNumWorkers();
-
 			auto path = getTaskPath().getPath();
 			auto depth = getDepth();
 
