@@ -389,30 +389,12 @@ namespace reference {
 		// the manager of all dependencies on members of this family
 		DependencyManager dependencies;
 
-		// the root task
-		std::unique_ptr<TaskBase> root;
-
 	public:
 
 		/**
 		 * Creates a new family, using a new ID.
 		 */
 		TaskFamily() : dependencies(getNextID()) {}
-
-		/**
-		 * Registers the root task, which is kept alive until completion of all tasks.
-		 */
-		void setRoot(std::unique_ptr<TaskBase>&& newRoot) {
-			assert_false(root) << "Root must not be set before!";
-			root = std::move(newRoot);
-		}
-
-		/**
-		 * Removes the ownership of the root task and hands it back to the caller.
-		 */
-		std::unique_ptr<TaskBase> removeRoot() {
-			return std::move(root);
-		}
 
 		/**
 		 * Obtain the family ID.
@@ -444,7 +426,6 @@ namespace reference {
 		 */
 		void markDone(const TaskPath& x) {
 			dependencies.markComplete(x);
-			if (x.isRoot() && root) root.reset();
 		}
 
 		/**
@@ -737,7 +718,6 @@ namespace reference {
 	// ---------------------------------------------------------------------------------------------
 
 
-
 	// the RT's interface to a task
 	class TaskBase {
 
@@ -779,16 +759,30 @@ namespace reference {
 		// the current state of this task
 		std::atomic<State> state;
 
-		// the number of tasks still active before this tasks can be released
-		// + 1 dependency for the release of tasks (tasks are released once this counter goes to 0)
+		/**
+		 * the number of active dependencies keeping this object alive and
+		 * blocking its execution. Those dependencies include
+		 *   +1 for the unreleased treeture, subtracted once the task is released
+		 *   +1 for the parent, released once the parent is no longer interested in this task
+		 *   +1 for each task this task is waiting for, thus for each dependency
+		 *
+		 * Initially, there are 2 dependencies -- one for the parent, one for the release.
+		 *
+		 * Actions:
+		 *   1 ... this task is started
+		 *   0 ... this task is destroyed
+		 */
 		std::atomic<int> num_active_dependencies;
 
 		// indicates whether this task can be split
 		bool splitable;
 
 		// split task data
-		std::unique_ptr<TaskBase> left;
-		std::unique_ptr<TaskBase> right;
+		TaskBase* left;
+		TaskBase* right;
+
+		// for the mutation from a simple to a split task
+		TaskBase* substitute;
 
 		// TODO: get rid of this
 		bool parallel;
@@ -797,50 +791,61 @@ namespace reference {
 		TaskBase* parent;                      // < a pointer to the parent to be notified upon completion
 		std::atomic<int> alive_child_counter;  // < the number of active child tasks
 
-		// for the mutation from a simple to a split task
-		std::unique_ptr<TaskBase> substitute;
-
 		// a flag to remember that this task got a substitute, even after the
 		// substitute got cut lose
 		bool substituted;
 
-		// a reference to this task itself, active when it has to keep itself alive once
-		// its sub-tasks are completed, but not all dependencies are yet satisfied
-		std::unique_ptr<TaskBase> self;
-
 	public:
 
-		TaskBase(bool done = true)
+		// TODO: remove those
+
+		std::atomic<bool> scheduled;
+
+		std::atomic<bool> processed;
+
+		TaskBase(bool done = false)
 			: family(), path(TaskPath::root()), id(TaskFamily::getNextID()),
 			  state(done ? State::Done : State::New),
 			  // one initial control flow dependency, released by treeture release
-			  num_active_dependencies(1),
-			  splitable(false), parallel(false), parent(nullptr),
-			  substituted(false) {
+			  num_active_dependencies(done ? 1 : 2),
+			  splitable(false),
+			  left(nullptr), right(nullptr), substitute(nullptr),
+			  parallel(false), parent(nullptr),
+			  substituted(false), scheduled(false), processed(false) {
 
 			LOG_TASKS( "Created " << *this );
 		}
 
-		TaskBase(std::unique_ptr<TaskBase>&& left, std::unique_ptr<TaskBase>&& right, bool parallel)
+		TaskBase(TaskBase* left, TaskBase* right, bool parallel)
 			: family(),
 			  path(TaskPath::root()), id(TaskFamily::getNextID()),
 			  state(State::New),
 			  // one initial control flow dependency, released by treeture release
-			  num_active_dependencies(1),
+			  num_active_dependencies(2),
 			  splitable(false),
-			  left(std::move(left)), right(std::move(right)), parallel(parallel),
+			  left(left), right(right), substitute(nullptr),
+			  parallel(parallel),
 			  parent(nullptr), alive_child_counter(0),
-			  substituted(false) {
+			  substituted(false), scheduled(false), processed(false) {
 
 			LOG_TASKS( "Created " << *this );
 			assert(this->left);
 			assert(this->right);
+
+			// fix the parent pointer
+			this->left->parent = this;
+			this->right->parent = this;
 		}
 
+	protected:
+
+		// make the destructor private, such that only this class can destroy itself
 		virtual ~TaskBase() {
 			LOG_TASKS( "Destroying Task " << *this );
 			assert_true(isDone()) << getId() << " - " << getState();
 		};
+
+	public:
 
 		// -- observers --
 
@@ -960,7 +965,7 @@ namespace reference {
 
 			// check that it is allowed to run
 			assert_eq(state, State::Ready);
-			assert_eq(0,num_active_dependencies);
+			assert_eq(1,num_active_dependencies);
 
 			// update state
 			setState(State::Running);
@@ -985,21 +990,19 @@ namespace reference {
 
 					// process left first
 					if (lState != State::Done) {
-						left->parent = this;
 						left->start();
 						left->wait();
 					} else {
 						// notify that this child is done
-						childDone(*left.get());
+						childDone(*left);
 					}
 
 					// continue with the right child
 					if (rState != State::Done) {
-						right->parent = this;
 						right->start();
 					} else {
 						// notify that this child is done
-						childDone(*right.get());
+						childDone(*right);
 					}
 
 					// done
@@ -1018,25 +1021,19 @@ namespace reference {
 
 					// both need to be started
 					alive_child_counter = 2;
-
-					left->parent = this;
 					left->start();
-
-					right->parent = this;
 					right->start();
 
 				} else if (lState == State::New) {
 
 					// only left has to be started
 					alive_child_counter = 1;
-					left->parent = this;
 					left->start();
 
 				} else if (rState == State::New) {
 
 					// only left has to be started
 					alive_child_counter = 1;
-					right->parent = this;
 					right->start();
 
 				} else {
@@ -1068,9 +1065,10 @@ namespace reference {
 		}
 
 		// Ready -> Split (if supported, otherwise remains Ready)
-		virtual void split() {
+		virtual bool split() {
 			// by default, no splitting is supported
 			assert_fail() << "This should not be reachable!";
+			return false;
 		}
 
 		// wait for the task completion
@@ -1084,13 +1082,13 @@ namespace reference {
 		const TaskBase* getLeft() const {
 			// forward call to substitute if present
 			if (substitute) return substitute->getLeft();
-			return left.get();
+			return left;
 		}
 
 		const TaskBase* getRight() const {
 			// forward call to substitute if present
 			if (substitute) return substitute->getRight();
-			return right.get();
+			return right;
 		}
 
 		bool isSplitable() const {
@@ -1133,7 +1131,7 @@ namespace reference {
 			splitable = value;
 		}
 
-		void setSubstitute(std::unique_ptr<TaskBase>&& newSub) {
+		void setSubstitute(TaskBase* newSub) {
 
 			// must only be set once!
 			assert_false(substitute);
@@ -1149,7 +1147,10 @@ namespace reference {
 			assert_true(newSub->state == State::New || newSub->state == State::Done);
 
 			// link substitute -- with this responsibilities are transfered
-			substitute = std::move(newSub);
+			substitute = newSub;
+
+			// connect substitute to parent
+			substitute->parent = this;
 
 			// remember that a substitute has been assigned
 			substituted = true;
@@ -1169,9 +1170,6 @@ namespace reference {
 				// done
 				return;
 			}
-
-			// connect substitute to parent
-			substitute->parent = this;
 
 			// adapt substitute
 			substitute->adopt(this->family, this->path);
@@ -1199,12 +1197,13 @@ namespace reference {
 		}
 
 		void setState(State newState) {
+
 			// check correctness of state transitions
 			assert_true(isValidTransition(state,newState))
 				<< "Illegal state transition from " << state << " to " << newState;
 
 			// make sure that the task is not released with active dependencies
-			assert_true(newState != State::Ready || num_active_dependencies == 0 || substituted)
+			assert_true(newState != State::Ready || num_active_dependencies == 1 || substituted)
 				<< "Active dependencies: " << num_active_dependencies;
 
 			// update the state
@@ -1215,7 +1214,7 @@ namespace reference {
 		void childDone(const TaskBase& child) {
 
 			// check whether it is the substitute
-			if (substitute.get() == &child) {
+			if (substitute == &child) {
 
 				// check state of this task
 				assert_true(State::Ready == state || State::Running == state)
@@ -1231,9 +1230,9 @@ namespace reference {
 
 			// make sure this task is still running
 			assert_eq(State::Running, state)
-				<< "\tis substitute:  " << (substitute.get() == &child) << "\n"
-				<< "\tis child left:  " << (left.get() == &child) << "\n"
-				<< "\tis child right: " << (right.get() == &child) << "\n";
+				<< "\tis substitute:  " << (substitute == &child) << "\n"
+				<< "\tis child left:  " << (left == &child) << "\n"
+				<< "\tis child right: " << (right == &child) << "\n";
 
 			// process a split-child
 			LOG_TASKS( "Child " << child << " of " << *this << " done" );
@@ -1256,6 +1255,16 @@ namespace reference {
 			// LOG_TASKS( "Child " << child << " of " << *this << " done - processing complete" );
 		}
 
+		void parentDone() {
+
+			// check that there is a parent
+			assert_true(parent);
+
+			// signal that one more dependency is satisfied
+			dependencyDone();
+
+		}
+
 		// Running -> Aggregating -> Done
 		void finish() {
 
@@ -1275,15 +1284,19 @@ namespace reference {
 			// aggregate result (collect results)
 			aggregate();
 
+			// a tool to release dependent tasks
+			auto release = [](TaskBase* task) {
+				assert_true(!task || task->isDone());
+				if (!task) return;
+				task->parentDone();
+			};
+
 			// cut lose children
-			assert_true(!left || left->isDone());
-			left.reset();
-			assert_true(!right || right->isDone());
-			right.reset();
+			release(left);
+			release(right);
 
 			// cut lose substitutes
-			assert_true(!substitute || substitute->isDone());
-			substitute.reset();
+			release(substitute);
 
 			// log completion
 			LOG( "Aggregating task " << *this << " complete" );
@@ -1291,40 +1304,16 @@ namespace reference {
 			// job is done
 			setState(State::Done);
 
-
-			// ---- disconnection and destruction -----
-
-			// a local handle to avoid destruction during processing of this final phase
-			std::unique_ptr<TaskBase> tmpSelf;
-
-			// since the notification of the parent may result in the deletion of this
-			// task, we first check whether we need to keep this task alive
-			if (num_active_dependencies > 0) {
-
-				// this may only happen if this task is substituted
-				assert_true(substituted);
-
-				// this must be the root or a left or right child since on substitutes there should not be any dependencies
-				assert_true(path.isRoot() || parent->left.get() == this || parent->right.get() == this);
-
-				// increment by one more dependency to avoid destruction while processing the transfer of ownership
-				num_active_dependencies++;
-
-				// take over ownership
-				if (path.isRoot() && family) {
-					tmpSelf = std::move(family->removeRoot());
-				} else {
-					tmpSelf = (parent->left.get() == this) ? std::move(parent->left) : std::move(parent->right);
-				}
-			}
-
 			// copy parent pointer to stack, since the markDone may release this task
 			TaskBase* locParent = parent;
 
 			// inform the family that the job is done
-			if (!parent || parent->substitute.get() != this) {
+			if (!parent || parent->substitute != this) {
 				// only due this if you are not the substitute
 				if (family) family->markDone(path);
+
+				// if there is no parent, don't wait for it to signal its release
+				if (!parent) dependencyDone();
 			}
 
 			// notify parent
@@ -1335,15 +1324,6 @@ namespace reference {
 
 			}
 
-			// finish handling of life cycle
-			if (tmpSelf) {
-
-				// move ownership
-				self = std::move(tmpSelf);
-
-				// release the auxiliary dependency
-				dependencyDone();
-			}
 		}
 
 		// -- support printing of tasks for debugging --
@@ -1494,13 +1474,13 @@ namespace reference {
 
 	public:
 
-		Task() : TaskBase(false), promise(nullptr) {}
+		Task() : TaskBase(), promise(nullptr) {}
 
 		Task(const T& value)
 			: TaskBase(true), value(value), promise(nullptr) {}
 
-		Task(std::unique_ptr<TaskBase>&& left, std::unique_ptr<TaskBase>&& right, bool parallel)
-			: TaskBase(std::move(left),std::move(right), parallel), promise(nullptr) {}
+		Task(TaskBase* left, TaskBase* right, bool parallel)
+			: TaskBase(left, right, parallel), promise(nullptr) {}
 
 
 		virtual ~Task(){};
@@ -1551,10 +1531,10 @@ namespace reference {
 	class Task<void> : public TaskBase {
 	public:
 
-		Task() : TaskBase(false) {}
+		Task() : TaskBase() {}
 
-		Task(std::unique_ptr<TaskBase>&& left, std::unique_ptr<TaskBase>&& right, bool parallel)
-			: TaskBase(std::move(left),std::move(right),parallel) {}
+		Task(TaskBase* left, TaskBase* right, bool parallel)
+			: TaskBase(left,right,parallel) {}
 
 		virtual ~Task(){};
 
@@ -1629,7 +1609,7 @@ namespace reference {
 			return (subTask) ? subTask->getValue() : Task<R>::computeAggregate();
 		}
 
-		void split() override;
+		bool split() override;
 
 	};
 
@@ -1643,10 +1623,10 @@ namespace reference {
 
 	public:
 
-		SplitTask(std::unique_ptr<Task<A>>&& left, std::unique_ptr<Task<B>>&& right, C&& merge, bool parallel)
-			: Task<R>(std::move(left),std::move(right),parallel),
-			  left(static_cast<const Task<A>&>(*this->getLeft())),
-			  right(static_cast<const Task<B>&>(*this->getRight())),
+		SplitTask(Task<A>* left, Task<B>* right, C&& merge, bool parallel)
+			: Task<R>(left,right,parallel),
+			  left(*left),
+			  right(*right),
 			  merge(merge) {}
 
 
@@ -1666,8 +1646,8 @@ namespace reference {
 	class SplitTask<void,A,B,void> : public Task<void> {
 	public:
 
-		SplitTask(std::unique_ptr<TaskBase>&& left, std::unique_ptr<TaskBase>&& right, bool parallel)
-			: Task<void>(std::move(left),std::move(right),parallel) {}
+		SplitTask(TaskBase* left, TaskBase* right, bool parallel)
+			: Task<void>(left,right,parallel) {}
 
 		void computeValue() override {
 			// should not be reached
@@ -1681,15 +1661,15 @@ namespace reference {
 	};
 
 	template<typename Deps, typename A, typename B, typename C, typename R = std::result_of_t<C(A,B)>>
-	std::unique_ptr<Task<R>> make_split_task(Deps&& deps, std::unique_ptr<Task<A>>&& left, std::unique_ptr<Task<B>>&& right, C&& merge, bool parallel) {
-		std::unique_ptr<Task<R>> res = std::make_unique<SplitTask<R,A,B,C>>(std::move(left), std::move(right), std::move(merge), parallel);
+	Task<R>* make_split_task(Deps&& deps, Task<A>* left, Task<B>* right, C&& merge, bool parallel) {
+		Task<R>* res = new SplitTask<R,A,B,C>(left, right, std::move(merge), parallel);
 		res->addDependencies(deps.begin(), deps.end());
 		return res;
 	}
 
 	template<typename Deps>
-	std::unique_ptr<Task<void>> make_split_task(Deps&& deps, std::unique_ptr<TaskBase>&& left, std::unique_ptr<TaskBase>&& right, bool parallel) {
-		std::unique_ptr<Task<void>> res = std::make_unique<SplitTask<void,void,void,void>>(std::move(left), std::move(right), parallel);
+	Task<void>* make_split_task(Deps&& deps, TaskBase* left, TaskBase* right, bool parallel) {
+		Task<void>* res = new SplitTask<void,void,void,void>(left, right, parallel);
 		res->addDependencies(deps.begin(), deps.end());
 		return res;
 	}
@@ -1836,26 +1816,29 @@ namespace reference {
 
 
 	template<typename Process, typename Split, typename R>
-	void SplitableTask<Process,Split,R>::split() {
+	bool SplitableTask<Process,Split,R>::split() {
 		// do not split a second time
-		if (!TaskBase::isSplitable()) return;
+		if (!TaskBase::isSplitable()) return false;
 
 		assert_true(TaskBase::State::Blocked == this->state || TaskBase::State::Ready == this->state)
 				<< "Actual state: " << this->state;
 
 		// decompose this task
-		std::unique_ptr<Task<R>> substitute = decompose().toTask();
+		Task<R>* substitute = decompose().toTask();
 		assert_true(substitute);
 		assert_true(substitute->state == TaskBase::State::New || substitute->state == TaskBase::State::Done);
 
 		// record reference to sub-task
-		subTask = substitute.get();
+		subTask = substitute;
 
 		// mark as no longer splitable
 		TaskBase::setSplitable(false);
 
 		// mutate to new task
-		Task<R>::setSubstitute(std::move(substitute));
+		Task<R>::setSubstitute(substitute);
+
+		// done
+		return true;
 	}
 
 
@@ -1888,24 +1871,31 @@ namespace reference {
 	template<typename T>
 	class unreleased_treeture {
 
-		std::unique_ptr<Task<T>> task;
+		Task<T>* task;
 
 	public:
 
 		using value_type = T;
 
-		unreleased_treeture(std::unique_ptr<Task<T>>&& task)
-			: task(std::move(task)) {}
+		unreleased_treeture(Task<T>* task)
+			: task(task) {}
 
 		unreleased_treeture(const unreleased_treeture&) =delete;
-		unreleased_treeture(unreleased_treeture&&) =default;
+
+		unreleased_treeture(unreleased_treeture&& other) : task(other.task) {
+			other.task = nullptr;
+		}
 
 		unreleased_treeture& operator=(const unreleased_treeture&) =delete;
-		unreleased_treeture& operator=(unreleased_treeture&&) =default;
+
+		unreleased_treeture& operator=(unreleased_treeture&& other) {
+			std::swap(task,other.task);
+			return *this;
+		}
 
 		~unreleased_treeture() {
 			if(task) {
-				assert_ne(TaskBase::State::New,task->getState())
+				assert_fail()
 						<< "Did you forget to release a treeture?";
 			}
 		}
@@ -1920,7 +1910,10 @@ namespace reference {
 
 			// special case for completed tasks
 			if (task->isDone()) {
-				return detail::done_task_to_treeture<T>()(*task);
+				auto res = detail::done_task_to_treeture<T>()(*task);
+				task->dependencyDone();	// remove one dependency for the lose of the owner
+				task = nullptr;
+				return res;
 			}
 
 			// the referenced task has not been released yet
@@ -1930,13 +1923,15 @@ namespace reference {
 			Task<T>& taskRef = *task;
 			auto family = createFamily();
 			taskRef.adopt(family,TaskPath::root());
-			family->setRoot(std::move(task));
 
 			// create the resulting treeture
 			treeture<T> res(taskRef);
 
 			// start the task -- the actual release
 			taskRef.start();
+
+			// reset the task pointer
+			task = nullptr;
 
 			// return the resulting treeture
 			return res;
@@ -1950,8 +1945,10 @@ namespace reference {
 			return std::move(*this).release().get();
 		}
 
-		std::unique_ptr<Task<T>> toTask() && {
-			return std::move(task);
+		Task<T>* toTask() && {
+			auto res = task;
+			task = nullptr;
+			return res;
 		}
 
 	};
@@ -1980,9 +1977,9 @@ namespace reference {
 
 	template<typename DepsKind>
 	unreleased_treeture<void> done(dependencies<DepsKind>&& deps) {
-		auto res = std::make_unique<Task<void>>();
+		auto res = new Task<void>();
 		res->addDependencies(deps.begin(),deps.end());
-		return std::move(res);
+		return res;
 	}
 
 	inline unreleased_treeture<void> done() {
@@ -1991,9 +1988,9 @@ namespace reference {
 
 	template<typename DepsKind, typename T>
 	unreleased_treeture<T> done(dependencies<DepsKind>&& deps, const T& value) {
-		auto res = std::make_unique<Task<T>>(value);
+		auto res = new Task<T>(value);
 		res->addDependencies(deps.begin(),deps.end());
-		return std::move(res);
+		return res;
 	}
 
 	template<typename T>
@@ -2005,7 +2002,7 @@ namespace reference {
 	namespace detail {
 
 		template<bool root, typename Deps, typename T>
-		unreleased_treeture<T> init(Deps&& deps, std::unique_ptr<Task<T>>&& task) {
+		unreleased_treeture<T> init(Deps&& deps, Task<T>* task) {
 
 			// add dependencies
 			task->addDependencies(deps.begin(),deps.end());
@@ -2016,7 +2013,7 @@ namespace reference {
 //			}
 
 			// done
-			return std::move(task);
+			return task;
 		}
 
 	}
@@ -2025,7 +2022,7 @@ namespace reference {
 	template<bool root, typename DepsKind, typename Action, typename T = std::result_of_t<Action()>>
 	unreleased_treeture<T> spawn(dependencies<DepsKind>&& deps, Action&& op) {
 		// create and initialize the task
-		return detail::init<root>(std::move(deps), std::unique_ptr<Task<T>>(std::make_unique<SimpleTask<Action>>(std::move(op))));
+		return detail::init<root>(std::move(deps), (Task<T>*)(new SimpleTask<Action>(std::move(op))));
 	}
 
 	template<bool root, typename Action>
@@ -2036,7 +2033,7 @@ namespace reference {
 	template<bool root, typename Deps, typename Action, typename Split, typename T = std::result_of_t<Action()>>
 	unreleased_treeture<T> spawn(Deps&& deps, Action&& op, Split&& split) {
 		// create and initialize the task
-		return detail::init<root>(std::move(deps), std::unique_ptr<Task<T>>(std::make_unique<SplitableTask<Action,Split>>(std::move(op),std::move(split))));
+		return detail::init<root>(std::move(deps), (Task<T>*)(new SplitableTask<Action,Split>(std::move(op),std::move(split))));
 	}
 
 	template<bool root, typename Action, typename Split>
@@ -2145,7 +2142,7 @@ namespace reference {
 			 * A utility to fix the affinity of the current thread to the given core.
 			 */
 			void fixAffinity(int core) {
-				static const int num_cores = std::thread::hardware_concurrency();
+				int num_cores = std::thread::hardware_concurrency();
 				cpu_set_t mask;
 				CPU_ZERO(&mask);
 				CPU_SET(core % num_cores, &mask);
@@ -2217,7 +2214,7 @@ namespace reference {
 
 			void runTask(TaskBase& task);
 
-			void splitTask(TaskBase& task);
+			bool splitTask(TaskBase& task);
 
 			duration estimateRuntime(const TaskBase& task) {
 				return predictions.predictTime(task.getDepth());
@@ -2410,6 +2407,18 @@ namespace reference {
 
 			LOG_SCHEDULE("Starting task " << task);
 
+			assert_decl({
+				bool f = false;
+				auto res = task.processed.compare_exchange_strong(f,true);
+				assert_true(res);
+			});
+
+			// no substituted task may be processed
+			assert_false(task.isSubstituted());
+
+			// make sure this is a ready task
+			assert_eq(TaskBase::State::Ready,task.getState());
+
 			if (task.isSplit()) {
 				task.run();
 			} else {
@@ -2440,7 +2449,7 @@ namespace reference {
 			LOG_SCHEDULE("Finished task " << task);
 		}
 
-		void Worker::splitTask(TaskBase& task) {
+		bool Worker::splitTask(TaskBase& task) {
 			using namespace std::chrono_literals;
 
 			// the threshold for estimated task to be split
@@ -2450,15 +2459,34 @@ namespace reference {
 			if (task.isSplitable() && (task.getDepth() == 0 || estimateRuntime(task) > taskTimeThreshold)) {
 
 				// split this task
-				task.split();
+				return task.split();
 
 			}
+
+			// no split happend
+			return false;
 		}
 
 		inline void Worker::schedule(TaskBase& task) {
 
 			// assert that task has no unfinished dependencies
 			assert_true(task.isReady());
+
+			// no task that is substituted shall be scheduled
+			assert_false(task.isSubstituted());
+
+//			{
+//				static std::mutex lock;
+//				std::lock_guard<std::mutex> g(lock);
+//				std::cout << "Scheduling " << task.getId() << "\n";
+//			}
+
+			assert_decl({
+				bool f = false;
+				auto first = task.scheduled.compare_exchange_strong(f,true);
+				assert_true(first);
+			});
+
 
 			// add task to queue
 			LOG_SCHEDULE( "Queue size before: " << queue.size() );
@@ -2475,6 +2503,8 @@ namespace reference {
 				return;
 			}
 
+			// no task that is substituted shall be scheduled
+			assert_false(task.isSubstituted());
 
 			// add task to queue
 			queue.push_back(&task);
@@ -2495,6 +2525,9 @@ namespace reference {
 			// process a task from the local queue
 			if (TaskBase* t = queue.pop_front()) {
 
+				// the task should not have a substitute
+				assert_false(t->isSubstituted());
+
 				// check precondition of task
 				assert_true(t->isReady()) << "Actual state: " << t->getState();
 
@@ -2503,8 +2536,12 @@ namespace reference {
 
 					LOG_SCHEDULE( "Splitting tasks @ queue size: " << queue.size() );
 
-					// split task
-					splitTask(*t);
+					// split task and be done
+					if (splitTask(*t)) return true;
+
+					// the task should not have a substitute
+					assert_false(t->isSubstituted());
+
 				}
 
 				// process this task
@@ -2525,13 +2562,19 @@ namespace reference {
 			// try to steal a task from another queue
 			if (TaskBase* t = other.queue.try_pop_back()) {
 
+				// the task should not have a substitute
+				assert_false(t->isSubstituted());
+
 				// log creation of worker event
 				logProfilerEvent(ProfileLogEntry::createTaskStolenEntry(t->getId()));
 
 				LOG_SCHEDULE( "Stolen task: " << t );
 
 				// split task the task (since there is not enough work in the queue)
-				splitTask(*t);
+				if (splitTask(*t)) return true;
+
+				// the task should not have a substitute
+				assert_false(t->isSubstituted());
 
 				// process task
 				runTask(*t);
@@ -2580,11 +2623,11 @@ namespace reference {
 			// split this task
 			split();
 
-			// remove dummy dependency blocking this task from running
-			num_active_dependencies--;
-
-			// done
-			return;
+//			// remove dummy dependency blocking this task from running
+//			num_active_dependencies--;
+//
+//			// done
+//			return;
 		}
 
 		// release dummy-dependency to get task started
@@ -2593,32 +2636,37 @@ namespace reference {
 
 	void TaskBase::dependencyDone() {
 
-
 		// decrease the number of active dependencies
 		int oldValue = num_active_dependencies.fetch_sub(1);
 
+		// compute the new value
+		int newValue = oldValue - 1;
+
 		// make sure there are no releases that should not be
-		assert_lt(0,oldValue);
+		assert_le(0,newValue);
 
-		// if the old value was not 1, the new one is not 0, thus there are dependencies left
-		if (oldValue != 1) return;
+		// if we are down to 0 => destroy this task
+		if (newValue == 0) {
 
-		// handle case where we are just waiting for the final dependencies to be completed
-		// before deleting this task
-		if (self) {
+			// at this point this task must be done
+			assert_eq(State::Done,state);
 
-			// copy unique pointer to stack to get deleted at return
-			std::unique_ptr<TaskBase> tmpSelf = std::move(self);
-
-			// done
+			// destroy this object, and be done
+			delete this;
 			return;
 		}
+
+		// if the new value is not 1 => ignore
+		if (newValue != 1) return;
+
+		// if the value is 1, we release this task for computation
+		assert_eq(1,newValue);
 
 		// handle substituted instances by ignoring the message
 		if (substituted) return;
 
-		// make sure that this is never reached when there is a dependency left
-		assert_eq(num_active_dependencies, 0);
+		// make sure that at this point there is still a parent left
+		assert_eq(num_active_dependencies, 1);
 
 		// at this point the state must not be new
 		assert_ne(State::New, state)
