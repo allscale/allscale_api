@@ -20,7 +20,7 @@ namespace data {
 
 	public:
 
-		Vector() {};
+		Vector() = default;
 
 		Vector(const T& e) {
 			for(size_t i = 0; i < Dims; i++) { data[i] = e; }
@@ -198,7 +198,7 @@ namespace data {
 	public:
 		T x, y, z;
 
-		Vector() {};
+		Vector() = default;
 
 		Vector(const T& e) : x(e), y(e), z(e) { }
 
@@ -277,7 +277,7 @@ namespace data {
 	public:
 		T x, y;
 
-		Vector() {};
+		Vector() = default;
 
 		Vector(const T& e) : x(e), y(e) { }
 
