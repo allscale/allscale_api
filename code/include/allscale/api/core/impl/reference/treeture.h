@@ -887,6 +887,9 @@ namespace reference {
 			// we must still be in the new state
 			assert_eq(getState(),State::New);
 
+			// this task must not yet be started nor must the parent be lost
+			assert_le(2,num_active_dependencies);
+
 			// increase the number of active dependencies
 			num_active_dependencies += end - begin;
 
@@ -2154,7 +2157,7 @@ namespace reference {
 		class WorkerPool;
 
 
-		struct Worker {
+		class Worker {
 
 			using duration = RuntimePredictor::duration;
 
@@ -2311,6 +2314,8 @@ namespace reference {
 			}
 
 			Worker& getWorker(int i) {
+				assert_le(0,i);
+				assert_lt(i,(int)workers.size());
 				return *workers[i];
 			}
 
@@ -2475,12 +2480,68 @@ namespace reference {
 			// no task that is substituted shall be scheduled
 			assert_false(task.isSubstituted());
 
+
+			// actively distribute initial tasks, by assigning them to different workers
+
+			// TODO: do the following only for top-level tasks!!
+
+			if (!task.isOrphan()) {
+
+				// get the limit for initial decomposition
+				auto split_limit = pool.getInitialSplitDepthLimit();
+
+				// if below this limit, split the task
+				if (task.isSplitable() && task.getDepth() < split_limit) {
+
+					// if splitting worked => we are done
+					if (task.split()) return;
+
+				}
+
+				// the depth limit for task being actively distributed
+				auto distribution_limit = split_limit + 2;
+
+				// actively distribute tasks throughout the pool
+				if (task.getDepth() < distribution_limit) {
+
+					// actively select the worker to issue the task to
+					int num_workers = pool.getNumWorkers();
+					auto path = task.getTaskPath().getPath();
+					auto depth = task.getDepth();
+
+					auto trgWorker = (depth==0) ? 0 : (path * num_workers) / (1 << depth);
+
+					// check the computation of the target worker
+					assert_lt(trgWorker,(std::size_t)pool.getNumWorkers())
+						<< "Error in target worker computation:\n"
+						<< "\tNumWorkers: " << num_workers << "\n"
+						<< "\tPath:       " << path << "\n"
+						<< "\tDepth:      " << depth << "\n"
+						<< "\tTarget:     " << trgWorker << "\n";
+
+
+					// if the target is another worker => send the task there
+					if (trgWorker != id) {
+
+						// submit this task to the selected worker
+						pool.getWorker(trgWorker).schedule(task);
+
+						// done
+						return;
+
+					}
+				}
+			}
+
+
+
 //			{
 //				static std::mutex lock;
 //				std::lock_guard<std::mutex> g(lock);
 //				std::cout << "Scheduling " << task.getId() << "\n";
 //			}
 
+			// make sure each task only reaches this point once
 			assert_decl({
 				bool f = false;
 				auto first = task.scheduled.compare_exchange_strong(f,true);
@@ -2615,20 +2676,20 @@ namespace reference {
 		// move to next state
 		setState(State::Blocked);
 
-		// split tasks by default up to a given level
-		auto& pool = runtime::WorkerPool::getInstance();
-		auto depth_limit = pool.getInitialSplitDepthLimit();
-		if (!isOrphan() && isSplitable() && getDepth() < depth_limit) {
-
-			// split this task
-			split();
-
-//			// remove dummy dependency blocking this task from running
-//			num_active_dependencies--;
+//		// split tasks by default up to a given level
+//		auto& pool = runtime::WorkerPool::getInstance();
+//		auto depth_limit = pool.getInitialSplitDepthLimit();
+//		if (!isOrphan() && isSplitable() && getDepth() < depth_limit) {
 //
-//			// done
-//			return;
-		}
+//			// split this task
+//			split();
+//
+////			// remove dummy dependency blocking this task from running
+////			num_active_dependencies--;
+////
+////			// done
+////			return;
+//		}
 
 		// release dummy-dependency to get task started
 		dependencyDone();
@@ -2679,33 +2740,36 @@ namespace reference {
 		// (this can only be reached by one thread)
 		setState(State::Ready);
 
-		// actively distribute initial tasks, by assigning them to different workers
+		// schedule task
+		runtime::getCurrentWorker().schedule(*this);
 
-		// TODO: do the following only for top-level tasks!!
-		auto& pool = runtime::WorkerPool::getInstance();
-
-		// compute the decomposition limit
-		auto depth_limit = pool.getInitialSplitDepthLimit();
-
-		// decide whether an active decomposition shell be conducted
-		if (!isOrphan() && getDepth() < depth_limit) {
-
-			// actively select the worker to issue the task to
-			int num_workers = pool.getNumWorkers();
-			auto path = getTaskPath().getPath();
-			auto depth = getDepth();
-
-			auto trgWorker = (depth==0) ? 0 : (path * num_workers) / (1 << depth);
-
-			// submit this task to the selected worker
-			pool.getWorker(trgWorker).schedule(*this);
-
-		} else {
-
-			// enqueue task to be processed by local worker
-			runtime::getCurrentWorker().schedule(*this);
-
-		}
+//		// actively distribute initial tasks, by assigning them to different workers
+//
+//		// TODO: do the following only for top-level tasks!!
+//		auto& pool = runtime::WorkerPool::getInstance();
+//
+//		// compute the decomposition limit
+//		auto depth_limit = pool.getInitialSplitDepthLimit();
+//
+//		// decide whether an active decomposition shell be conducted
+//		if (!isOrphan() && getDepth() < depth_limit) {
+//
+//			// actively select the worker to issue the task to
+//			int num_workers = pool.getNumWorkers();
+//			auto path = getTaskPath().getPath();
+//			auto depth = getDepth();
+//
+//			auto trgWorker = (depth==0) ? 0 : (path * num_workers) / (1 << depth);
+//
+//			// submit this task to the selected worker
+//			pool.getWorker(trgWorker).schedule(*this);
+//
+//		} else {
+//
+//			// enqueue task to be processed by local worker
+//			runtime::getCurrentWorker().schedule(*this);
+//
+//		}
 
 	}
 
