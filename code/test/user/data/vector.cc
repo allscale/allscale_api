@@ -103,9 +103,17 @@ namespace data {
 		// scalar multiplication
 		p1 = p1 * 2;
 		EXPECT_EQ("[4,8]", toString(p1));
+		p1 = 2 * p1;
+		EXPECT_EQ("[8,16]", toString(p1));
 
 		p1 *= 2;
+		EXPECT_EQ("[16,32]", toString(p1));
+
+		// scalar division
+		p1 = p1 / 2;
 		EXPECT_EQ("[8,16]", toString(p1));
+		p1 /= 2;
+		EXPECT_EQ("[4,8]", toString(p1));
 
 	}
 
@@ -156,15 +164,28 @@ namespace data {
 		// scalar multiplication
 		p1 = p1 * 2;
 		EXPECT_EQ("[4,8,12]", toString(p1));
+		p1 = 2 * p1;
+		EXPECT_EQ("[8,16,24]", toString(p1));
 
 		p1 *= 2;
+		EXPECT_EQ("[16,32,48]", toString(p1));
+
+		// scalar division
+		p1 = p1 / 2;
 		EXPECT_EQ("[8,16,24]", toString(p1));
+		p1 /= 2;
+		EXPECT_EQ("[4,8,12]", toString(p1));
 
 		// cross product
 		p1 = {1,2,3};
 		p2 = {2,3,4};
 		auto p3 = crossProduct(p1, p2);
 		EXPECT_EQ("[-1,2,-1]", toString(p3));
+
+		Vector<double, 3> temp = { 1,2,3 };
+		const Vector<double, 3>& temp2 = temp;
+		auto res = temp2 * 2.0;
+		EXPECT_EQ("[2,4,6]", toString(res));
 
 	}
 
@@ -215,9 +236,17 @@ namespace data {
 		// scalar multiplication
 		p1 = p1 * 2;
 		EXPECT_EQ("[4,8,12,16,20]", toString(p1));
+		p1 = 2 * p1;
+		EXPECT_EQ("[8,16,24,32,40]", toString(p1));
 
 		p1 *= 2;
+		EXPECT_EQ("[16,32,48,64,80]", toString(p1));
+
+		// scalar division
+		p1 = p1 / 2;
 		EXPECT_EQ("[8,16,24,32,40]", toString(p1));
+		p1 /= 2;
+		EXPECT_EQ("[4,8,12,16,20]", toString(p1));
 
 	}
 

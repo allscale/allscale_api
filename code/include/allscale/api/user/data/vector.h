@@ -139,6 +139,11 @@ namespace data {
 	}
 
 	template<typename T, std::size_t Dims, typename S>
+	Vector<T, Dims> operator*(const S& fac, const Vector<T, Dims>& vec) {
+		return vec * fac;
+	}
+
+	template<typename T, std::size_t Dims, typename S>
 	Vector<T,Dims> operator/(const Vector<T, Dims>& vec, const S& fac) {
 		Vector<T,Dims> res(vec);
 		return res /= fac;
