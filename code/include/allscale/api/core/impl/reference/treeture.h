@@ -2310,7 +2310,7 @@ namespace reference {
 			std::size_t getInitialSplitDepthLimit() const {
 				auto num_workers = getNumWorkers();
 				// we go down to ~ 4 times the number of threads
-				return sizeof(num_workers) * 8 - __builtin_clz(num_workers) + 2;
+				return sizeof(num_workers) * 8 - __builtin_clz(num_workers-1) + 2;
 			}
 
 			Worker& getWorker(int i) {
