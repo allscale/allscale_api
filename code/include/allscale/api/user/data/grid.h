@@ -409,8 +409,8 @@ namespace data {
 			// compute the bounding box
 			box_type res = regions.front();
 			for(const box_type& cur : regions) {
-				res.min = data::pointwiseMin(res.min, cur.min);
-				res.max = data::pointwiseMax(res.max, cur.max);
+				res.min = data::elementwiseMin(res.min, cur.min);
+				res.max = data::elementwiseMax(res.max, cur.max);
 			}
 			return res;
 		}
