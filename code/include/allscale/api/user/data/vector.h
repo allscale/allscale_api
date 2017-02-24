@@ -2,6 +2,7 @@
 
 #include <array>
 #include <algorithm>
+#include <tuple>
 
 #include "allscale/utils/printer/arrays.h"
 #include "allscale/utils/assert.h"
