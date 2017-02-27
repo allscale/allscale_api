@@ -270,60 +270,71 @@ namespace reference {
 
 		template<bool tryOnlyOnce>
 		T pop_front_internal() {
-			// start with a read permit
-			auto lease = lock.start_read();
+			// manual tail-recursion optimization since
+			// debug builds may fail to do so
+			while(true) {
 
-			// check whether it is empty
-			if (data.empty()) {
-				return T();
+				// start with a read permit
+				auto lease = lock.start_read();
+
+				// check whether it is empty
+				if (data.empty()) {
+					return T();
+				}
+
+				// to retrieve data, upgrade to a write
+				if (!lock.try_upgrade_to_write(lease)) {
+					// if upgrade failed, restart procedure if requested
+					if (tryOnlyOnce) return T();
+					continue;	// start over again
+				}
+
+				// now this one has write access (exclusive)
+				T res(std::move(data.front()));
+				data.pop_front();
+				--num_entries;
+
+				// write is complete
+				lock.end_write();
+
+				// done
+				return res;
+
 			}
-
-			// to retrieve data, upgrade to a write
-			if (!lock.try_upgrade_to_write(lease)) {
-				// if upgrade failed, restart procedure if requested
-				if (tryOnlyOnce) return T();
- 				return pop_front_internal<tryOnlyOnce>();
-			}
-
-			// now this one has write access (exclusive)
-			T res(std::move(data.front()));
-			data.pop_front();
-			--num_entries;
-
-			// write is complete
-			lock.end_write();
-
-			// done
-			return res;
 		}
 
 		template<bool tryOnlyOnce>
 		T pop_back_internal() {
-			// start with a read permit
-			auto lease = lock.start_read();
+			// manual tail-recursion optimization since
+			// debug builds may fail to do so
+			while(true) {
 
-			// check whether it is empty
-			if (data.empty()) {
-				return T();
+				// start with a read permit
+				auto lease = lock.start_read();
+
+				// check whether it is empty
+				if (data.empty()) {
+					return T();
+				}
+
+				// to retrieve data, upgrade to a write
+				if (!lock.try_upgrade_to_write(lease)) {
+					// if upgrade failed, restart procedure if requested
+					if (tryOnlyOnce) return T();
+					continue;	// start over again
+				}
+
+				// now this one has write access (exclusive)
+				T res(std::move(data.back()));
+				data.pop_back();
+				--num_entries;
+
+				// write is complete
+				lock.end_write();
+
+				// done
+				return res;
 			}
-
-			// to retrieve data, upgrade to a write
-			if (!lock.try_upgrade_to_write(lease)) {
-				// if upgrade failed, restart procedure if requested
-				if (tryOnlyOnce) return T();
-				return pop_back_internal<tryOnlyOnce>();
-			}
-
-			// now this one has write access (exclusive)
-			T res(std::move(data.back()));
-			data.pop_back();
-			--num_entries;
-
-			// write is complete
-			lock.end_write();
-
-			// done
-			return res;
 		}
 
 	public:
