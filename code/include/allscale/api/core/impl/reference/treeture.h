@@ -692,7 +692,7 @@ namespace reference {
 	class Promise {
 
 		// a marker for delivered values
-		bool ready;
+		std::atomic<bool> ready;
 
 		// the delivered value
 		T value;
@@ -717,6 +717,31 @@ namespace reference {
 			ready = true;
 		}
 	};
+
+	/**
+	 * A specialization for void promises.
+	 */
+	template<>
+	class Promise<void> {
+
+		// a marker for delivered promises
+		std::atomic<bool> ready;
+
+	public:
+
+		Promise(bool ready = false)
+			: ready(ready) {}
+
+		bool isReady() const {
+			return ready;
+		}
+
+		void setReady() {
+			ready = true;
+		}
+
+	};
+
 
 	template<typename T>
 	using PromisePtr = std::shared_ptr<Promise<T>>;
@@ -1541,6 +1566,9 @@ namespace reference {
 
 	template<>
 	class Task<void> : public TaskBase {
+
+		mutable PromisePtr<void> promise;
+
 	public:
 
 		Task() : TaskBase() {}
@@ -1553,6 +1581,18 @@ namespace reference {
 		void getValue() const {
 		}
 
+		void setPromise(const PromisePtr<void>& newPromise) const {
+
+			// this task must not be started yet
+			assert_eq(State::New,this->getState());
+
+			// there must not be a previous promise
+			assert_false(promise);
+
+			// register promise
+			promise = newPromise;
+		}
+
 	protected:
 
 		void execute() override {
@@ -1561,6 +1601,9 @@ namespace reference {
 
 		void aggregate() override {
 			computeAggregate();
+			if(promise) {
+				promise->setReady();
+			}
 		}
 
 		virtual void computeValue() {};
@@ -1708,39 +1751,57 @@ namespace reference {
 
 		protected:
 
-			task_reference task;
+			task_reference taskRef;
 
-			treeture_base() : task() {}
+			PromisePtr<T> promise;
 
-			treeture_base(const TaskBase& task) : task(task) {}
+			treeture_base() : promise() {}
+
+			treeture_base(const Task<T>& task) : promise(std::make_shared<Promise<T>>()) {
+
+				// make sure task has not been started yet
+				assert_eq(TaskBase::State::New, task.getState());
+
+				// register the promise
+				task.setPromise(promise);
+
+				// also create task reference if available
+				if (!task.isOrphan()) {
+					taskRef = task_reference(task);
+				}
+			}
+
+			treeture_base(PromisePtr<T>&& promise)
+				: promise(std::move(promise)) {
+
+				// make sure the promise is valid and set
+				assert_true(this->promise);
+				assert_true(this->promise->isReady());
+
+			}
 
 		public:
 
 			using value_type = T;
 
 			treeture_base(const treeture_base&) = delete;
-			treeture_base(treeture_base&& other) : task(std::move(other.task)) {}
+			treeture_base(treeture_base&& other) = default;
 
 			treeture_base& operator=(const treeture_base&) = delete;
-			treeture_base& operator=(treeture_base&& other) {
-				task = std::move(other.task);
-				return *this;
-			}
+			treeture_base& operator=(treeture_base&& other) = default;
 
-			void wait() const {
-				task.wait();
-			}
+			void wait() const;
 
 			task_reference getLeft() const {
-				return task.getLeft();
+				return getTaskReference().getLeft();
 			}
 
 			task_reference getRight() const {
-				return task.getRight();
+				return getTaskReference().getRight();
 			}
 
 			task_reference getTaskReference() const {
-				return task;
+				return taskRef;
 			}
 
 			operator task_reference() const {
@@ -1762,24 +1823,14 @@ namespace reference {
 
 		friend class unreleased_treeture<T>;
 
-		PromisePtr<T> promise;
-
 	protected:
 
-		treeture(const Task<T>& task)
-			: super(task), promise(std::make_shared<Promise<T>>()) {
-
-			// make sure task has not been started yet
-			assert_eq(TaskBase::State::New, task.getState());
-
-			// register the promise
-			task.setPromise(promise);
-		}
+		treeture(const Task<T>& task) : super(task) {}
 
 	public:
 
 		treeture(const T& value = T())
-			: super(), promise(std::make_shared<Promise<T>>(value)) {}
+			: super(std::make_shared<Promise<T>>(value)) {}
 
 		treeture(const treeture&) = delete;
 		treeture(treeture&& other) = default;
@@ -1789,7 +1840,7 @@ namespace reference {
 
 		const T& get() {
 			super::wait();
-			return promise->getValue();
+			return this->promise->getValue();
 		}
 
 	};
@@ -1807,11 +1858,11 @@ namespace reference {
 
 	protected:
 
-		treeture(const TaskBase& task) : super(task) {}
+		treeture(const Task<void>& task) : super(task) {}
 
 	public:
 
-		treeture() : super() {}
+		treeture() : super(std::make_shared<Promise<void>>(true)) {}
 
 		treeture(const treeture&) = delete;
 		treeture(treeture&& other) = default;
@@ -1917,8 +1968,8 @@ namespace reference {
 			// there has to be a task
 			assert_true(task);
 
-			// this task should be an orphan
-			assert_true(task->isOrphan());
+//			// this task should be an orphan
+//			assert_true(task->isOrphan());
 
 			// special case for completed tasks
 			if (task->isDone()) {
@@ -1931,10 +1982,10 @@ namespace reference {
 			// the referenced task has not been released yet
 			assert_eq(TaskBase::State::New,task->getState());
 
-			// create a family for the task
+//			// create a family for the task
 			Task<T>& taskRef = *task;
-			auto family = createFamily();
-			taskRef.adopt(family,TaskPath::root());
+//			auto family = createFamily();
+//			taskRef.adopt(family,TaskPath::root());
 
 			// create the resulting treeture
 			treeture<T> res(taskRef);
@@ -2019,10 +2070,10 @@ namespace reference {
 			// add dependencies
 			task->addDependencies(deps.begin(),deps.end());
 
-//			// create task family if requested
-//			if (root) {
-//				task->adopt(createFamily());
-//			}
+			// create task family if requested
+			if (root) {
+				task->adopt(createFamily());
+			}
 
 			// done
 			return task;
@@ -2807,6 +2858,19 @@ namespace reference {
 			// but while doing so, do useful stuff
 			runtime::getCurrentWorker().schedule_step();
 		}
+	}
+
+	namespace detail {
+
+		template<typename T>
+		void treeture_base<T>::wait() const {
+			// wait for completion
+			while (promise && !promise->isReady()) {
+				// make some progress
+				runtime::getCurrentWorker().schedule_step();
+			}
+		}
+
 	}
 
 } // end namespace reference
