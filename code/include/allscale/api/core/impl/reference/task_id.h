@@ -136,7 +136,7 @@ namespace reference {
 
 			path_iterator& operator++() {
 				--pos;
-				cur = Direction((path >> (pos-1)) % 2);
+				if (pos > 0) cur = Direction((path >> (pos-1)) % 2);
 				return *this;
 			}
 
