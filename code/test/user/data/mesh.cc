@@ -93,6 +93,25 @@ namespace data {
 		builder.link<Tree>(root,cell);
 	}
 
+
+	TEST(MeshData, Basic) {
+
+		struct Vertex {};
+		struct Edge : public edge<Vertex,Vertex> {};
+
+		MeshBuilder<nodes<Vertex>,edges<Edge>> builder;
+
+		auto cell = builder.create<Vertex>();
+		builder.link<Edge>(cell,cell);
+
+		auto m = builder.build();
+
+		auto store = m.createNodeData<Vertex,int>();
+
+		EXPECT_EQ(1,store.size());
+
+	}
+
 	// --- combinations ---
 
 
