@@ -464,13 +464,13 @@ namespace data {
 
 			NodeList<Trg,Level> getSinks(const NodeRef<Src,Level>& src) const {
 				assert_true(edges.empty()) << "Accessing non-closed edge set!";
-				if (src.id >= forward_offsets.size()-1) return NodeList<Trg,Level>{nullptr,nullptr};
+				if (src.id >= forward_offsets.size()-1 || forward_targets.empty()) return NodeList<Trg,Level>{nullptr,nullptr};
 				return NodeList<Trg,Level>{&forward_targets[forward_offsets[src.id]], &forward_targets[forward_offsets[src.id+1]]};
 			}
 
 			NodeList<Src,Level> getSources(const NodeRef<Trg,Level>& src) const {
 				assert_true(edges.empty()) << "Accessing non-closed edge set!";
-				if (src.id >= backward_offsets.size()-1) return NodeList<Src,Level>{nullptr,nullptr};
+				if (src.id >= backward_offsets.size()-1 || backward_targets.empty()) return NodeList<Src,Level>{nullptr,nullptr};
 				return NodeList<Src,Level>{&backward_targets[backward_offsets[src.id]], &backward_targets[backward_offsets[src.id+1]]};
 			}
 
@@ -763,7 +763,7 @@ namespace data {
 
 			NodeList<Trg,Level-1> getChildren(const NodeRef<Src,Level>& parent) const {
 				assert_true(isClosed());
-				if (parent.id >= children_offsets.size()-1) return NodeList<Trg,Level-1>{nullptr,nullptr};
+				if (parent.id >= children_offsets.size()-1 || children_targets.empty()) return NodeList<Trg,Level-1>{nullptr,nullptr};
 				return NodeList<Trg,Level-1>{&children_targets[children_offsets[parent.id]], &children_targets[children_offsets[parent.id+1]]};
 			}
 
