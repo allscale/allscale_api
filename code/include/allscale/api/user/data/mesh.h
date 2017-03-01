@@ -93,7 +93,8 @@ namespace data {
 		typename NodeKinds,						// < list of node types in each level
 		typename EdgeKinds,						// < list of edge types connecting nodes within levels
 		typename Hierarchies = hierarchies<>,	// < list of edge types connecting nodes between adjacent levels
-		unsigned Levels = 1						// < number of levels in the hierarchy
+		unsigned Levels = 1,					// < number of levels in the hierarchy
+		unsigned PartitionMesh = 0				// < number of partitioning level
 	>
 	class Mesh;
 
@@ -174,7 +175,7 @@ namespace data {
 	>
 	class MeshData {
 
-		template<typename NodeKinds,typename EdgeKinds,typename Hierarchies,unsigned Levels>
+		template<typename NodeKinds,typename EdgeKinds,typename Hierarchies,unsigned Levels,unsigned PartitionDepth>
 		friend class Mesh;
 
 		std::vector<ElementType> data;
@@ -229,6 +230,26 @@ namespace data {
 		struct level {
 			enum { value = Level };
 		};
+
+
+		template<typename T>
+		struct get_level;
+
+		template<unsigned L>
+		struct get_level<level<L>> {
+			enum { value = L };
+		};
+
+		template<typename T>
+		struct get_level<T&> : public get_level<T> {};
+		template<typename T>
+		struct get_level<const T> : public get_level<T> {};
+		template<typename T>
+		struct get_level<volatile T> : public get_level<T> {};
+
+		template<typename T>
+		using plain_type = typename std::remove_cv<typename std::remove_reference<T>::type>::type;
+
 
 		template<typename Element>
 		void sumPrefixes(std::vector<Element>& list) {
@@ -300,11 +321,11 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllTypes(const Body& body) const {
+			void forAllKinds(const Body& body) const {
 				// call for this type
 				body(First(), level<Level>());
 				// and the nested types
-				nested.forAllTypes(body);
+				nested.forAllKinds(body);
 			}
 /*
 			void store(std::ostream& out) const {
@@ -360,7 +381,7 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllTypes(const Body&) const {
+			void forAllKinds(const Body&) const {
 				// nothing to do
 			}
 /*
@@ -519,11 +540,11 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllTypes(const Body& body) const {
+			void forAllKinds(const Body& body) const {
 				// visit all links for this type
 				body(First(), level<Level>());
 				// visit links of remaining hierarchies
-				nested.forAllTypes(body);
+				nested.forAllKinds(body);
 			}
 /*
 			void store(std::ostream& out) const {
@@ -621,7 +642,7 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllTypes(const Body&) const {
+			void forAllKinds(const Body&) const {
 				// nothing to do
 			}
 
@@ -800,11 +821,11 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllTypes(const Body& body) const {
+			void forAllKinds(const Body& body) const {
 				// visit all links for this type
 				body(First(), level<Level>());
 				// visit links of remaining hierarchies
-				nested.forAllTypes(body);
+				nested.forAllKinds(body);
 			}
 /*
 			void store(std::ostream& out) const {
@@ -885,7 +906,7 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllTypes(const Body&) const {
+			void forAllKinds(const Body&) const {
 				// nothing to do
 			}
 /*
@@ -988,9 +1009,9 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllNodeTypes(const Body& body) const {
-				nodes.forAllTypes(body);
-				nested.forAllNodeTypes(body);
+			void forAllNodeKinds(const Body& body) const {
+				nodes.forAllKinds(body);
+				nested.forAllNodeKinds(body);
 			}
 
 			template<typename Body>
@@ -1000,9 +1021,9 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllEdgeTypes(const Body& body) const {
-				edges.forAllTypes(body);
-				nested.forAllEdgeTypes(body);
+			void forAllEdgeKinds(const Body& body) const {
+				edges.forAllKinds(body);
+				nested.forAllEdgeKinds(body);
 			}
 
 			template<typename Body>
@@ -1012,9 +1033,9 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllHierarchyTypes(const Body& body) const {
-				hierarchies.forAllTypes(body);
-				nested.forAllHierarchyTypes(body);
+			void forAllHierarchyKinds(const Body& body) const {
+				hierarchies.forAllKinds(body);
+				nested.forAllHierarchyKinds(body);
 			}
 
 			template<typename MeshData>
@@ -1093,8 +1114,8 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllNodeTypes(const Body& body) const {
-				nodes.forAllTypes(body);
+			void forAllNodeKinds(const Body& body) const {
+				nodes.forAllKinds(body);
 			}
 
 			template<typename Body>
@@ -1103,8 +1124,8 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllEdgeTypes(const Body& body) const {
-				edges.forAllTypes(body);
+			void forAllEdgeKinds(const Body& body) const {
+				edges.forAllKinds(body);
 			}
 
 			template<typename Body>
@@ -1113,7 +1134,7 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllHierarchyTypes(const Body&) const {
+			void forAllHierarchyKinds(const Body&) const {
 				// nothing to do here
 			}
 
@@ -1158,7 +1179,7 @@ namespace data {
 		>
 		struct MeshTopologyData<nodes<Nodes...>,edges<Edges...>,hierarchies<Hierarchies...>,Levels> {
 
-			using data_store = detail::Levels<Levels,nodes<Nodes...>,edges<Edges...>,hierarchies<Hierarchies...>>;
+			using data_store = detail::Levels<Levels-1,nodes<Nodes...>,edges<Edges...>,hierarchies<Hierarchies...>>;
 
 			// all the topological data of all the nodes, edges and hierarchy relations on all levels
 			data_store data;
@@ -1206,8 +1227,8 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllNodeTypes(const Body& body) const {
-				data.forAllNodeTypes(body);
+			void forAllNodeKinds(const Body& body) const {
+				data.forAllNodeKinds(body);
 			}
 
 			template<typename Body>
@@ -1216,8 +1237,8 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllEdgeTypes(const Body& body) const {
-				data.forAllEdgeTypes(body);
+			void forAllEdgeKinds(const Body& body) const {
+				data.forAllEdgeKinds(body);
 			}
 
 			template<typename Body>
@@ -1226,8 +1247,8 @@ namespace data {
 			}
 
 			template<typename Body>
-			void forAllHierarchyTypes(const Body& body) const {
-				data.forAllHierarchyTypes(body);
+			void forAllHierarchyKinds(const Body& body) const {
+				data.forAllHierarchyKinds(body);
 			}
 
 			template<typename Kind,unsigned Level = 0>
@@ -1260,7 +1281,7 @@ namespace data {
 
 
 		template<typename Kind, unsigned Level>
-		class NodeRange {
+		struct NodeRange {
 
 			NodeRef<Kind,Level> begin;
 
@@ -1363,6 +1384,21 @@ namespace data {
 				}
 				return res;
 			}
+
+			template<typename Body>
+			void visitPostOrder(unsigned max_depth, const Body& body) {
+
+				// visit children first
+				if (getDepth() < max_depth) {
+					getLeftChild().visitPostOrder(max_depth,body);
+					getRightChild().visitPostOrder(max_depth,body);
+				}
+
+				// visit this reference
+				body(*this);
+
+			}
+
 
 			friend std::ostream& operator<<(std::ostream& out, const SubTreeRef& ref) {
 				out << "r";
@@ -1589,7 +1625,7 @@ namespace data {
 
 			static_assert(Levels > 0, "There must be at least one level!");
 
-			class LevelInfo {
+			struct LevelInfo {
 
 				utils::StaticMap<utils::keys<Nodes...>,std::pair<NodeID,NodeID>> nodeRanges;
 
@@ -1601,7 +1637,7 @@ namespace data {
 
 			};
 
-			class Node {
+			struct Node {
 
 				std::array<LevelInfo,Levels> data;
 
@@ -1619,6 +1655,7 @@ namespace data {
 
 			template<typename Kind, unsigned Level = 0>
 			NodeRange<Kind,Level> getNodeRange(const SubTreeRef& ref) const {
+				assert_lt(ref.getIndex(),num_elements);
 				auto pair = data[ref.getIndex()].data[Level].nodeRanges.template get<Kind>();
 				return {
 					NodeRef<Kind,Level>{ pair.first },
@@ -1628,53 +1665,121 @@ namespace data {
 
 			template<typename Kind, unsigned Level = 0>
 			void setNodeRange(const SubTreeRef& ref, const NodeRange<Kind,Level>& range) {
-				auto& pair = data[ref.getIndex()].data[Level].nodeRanges.template get<Kind>();
+				auto& pair = getNode(ref).data[Level].nodeRanges.template get<Kind>();
 				pair.first = range.begin.id;
 				pair.second = range.end.id;
 			}
 
 			template<typename EdgeKind, unsigned Level = 0>
 			const MeshRegion& getForwardClosure(const SubTreeRef& ref) const {
-				return data[ref.getIndex()].data[Level].forwardClosure.template get<EdgeKind>();
+				return getNode(ref).data[Level].forwardClosure.template get<EdgeKind>();
 			}
 
 			template<typename EdgeKind, unsigned Level = 0>
 			void setForwardClosure(const SubTreeRef& ref, const MeshRegion& region) {
-				data[ref.getIndex()].data[Level].forwardClosure.template get<EdgeKind>() = region;
+				getNode(ref).data[Level].forwardClosure.template get<EdgeKind>() = region;
 			}
 
 			template<typename EdgeKind, unsigned Level = 0>
 			const MeshRegion& getBackwardClosure(const SubTreeRef& ref) const {
-				return data[ref.getIndex()].data[Level].backwardClosure.template get<EdgeKind>();
+				return getNode(ref).data[Level].backwardClosure.template get<EdgeKind>();
 			}
 
 			template<typename EdgeKind, unsigned Level = 0>
 			void setBackwardClosure(const SubTreeRef& ref, const MeshRegion& region) {
-				data[ref.getIndex()].data[Level].backwardClosure.template get<EdgeKind>() = region;
+				getNode(ref).data[Level].backwardClosure.template get<EdgeKind>() = region;
 			}
 
 			template<typename HierarchyKind, unsigned Level = 0>
 			const MeshRegion& getParentClosure(const SubTreeRef& ref) const {
-				return data[ref.getIndex()].data[Level].parentClosure.template get<HierarchyKind>();
+				return getNode(ref).data[Level].parentClosure.template get<HierarchyKind>();
 			}
 
 			template<typename HierarchyKind, unsigned Level = 0>
 			void setParentClosure(const SubTreeRef& ref, const MeshRegion& region) {
-				data[ref.getIndex()].data[Level].parentClosure.template get<HierarchyKind>() = region;
+				getNode(ref).data[Level].parentClosure.template get<HierarchyKind>() = region;
 			}
 
 
 			template<typename HierarchyKind, unsigned Level = 1>
 			const MeshRegion& getChildClosure(const SubTreeRef& ref) const {
-				return data[ref.getIndex()].data[Level].childClosure.template get<HierarchyKind>();
+				return getNode(ref).data[Level].childClosure.template get<HierarchyKind>();
 			}
 
 			template<typename HierarchyKind, unsigned Level = 1>
 			void setChildClosure(const SubTreeRef& ref, const MeshRegion& region) {
-				data[ref.getIndex()].data[Level].childClosure.template get<HierarchyKind>() = region;
+				getNode(ref).data[Level].childClosure.template get<HierarchyKind>() = region;
 			}
+
+		private:
+
+			const Node& getNode(const SubTreeRef& ref) const {
+				assert_lt(ref.getIndex(),num_elements);
+				return data[ref.getIndex()];
+			}
+
+			Node& getNode(const SubTreeRef& ref) {
+				assert_lt(ref.getIndex(),num_elements);
+				return data[ref.getIndex()];
+			}
+
 		};
 
+
+		class NaiveMeshPartitioner {
+
+		public:
+
+			template<
+				unsigned PartitionDepth,
+				typename Nodes,
+				typename Edges,
+				typename Hierarchies,
+				unsigned Levels
+			>
+			PartitionTree<Nodes,Edges,Hierarchies,Levels,PartitionDepth> partition(const MeshTopologyData<Nodes,Edges,Hierarchies,Levels>& data) const {
+
+				// create empty partition tree
+				PartitionTree<Nodes,Edges,Hierarchies,Levels,PartitionDepth> res;
+
+				// set up node ranges for partitions
+				data.forAllNodeKinds([&](const auto& nodeKind, const auto& level) {
+
+						// get NodeType and level from nodetype
+						using NodeKind = plain_type<decltype(nodeKind)>;
+						const unsigned lvl = get_level<decltype(level)>::value;
+
+
+
+						auto num_nodes = data.template numNodes<NodeKind,lvl>();
+
+						SubTreeRef root = SubTreeRef::root();
+
+						root.visitPostOrder(PartitionDepth,[](const SubTreeRef& ref) {
+
+							// TODO: fill in values!
+
+							std::cout << ref << "\n";
+						});
+
+
+						// TODO:
+
+						NodeRange<NodeKind,lvl> range;
+						range.begin = NodeRef<NodeKind,lvl>{ 0 };
+						range.end = NodeRef<NodeKind,lvl>{ num_nodes };
+						res.template setNodeRange<NodeKind,lvl>(root,range);
+
+				});
+
+
+				// set up closures for partitions
+
+				// done
+				return res;
+			}
+
+		};
 
 
 	} // end namespace detail
@@ -1688,7 +1793,8 @@ namespace data {
 		typename Nodes,
 		typename Edges,
 		typename Hierarchies,
-		unsigned Levels
+		unsigned Levels,
+		unsigned PartitionDepth
 	>
 	class Mesh {
 
@@ -1711,15 +1817,18 @@ namespace data {
 		typename ... NodeKinds,
 		typename ... EdgeKinds,
 		typename ... Hierarchies,
-		unsigned Levels
+		unsigned Levels,
+		unsigned PartitionDepth
 	>
-	class Mesh<nodes<NodeKinds...>,edges<EdgeKinds...>,hierarchies<Hierarchies...>,Levels> {
+	class Mesh<nodes<NodeKinds...>,edges<EdgeKinds...>,hierarchies<Hierarchies...>,Levels,PartitionDepth> {
 
 		static_assert(Levels > 0, "There must be at least one level!");
 
 	public:
 
 		using topology_type = detail::MeshTopologyData<nodes<NodeKinds...>,edges<EdgeKinds...>,hierarchies<Hierarchies...>,Levels>;
+
+		using partition_tree_type = detail::PartitionTree<nodes<NodeKinds...>,edges<EdgeKinds...>,hierarchies<Hierarchies...>,Levels,PartitionDepth>;
 
 		using builder_type = MeshBuilder<nodes<NodeKinds...>,edges<EdgeKinds...>,hierarchies<Hierarchies...>,Levels>;
 
@@ -1731,7 +1840,10 @@ namespace data {
 
 		topology_type data;
 
-		Mesh(topology_type&& data) : data(std::move(data)) {
+		partition_tree_type partitionTree;
+
+		Mesh(topology_type&& data, partition_tree_type&& partitionTree)
+			: data(std::move(data)), partitionTree(std::move(partitionTree)) {
 			assert_true(data.isClosed());
 		}
 
@@ -1836,8 +1948,8 @@ namespace data {
 		}
 
 		template<typename Body>
-		void forAllNodeTypes(const Body& body) const {
-			data.forAllNodeTypes(body);
+		void forAllNodeKinds(const Body& body) const {
+			data.forAllNodeKinds(body);
 		}
 
 		template<typename Body>
@@ -1846,8 +1958,8 @@ namespace data {
 		}
 
 		template<typename Body>
-		void forAllEdgeTypes(const Body& body) const {
-			data.forAllEdgeTypes(body);
+		void forAllEdgeKinds(const Body& body) const {
+			data.forAllEdgeKinds(body);
 		}
 
 		template<typename Body>
@@ -1856,8 +1968,8 @@ namespace data {
 		}
 
 		template<typename Body>
-		void forAllHierarchyTypes(const Body& body) const {
-			data.forAllHierarchyTypes(body);
+		void forAllHierarchyKinds(const Body& body) const {
+			data.forAllHierarchyKinds(body);
 		}
 
 		template<typename Body>
@@ -1868,8 +1980,8 @@ namespace data {
 
 		template<typename Body>
 		void forAllLinkedTypes(const Body& body) const {
-			forAllEdgeTypes(body);
-			forAllHierarchyTypes(body);
+			forAllEdgeKinds(body);
+			forAllHierarchyKinds(body);
 		}
 */
 		// -- graph data --
@@ -1921,9 +2033,10 @@ namespace data {
 
 	public:
 
-		using mesh_type = Mesh<nodes<NodeKinds...>,edges<EdgeKinds...>,hierarchies<Hierarchies...>,Levels>;
+		template<unsigned PartitionDepth>
+		using mesh_type = Mesh<nodes<NodeKinds...>,edges<EdgeKinds...>,hierarchies<Hierarchies...>,Levels,PartitionDepth>;
 
-		using topology_type = typename mesh_type::topology_type;
+		using topology_type = detail::MeshTopologyData<nodes<NodeKinds...>,edges<EdgeKinds...>,hierarchies<Hierarchies...>,Levels>;
 
 	private:
 
@@ -1967,17 +2080,41 @@ namespace data {
 
 		// -- build mesh --
 
-		mesh_type build() const & {
-			topology_type copy = data;
-			copy.close();
-			return std::move(copy);
+		template<typename Partitioner, unsigned PartitionDepth = 0>
+		mesh_type<PartitionDepth> build(const Partitioner& partitioner) const & {
+
+			// close the topological data
+			topology_type meshData = data;
+			meshData.close();
+
+			// partition the mesh
+			auto partitionTree = partitioner.template partition<PartitionDepth>(meshData);
+
+			return mesh_type<PartitionDepth>(std::move(meshData), std::move(partitionTree));
 		}
 
-		mesh_type build() && {
-			data.close();
-			return std::move(data);
+		template<unsigned PartitionDepth = 0>
+		mesh_type<PartitionDepth> build() const & {
+			return build<detail::NaiveMeshPartitioner,PartitionDepth>(detail::NaiveMeshPartitioner());
 		}
+
+
+		template<typename Partitioner, unsigned PartitionDepth = 0>
+		mesh_type<PartitionDepth> build(const Partitioner& partitioner) && {
+
+			// partition the mesh
+			auto partitionTree = partitioner.template partition<PartitionDepth>(data);
+
+			return mesh_type<PartitionDepth>(std::move(data), std::move(partitionTree));
+		}
+
+		template<unsigned PartitionDepth = 0>
+		mesh_type<PartitionDepth> build() const && {
+			return std::move(*this).build<detail::NaiveMeshPartitioner,PartitionDepth>(detail::NaiveMeshPartitioner());
+		}
+
 	};
+
 
 } // end namespace data
 } // end namespace user
