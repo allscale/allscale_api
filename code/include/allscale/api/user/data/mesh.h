@@ -1352,7 +1352,16 @@ namespace data {
 		public:
 
 			value_t getIndex() const {
-				return (1 << getDepth()) | path;
+				// this is reversing the path 000ZYX to 1XYZ to get the usual
+				// order of nodes within a embedded tree
+				auto res = 1;
+				value_t cur = path;
+				for(unsigned i = 0; i<getDepth(); ++i) {
+					res <<= 1;
+					res += cur % 2;
+					cur >>= 1;
+				}
+				return res;
 			}
 
 			friend std::ostream& operator<<(std::ostream& out, const SubTreeRef& ref) {

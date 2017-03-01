@@ -163,6 +163,8 @@ namespace data {
 		EXPECT_EQ(3,r.getRightChild().getIndex());
 
 		EXPECT_EQ(4,r.getLeftChild().getLeftChild().getIndex());
+		EXPECT_EQ(5,r.getLeftChild().getRightChild().getIndex());
+		EXPECT_EQ(6,r.getRightChild().getLeftChild().getIndex());
 		EXPECT_EQ(7,r.getRightChild().getRightChild().getIndex());
 	}
 
@@ -474,20 +476,12 @@ namespace data {
 		auto a = mb.create<Cell>();
 		auto b = mb.create<Cell>();
 
-		std::cout << "Node a: " << a << "\n";
-		std::cout << "Node b: " << b << "\n";
-
 		// create the face in-between
 		auto f = mb.create<Face>();
-
-		std::cout << "Node f: " << f << "\n";
 
 		// create Boundary faces
 		auto bl = mb.create<BoundaryFace>();
 		auto br = mb.create<BoundaryFace>();
-
-		std::cout << "Node bl: " << bl << "\n";
-		std::cout << "Node br: " << br << "\n";
 
 		// connect the elements
 		mb.link<BoundaryFace2Cell>(bl,a);
