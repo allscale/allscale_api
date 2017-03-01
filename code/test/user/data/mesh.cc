@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "allscale/api/core/data.h"
 #include "allscale/api/user/data/mesh.h"
 #include "allscale/utils/string_utils.h"
 
@@ -7,6 +8,8 @@ namespace allscale {
 namespace api {
 namespace user {
 namespace data {
+
+	#include "data_item_test.inl"
 
 	TEST(NodeRef, TypeProperties) {
 
@@ -27,7 +30,7 @@ namespace data {
 		EXPECT_TRUE(std::is_copy_assignable<node_type>::value);
 		EXPECT_TRUE(std::is_move_assignable<node_type>::value);
 
-		EXPECT_EQ(sizeof(node_type),sizeof(typename node_type::NodeID));
+		EXPECT_EQ(sizeof(node_type),sizeof(NodeID));
 	}
 
 
@@ -112,8 +115,342 @@ namespace data {
 
 	}
 
-	// --- combinations ---
+	TEST(SubTreeRef, TypeProperties) {
 
+		using namespace detail;
+
+		EXPECT_FALSE(std::is_default_constructible<SubTreeRef>::value);
+		EXPECT_FALSE(std::is_trivially_default_constructible<SubTreeRef>::value);
+
+		EXPECT_TRUE(std::is_trivially_copy_constructible<SubTreeRef>::value);
+		EXPECT_TRUE(std::is_trivially_move_constructible<SubTreeRef>::value);
+
+		EXPECT_TRUE(std::is_copy_constructible<SubTreeRef>::value);
+		EXPECT_TRUE(std::is_move_constructible<SubTreeRef>::value);
+
+		EXPECT_TRUE(std::is_trivially_copy_assignable<SubTreeRef>::value);
+		EXPECT_TRUE(std::is_trivially_move_assignable<SubTreeRef>::value);
+
+		EXPECT_TRUE(std::is_copy_assignable<SubTreeRef>::value);
+		EXPECT_TRUE(std::is_move_assignable<SubTreeRef>::value);
+
+	}
+
+	TEST(SubTreeRef, Depth) {
+
+		using namespace detail;
+
+		SubTreeRef r = SubTreeRef::root();
+
+		EXPECT_EQ(0,r.getDepth());
+
+		EXPECT_EQ(1,r.getLeftChild().getDepth());
+		EXPECT_EQ(1,r.getRightChild().getDepth());
+
+		EXPECT_EQ(2,r.getLeftChild().getLeftChild().getDepth());
+		EXPECT_EQ(2,r.getRightChild().getRightChild().getDepth());
+	}
+
+	TEST(SubTreeRef, Index) {
+
+		using namespace detail;
+
+		SubTreeRef r = SubTreeRef::root();
+
+		EXPECT_EQ(1,r.getIndex());
+
+		EXPECT_EQ(2,r.getLeftChild().getIndex());
+		EXPECT_EQ(3,r.getRightChild().getIndex());
+
+		EXPECT_EQ(4,r.getLeftChild().getLeftChild().getIndex());
+		EXPECT_EQ(7,r.getRightChild().getRightChild().getIndex());
+	}
+
+
+	TEST(SubTreeRef, Print) {
+
+		using namespace detail;
+
+		SubTreeRef r = SubTreeRef::root();
+
+		EXPECT_EQ("r",toString(r));
+
+		EXPECT_EQ("r.0",toString(r.getLeftChild()));
+		EXPECT_EQ("r.1",toString(r.getRightChild()));
+
+		EXPECT_EQ("r.1.0",toString(r.getRightChild().getLeftChild()));
+		EXPECT_EQ("r.0.1",toString(r.getLeftChild().getRightChild()));
+
+		EXPECT_EQ("r.1.0.1",toString(r.getRightChild().getLeftChild().getRightChild()));
+		EXPECT_EQ("r.0.1.0",toString(r.getLeftChild().getRightChild().getLeftChild()));
+	}
+
+
+
+	TEST(SubMeshRef, TypeProperties) {
+
+		using namespace detail;
+
+		EXPECT_FALSE(std::is_default_constructible<SubMeshRef>::value);
+		EXPECT_FALSE(std::is_trivially_default_constructible<SubMeshRef>::value);
+
+		EXPECT_TRUE(std::is_trivially_copy_constructible<SubMeshRef>::value);
+		EXPECT_TRUE(std::is_trivially_move_constructible<SubMeshRef>::value);
+
+		EXPECT_TRUE(std::is_copy_constructible<SubMeshRef>::value);
+		EXPECT_TRUE(std::is_move_constructible<SubMeshRef>::value);
+
+		EXPECT_TRUE(std::is_trivially_copy_assignable<SubMeshRef>::value);
+		EXPECT_TRUE(std::is_trivially_move_assignable<SubMeshRef>::value);
+
+		EXPECT_TRUE(std::is_copy_assignable<SubMeshRef>::value);
+		EXPECT_TRUE(std::is_move_assignable<SubMeshRef>::value);
+
+	}
+
+	TEST(SubMeshRef, Depth) {
+
+		using namespace detail;
+
+		SubMeshRef r = SubMeshRef::root();
+
+		EXPECT_EQ(0,r.getDepth());
+
+		EXPECT_EQ(1,r.getLeftChild().getDepth());
+		EXPECT_EQ(1,r.getRightChild().getDepth());
+
+		EXPECT_EQ(2,r.getLeftChild().getLeftChild().getDepth());
+		EXPECT_EQ(2,r.getRightChild().getRightChild().getDepth());
+
+
+		EXPECT_EQ(2, r.getRightChild().getLeftChild().mask(0).getDepth());
+		EXPECT_EQ(2, r.getLeftChild().getRightChild().mask(0).getDepth());
+
+	}
+
+	TEST(SubMeshRef, Scan) {
+
+		using namespace detail;
+
+		auto toList = [](const SubMeshRef& r) {
+			std::vector<SubTreeRef> list;
+			r.scan([&](const SubTreeRef& ref) {
+				list.push_back(ref);
+			});
+			return list;
+		};
+
+		SubMeshRef r = SubMeshRef::root();
+		EXPECT_EQ("[r]",toString(toList(r)));
+
+		r = r.getLeftChild().getRightChild().getLeftChild();
+		EXPECT_EQ( "r.0.1.0",toString(r));
+		EXPECT_EQ("[r.0.1.0]",toString(toList(r)));
+
+
+		r = r.mask(1);
+		EXPECT_EQ( "r.0.*.0",toString(r));
+		EXPECT_EQ("[r.0.0.0,r.0.1.0]",toString(toList(r)));
+
+		r = r.mask(0);
+		EXPECT_EQ( "r.*.*.0",toString(r));
+		EXPECT_EQ("[r.0.0.0,r.0.1.0,r.1.0.0,r.1.1.0]",toString(toList(r)));
+
+
+		r = r.mask(2);
+		EXPECT_EQ( "r",toString(r));
+		EXPECT_EQ("[r]",toString(toList(r)));
+
+	}
+
+
+	TEST(SubMeshRef, Print) {
+
+		using namespace detail;
+
+		SubMeshRef r = SubMeshRef::root();
+
+		EXPECT_EQ("r",toString(r));
+
+		EXPECT_EQ("r.0",toString(r.getLeftChild()));
+		EXPECT_EQ("r.1",toString(r.getRightChild()));
+
+		EXPECT_EQ("r.1.0",toString(r.getRightChild().getLeftChild()));
+		EXPECT_EQ("r.0.1",toString(r.getLeftChild().getRightChild()));
+
+		EXPECT_EQ("r.1.0.1",toString(r.getRightChild().getLeftChild().getRightChild()));
+		EXPECT_EQ("r.0.1.0",toString(r.getLeftChild().getRightChild().getLeftChild()));
+
+		EXPECT_EQ("r.*.0",toString(r.getRightChild().getLeftChild().mask(0)));
+		EXPECT_EQ("r.*.1",toString(r.getLeftChild().getRightChild().mask(0)));
+
+	}
+
+
+
+
+	TEST(MeshRegion, TypeProperties) {
+
+		using namespace detail;
+
+		EXPECT_TRUE(std::is_default_constructible<MeshRegion>::value);
+		EXPECT_FALSE(std::is_trivially_default_constructible<MeshRegion>::value);
+
+		EXPECT_FALSE(std::is_trivially_copy_constructible<MeshRegion>::value);
+		EXPECT_FALSE(std::is_trivially_move_constructible<MeshRegion>::value);
+
+		EXPECT_TRUE(std::is_copy_constructible<MeshRegion>::value);
+		EXPECT_TRUE(std::is_move_constructible<MeshRegion>::value);
+
+		EXPECT_FALSE(std::is_trivially_copy_assignable<MeshRegion>::value);
+		EXPECT_FALSE(std::is_trivially_move_assignable<MeshRegion>::value);
+
+		EXPECT_TRUE(std::is_copy_assignable<MeshRegion>::value);
+		EXPECT_TRUE(std::is_move_assignable<MeshRegion>::value);
+
+		// check that it qualifies as a region
+		EXPECT_TRUE(allscale::api::core::is_region<MeshRegion>::value);
+
+	}
+
+	TEST(MeshRegion, Print) {
+
+		using namespace detail;
+
+		MeshRegion e;
+		EXPECT_EQ("[]",toString(e));
+
+		MeshRegion sl = SubMeshRef::root().getLeftChild();
+		EXPECT_EQ("[r.0]",toString(sl));
+
+		MeshRegion sr = SubMeshRef::root().getRightChild();
+		EXPECT_EQ("[r.1]",toString(sr));
+
+		MeshRegion s2 = MeshRegion::merge(sl,sr);
+		EXPECT_EQ("[r.0,r.1]",toString(s2));
+	}
+
+	TEST(MeshRegion, SetOps) {
+
+		using namespace detail;
+
+		MeshRegion e;
+		EXPECT_EQ("[]",toString(e));
+
+		MeshRegion sl = SubMeshRef::root().getLeftChild();
+		EXPECT_EQ("[r.0]",toString(sl));
+
+		MeshRegion sr = SubMeshRef::root().getRightChild();
+		EXPECT_EQ("[r.1]",toString(sr));
+
+		MeshRegion s2 = MeshRegion::merge(sl,sr);
+		EXPECT_EQ("[r.0,r.1]",toString(s2));
+
+		// -- test union --
+		EXPECT_EQ("[]",toString(MeshRegion::merge(e,e)));
+		EXPECT_EQ("[r.0]",toString(MeshRegion::merge(e,sl)));
+		EXPECT_EQ("[r.0]",toString(MeshRegion::merge(sl,e)));
+		EXPECT_EQ("[r.0,r.1]",toString(MeshRegion::merge(e,s2)));
+		EXPECT_EQ("[r.0,r.1]",toString(MeshRegion::merge(s2,e)));
+
+		EXPECT_EQ("[r.0,r.1]",toString(MeshRegion::merge(sl,sr)));
+		EXPECT_EQ("[r.0,r.1]",toString(MeshRegion::merge(s2,sr)));
+		EXPECT_EQ("[r.0,r.1]",toString(MeshRegion::merge(sl,s2)));
+		EXPECT_EQ("[r.0,r.1]",toString(MeshRegion::merge(s2,e)));
+		EXPECT_EQ("[r.0,r.1]",toString(MeshRegion::merge(e,s2)));
+
+
+		// -- test intersection --
+		EXPECT_EQ("[]",toString(MeshRegion::intersect(e,e)));
+		EXPECT_EQ("[]",toString(MeshRegion::intersect(e,sl)));
+		EXPECT_EQ("[]",toString(MeshRegion::intersect(sl,e)));
+
+		EXPECT_EQ("[]",toString(MeshRegion::intersect(sl,sr)));
+
+		EXPECT_EQ("[r.0]",toString(MeshRegion::intersect(sl,s2)));
+		EXPECT_EQ("[r.0]",toString(MeshRegion::intersect(s2,sl)));
+		EXPECT_EQ("[r.1]",toString(MeshRegion::intersect(sr,s2)));
+		EXPECT_EQ("[r.1]",toString(MeshRegion::intersect(s2,sr)));
+
+	}
+
+	TEST(MeshRegion, DataItemRegionConcept) {
+
+		using namespace detail;
+
+		SubMeshRef r = SubMeshRef::root();
+
+		SubMeshRef r00 = r.getLeftChild().getLeftChild();
+		SubMeshRef r01 = r.getLeftChild().getRightChild();
+		SubMeshRef r11 = r.getRightChild().getRightChild();
+
+		MeshRegion a { r00, r01 };
+		MeshRegion b { r01, r11 };
+
+		EXPECT_EQ("[r.0.0,r.0.1]",toString(a));
+		EXPECT_EQ("[r.0.1,r.1.1]",toString(b));
+
+		testRegion(a,b);
+	}
+
+
+	TEST(MeshRegion, Scan) {
+
+		using namespace detail;
+
+		auto toList = [](const MeshRegion& r) {
+			std::vector<SubTreeRef> list;
+			r.scan([&](const SubTreeRef& ref) {
+				list.push_back(ref);
+			});
+			return list;
+		};
+
+
+		SubMeshRef r = SubMeshRef::root();
+
+		SubMeshRef r00 = r.getLeftChild().getLeftChild();
+		SubMeshRef r01 = r.getLeftChild().getRightChild();
+		SubMeshRef r11 = r.getRightChild().getRightChild();
+
+		MeshRegion a { r00, r01 };
+		MeshRegion b { r01, r11 };
+
+		EXPECT_EQ("[r.0.0,r.0.1]",toString(toList(a)));
+		EXPECT_EQ("[r.0.1,r.1.1]",toString(toList(b)));
+
+	}
+
+
+	TEST(PartitionTree, Basic) {
+
+		using namespace detail;
+
+		struct Vertex {};
+		struct Edge : public edge<Vertex,Vertex> {};
+
+		using Ptree = PartitionTree<nodes<Vertex>,edges<Edge>>;
+
+
+		EXPECT_TRUE(std::is_default_constructible<Ptree>::value);
+		EXPECT_FALSE(std::is_trivially_default_constructible<Ptree>::value);
+
+		EXPECT_FALSE(std::is_trivially_copy_constructible<Ptree>::value);
+		EXPECT_FALSE(std::is_trivially_move_constructible<Ptree>::value);
+
+		EXPECT_TRUE(std::is_copy_constructible<Ptree>::value);
+		EXPECT_TRUE(std::is_move_constructible<Ptree>::value);
+
+		EXPECT_FALSE(std::is_trivially_copy_assignable<Ptree>::value);
+		EXPECT_FALSE(std::is_trivially_move_assignable<Ptree>::value);
+
+		EXPECT_TRUE(std::is_copy_assignable<Ptree>::value);
+		EXPECT_TRUE(std::is_move_assignable<Ptree>::value);
+
+
+	}
+
+	// --- combinations ---
 
 	TEST(Mesh, BuildSingleLevel) {
 

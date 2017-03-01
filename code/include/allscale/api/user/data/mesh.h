@@ -1,7 +1,14 @@
 #pragma once
 
+#include <algorithm>
+#include <iterator>
+#include <ostream>
+
 #include "allscale/utils/assert.h"
 #include "allscale/utils/range.h"
+#include "allscale/utils/static_map.h"
+
+#include "allscale/utils/printer/vectors.h"
 
 namespace allscale {
 namespace api {
@@ -119,14 +126,15 @@ namespace data {
 	//							  Definitions
 	// --------------------------------------------------------------------
 
+	// The type used for identifying nodes within meshes.
+	using NodeID = uint32_t;
+
 	/**
 	 * The type used for addressing nodes within meshes.
 	 */
 	template<typename Kind,unsigned Level>
 	struct NodeRef {
 
-		// The type used for identifying nodes within meshes.
-		using NodeID = uint32_t;
 
 		using node_type = Kind;
 		enum { level = Level };
@@ -687,7 +695,7 @@ namespace data {
 
 			void addChild(const NodeRef<Src,Level>& parent, const NodeRef<Trg,Level-1>& child) {
 				// a constant for an unknown parent
-				static const NodeRef<Src,Level> unknownParent(std::numeric_limits<typename NodeRef<Src,Level>::NodeID>::max());
+				static const NodeRef<Src,Level> unknownParent(std::numeric_limits<NodeID>::max());
 
 				assert_ne(parent,unknownParent) << "Unknown parent constant must not be used!";
 
@@ -715,7 +723,7 @@ namespace data {
 			template<typename MeshData>
 			void close(const MeshData& data) {
 				// a constant for an unknown parent
-				static const NodeRef<Src,Level> unknownParent(std::numeric_limits<typename NodeRef<Src,Level>::NodeID>::max());
+				static const NodeRef<Src,Level> unknownParent(std::numeric_limits<NodeID>::max());
 
 				// compute total number of parent-child links
 				std::size_t numParentChildLinks = 0;
@@ -1250,6 +1258,416 @@ namespace data {
 */
 		};
 
+
+		template<typename Kind, unsigned Level>
+		class NodeRange {
+
+			NodeRef<Kind,Level> begin;
+
+			NodeRef<Kind,Level> end;
+
+			template<typename Body>
+			void forEach(const Body& body) {
+				for(auto i = begin.id; i < end.id; ++i) {
+					body(NodeRef<Kind,Level>(i));
+				}
+			}
+
+		};
+
+
+		/**
+		 * A common basis class for sub-tree and sub-graph references, which are both based on paths
+		 * within a tree.
+		 */
+		template<typename Derived>
+		class PathRefBase {
+
+		protected:
+
+			using value_t = uint32_t;
+
+			value_t path;
+			value_t mask;
+
+			PathRefBase(value_t path, value_t mask)
+				: path(path), mask(mask) {}
+
+		public:
+
+			static Derived root() {
+				return { 0u , 0u };
+			}
+
+			value_t getDepth() const {
+				if (PathRefBase::mask == 0) return 0;
+				return sizeof(PathRefBase::mask) * 8 - __builtin_clz(PathRefBase::mask);
+			}
+
+			Derived getLeftChild() const {
+				assert_lt(getDepth(),sizeof(PathRefBase::path)*8);
+				Derived res = static_cast<const Derived&>(*this);
+				res.PathRefBase::mask = res.PathRefBase::mask | (1 << getDepth());
+				return res;
+			}
+
+			Derived getRightChild() const {
+				Derived res = getLeftChild();
+				res.PathRefBase::path = res.PathRefBase::path | (1 << getDepth());
+				return res;
+			}
+
+			bool operator==(const Derived& other) const {
+				// same mask and same valid bit part
+				return (PathRefBase::mask == other.PathRefBase::mask) &&
+						((PathRefBase::path & PathRefBase::mask) == (other.PathRefBase::path & other.PathRefBase::mask));
+			}
+
+			bool operator!=(const Derived& other) const {
+				return !(*this == other);
+			}
+
+			bool operator<(const Derived& other) const {
+				auto commonMask = PathRefBase::mask & other.PathRefBase::mask;
+				return (PathRefBase::path & commonMask) < (other.PathRefBase::path & commonMask);
+			}
+
+		};
+
+
+		/**
+		 * A utility to address nodes in the partition tree.
+		 */
+		class SubTreeRef : public PathRefBase<SubTreeRef> {
+
+			using super = PathRefBase<SubTreeRef>;
+
+			friend super;
+
+			friend class SubMeshRef;
+
+			SubTreeRef(value_t path, value_t mask)
+				: super(path,mask) {}
+
+		public:
+
+			value_t getIndex() const {
+				return (1 << getDepth()) | path;
+			}
+
+			friend std::ostream& operator<<(std::ostream& out, const SubTreeRef& ref) {
+				out << "r";
+				auto depth = ref.getDepth();
+				for(value_t i = 0; i<depth; ++i) {
+					out << "." << ((ref.path >> i) % 2);
+				}
+				return out;
+			}
+
+		};
+
+
+		/**
+		 * A reference to a continuously stored part of a mesh.
+		 */
+		class SubMeshRef : public PathRefBase<SubMeshRef> {
+
+			using super = PathRefBase<SubMeshRef>;
+
+			using value_t = uint32_t;
+
+			friend super;
+
+			SubMeshRef(value_t path, value_t mask)
+				: super(path,mask) {}
+
+		public:
+
+			SubMeshRef(const SubTreeRef& ref)
+				: super(ref.path, ref.mask) {}
+
+			SubMeshRef mask(unsigned pos) const {
+				assert_lt(pos,getDepth());
+				SubMeshRef res = *this;
+				res.super::mask = res.super::mask & ~(1<<pos);
+				return res;
+			}
+
+			SubMeshRef unmask(unsigned pos) const {
+				assert_lt(pos,getDepth());
+				SubMeshRef res = *this;
+				res.super::mask = res.super::mask | (1<<pos);
+				return res;
+			}
+
+			template<typename Body>
+			void scan(const Body& body) const {
+
+				// look for last 0 in mask
+				unsigned zeroPos = __builtin_ctz(~super::mask);
+				if (zeroPos >= getDepth()) {
+					body(SubTreeRef(super::path,super::mask));
+					return;
+				}
+
+				// recursive
+				SubMeshRef copy = unmask(zeroPos);
+
+				// set bit to 0
+				copy.super::path = copy.super::path & ~( 1 << zeroPos );
+				copy.scan(body);
+
+				// set bit to 1
+				copy.super::path = copy.super::path |  ( 1 << zeroPos );
+				copy.scan(body);
+			}
+
+			friend std::ostream& operator<<(std::ostream& out, const SubMeshRef& ref) {
+				out << "r";
+				auto depth = ref.getDepth();
+				for(value_t i = 0; i<depth; ++i) {
+					if (ref.super::mask & (1 << i)) {
+						out << "." << ((ref.super::path >> i) % 2);
+					} else {
+						out << ".*";
+					}
+				}
+				return out;
+			}
+
+		};
+
+		/**
+		 * A union of sub mesh references.
+		 */
+		class MeshRegion {
+
+			std::vector<SubMeshRef> refs;
+
+		public:
+
+			MeshRegion() {}
+
+			MeshRegion(const SubMeshRef& ref) {
+				refs.push_back(ref);
+			}
+
+			MeshRegion(std::initializer_list<SubMeshRef> meshRefs) : refs(meshRefs) {
+				std::sort(refs.begin(),refs.end());
+				auto newEnd = std::unique(refs.begin(),refs.end());
+				refs.erase(newEnd,refs.end());
+			}
+
+			bool operator==(const MeshRegion& other) const {
+				return refs == other.refs;
+			}
+
+			bool operator!=(const MeshRegion& other) const {
+				return !(*this == other);
+			}
+
+			bool empty() const {
+				return refs.empty();
+			}
+
+			static MeshRegion merge(const MeshRegion& a, const MeshRegion& b) {
+				MeshRegion res;
+				std::set_union(
+					a.refs.begin(), a.refs.end(),
+					b.refs.begin(), b.refs.end(),
+					std::back_inserter(res.refs)
+				);
+				return res;
+			}
+
+			template<typename ... Rest>
+			static MeshRegion merge(const MeshRegion& a, const MeshRegion& b, const Rest& ... rest) {
+				return merge(merge(a,b),rest...);
+			}
+
+			static MeshRegion intersect(const MeshRegion& a, const MeshRegion& b) {
+				MeshRegion res;
+				std::set_intersection(
+					a.refs.begin(), a.refs.end(),
+					b.refs.begin(), b.refs.end(),
+					std::back_inserter(res.refs)
+				);
+				return res;
+			}
+
+			static MeshRegion difference(const MeshRegion& a, const MeshRegion& b) {
+				MeshRegion res;
+				std::set_difference(
+					a.refs.begin(), a.refs.end(),
+					b.refs.begin(), b.refs.end(),
+					std::back_inserter(res.refs)
+				);
+				return res;
+			}
+
+			/**
+			 * An operator to load an instance of this region from the given archive.
+			 */
+			static MeshRegion load(utils::Archive&) {
+				assert_not_implemented();
+				return MeshRegion();
+			}
+
+			/**
+			 * An operator to store an instance of this region into the given archive.
+			 */
+			void store(utils::Archive&) const {
+				assert_not_implemented();
+				// nothing so far
+			}
+
+			template<typename Body>
+			void scan(const Body& body) const {
+				for(const auto& cur : refs) {
+					cur.scan(body);
+				}
+			}
+
+			friend std::ostream& operator<<(std::ostream& out, const MeshRegion& reg) {
+				return out << reg.refs;
+			}
+
+		};
+
+
+		// --------------------------------------------------------------
+		//					Partition Tree
+		// --------------------------------------------------------------
+
+
+		template<
+			typename Nodes,
+			typename Edges,
+			typename Hierarchies = hierarchies<>,
+			unsigned Levels = 1,
+			unsigned depth = 12
+		>
+		class PartitionTree;
+
+		template<
+			typename Nodes,
+			typename Edges,
+			typename Hierarchies,
+			unsigned Levels,
+			unsigned depth
+		>
+		class PartitionTree {
+
+			static_assert(detail::is_nodes<Nodes>::value,
+					"First template argument of PartitionTree must be of type nodes<...>");
+
+			static_assert(detail::is_edges<Edges>::value,
+					"Second template argument of PartitionTree must be of type edges<...>");
+
+			static_assert(detail::is_hierarchies<Hierarchies>::value,
+					"Third template argument of PartitionTree must be of type hierarchies<...>");
+
+		};
+
+		template<
+			typename ... Nodes,
+			typename ... Edges,
+			typename ... Hierarchies,
+			unsigned Levels,
+			unsigned depth
+		>
+		class PartitionTree<nodes<Nodes...>,edges<Edges...>,hierarchies<Hierarchies...>,Levels,depth> {
+
+			static_assert(Levels > 0, "There must be at least one level!");
+
+			class LevelInfo {
+
+				utils::StaticMap<utils::keys<Nodes...>,std::pair<NodeID,NodeID>> nodeRanges;
+
+				utils::StaticMap<utils::keys<Edges...>,MeshRegion> forwardClosure;
+				utils::StaticMap<utils::keys<Edges...>,MeshRegion> backwardClosure;
+
+				utils::StaticMap<utils::keys<Hierarchies...>,MeshRegion> parentClosure;
+				utils::StaticMap<utils::keys<Hierarchies...>,MeshRegion> childClosure;
+
+			};
+
+			class Node {
+
+				std::array<LevelInfo,Levels> data;
+
+			};
+
+			enum { num_elements = 1ul << (depth + 1) };
+
+			std::array<Node,num_elements> data;
+
+		public:
+
+			PartitionTree() {}
+
+			// TODO: return references
+
+			template<typename Kind, unsigned Level = 0>
+			NodeRange<Kind,Level> getNodeRange(const SubTreeRef& ref) const {
+				auto pair = data[ref.getIndex()].data[Level].nodeRanges.template get<Kind>();
+				return {
+					NodeRef<Kind,Level>{ pair.first },
+					NodeRef<Kind,Level>{ pair.second }
+				};
+			}
+
+			template<typename Kind, unsigned Level = 0>
+			void setNodeRange(const SubTreeRef& ref, const NodeRange<Kind,Level>& range) {
+				auto& pair = data[ref.getIndex()].data[Level].nodeRanges.template get<Kind>();
+				pair.first = range.begin.id;
+				pair.second = range.end.id;
+			}
+
+			template<typename EdgeKind, unsigned Level = 0>
+			const MeshRegion& getForwardClosure(const SubTreeRef& ref) const {
+				return data[ref.getIndex()].data[Level].forwardClosure.template get<EdgeKind>();
+			}
+
+			template<typename EdgeKind, unsigned Level = 0>
+			void setForwardClosure(const SubTreeRef& ref, const MeshRegion& region) {
+				data[ref.getIndex()].data[Level].forwardClosure.template get<EdgeKind>() = region;
+			}
+
+			template<typename EdgeKind, unsigned Level = 0>
+			const MeshRegion& getBackwardClosure(const SubTreeRef& ref) const {
+				return data[ref.getIndex()].data[Level].backwardClosure.template get<EdgeKind>();
+			}
+
+			template<typename EdgeKind, unsigned Level = 0>
+			void setBackwardClosure(const SubTreeRef& ref, const MeshRegion& region) {
+				data[ref.getIndex()].data[Level].backwardClosure.template get<EdgeKind>() = region;
+			}
+
+			template<typename HierarchyKind, unsigned Level = 0>
+			const MeshRegion& getParentClosure(const SubTreeRef& ref) const {
+				return data[ref.getIndex()].data[Level].parentClosure.template get<HierarchyKind>();
+			}
+
+			template<typename HierarchyKind, unsigned Level = 0>
+			void setParentClosure(const SubTreeRef& ref, const MeshRegion& region) {
+				data[ref.getIndex()].data[Level].parentClosure.template get<HierarchyKind>() = region;
+			}
+
+
+			template<typename HierarchyKind, unsigned Level = 1>
+			const MeshRegion& getChildClosure(const SubTreeRef& ref) const {
+				return data[ref.getIndex()].data[Level].childClosure.template get<HierarchyKind>();
+			}
+
+			template<typename HierarchyKind, unsigned Level = 1>
+			void setChildClosure(const SubTreeRef& ref, const MeshRegion& region) {
+				data[ref.getIndex()].data[Level].childClosure.template get<HierarchyKind>() = region;
+			}
+		};
+
+
+
 	} // end namespace detail
 
 
@@ -1261,7 +1679,7 @@ namespace data {
 		typename Nodes,
 		typename Edges,
 		typename Hierarchies,
-		unsigned layers
+		unsigned Levels
 	>
 	class Mesh {
 
@@ -1287,6 +1705,8 @@ namespace data {
 		unsigned Levels
 	>
 	class Mesh<nodes<NodeKinds...>,edges<EdgeKinds...>,hierarchies<Hierarchies...>,Levels> {
+
+		static_assert(Levels > 0, "There must be at least one level!");
 
 	public:
 
