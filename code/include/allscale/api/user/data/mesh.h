@@ -2110,7 +2110,7 @@ namespace data {
 
 		template<unsigned PartitionDepth = 0>
 		mesh_type<PartitionDepth> build() const && {
-			return std::move(*this).build<detail::NaiveMeshPartitioner,PartitionDepth>(detail::NaiveMeshPartitioner());
+			return std::move(*this).template build<detail::NaiveMeshPartitioner,PartitionDepth>(detail::NaiveMeshPartitioner());
 		}
 
 	};
