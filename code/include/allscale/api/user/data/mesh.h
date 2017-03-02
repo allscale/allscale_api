@@ -4,6 +4,8 @@
 #include <iterator>
 #include <ostream>
 
+#include <bitset>
+
 #include "allscale/utils/assert.h"
 #include "allscale/utils/range.h"
 #include "allscale/utils/static_map.h"
@@ -94,7 +96,7 @@ namespace data {
 		typename EdgeKinds,						// < list of edge types connecting nodes within levels
 		typename Hierarchies = hierarchies<>,	// < list of edge types connecting nodes between adjacent levels
 		unsigned Levels = 1,					// < number of levels in the hierarchy
-		unsigned PartitionMesh = 0				// < number of partitioning level
+		unsigned PartitionDepth = 0				// < number of partitioning level
 	>
 	class Mesh;
 
@@ -103,9 +105,10 @@ namespace data {
 	 * The type for associating (dynamic) information to nodes within a mesh.
 	 */
 	template<
-		typename NodeKind,			// < the type of node to be annotated
-		typename ElementType,		// < the type of value to be associated to each node on the given level
-		unsigned Level = 0			// < the level of the mesh to be annotated
+		typename NodeKind,				// < the type of node to be annotated
+		typename ElementType,			// < the type of value to be associated to each node on the given level
+		unsigned Level,					// < the level of the mesh to be annotated
+		typename PartitionTree			// < the type of the partition tree indexing the associated mesh
 	>
 	class MeshData;
 
@@ -304,7 +307,7 @@ namespace data {
 		}
 
 		template<typename Body>
-		void forEach(const Body& body) {
+		void forAll(const Body& body) {
 			for(const auto& cur : *this) {
 				body(cur);
 			}
@@ -316,44 +319,6 @@ namespace data {
 
 	};
 
-
-	template<
-		typename NodeKind,
-		typename ElementType,
-		unsigned Level
-	>
-	class MeshData {
-
-		template<typename NodeKinds,typename EdgeKinds,typename Hierarchies,unsigned Levels,unsigned PartitionDepth>
-		friend class Mesh;
-
-		std::vector<ElementType> data;
-
-		MeshData(std::size_t size) : data(size) {}
-
-	public:
-
-		MeshData() = delete;
-
-		MeshData(const MeshData&) = delete;
-		MeshData(MeshData&&) = default;
-
-		MeshData& operator=(const MeshData&) = delete;
-		MeshData& operator=(MeshData&&) = default;
-
-		const ElementType& operator[](const NodeRef<NodeKind,Level>& id) const {
-			return data[id.getOrdinal()];
-		}
-
-		ElementType& operator[](const NodeRef<NodeKind,Level>& id) {
-			return data[id.getOrdinal()];
-		}
-
-		std::size_t size() const {
-			return data.size();
-		}
-
-	};
 
 	namespace detail {
 
@@ -1504,10 +1469,89 @@ namespace data {
 			}
 
 			bool operator<(const Derived& other) const {
-				auto commonMask = PathRefBase::mask & other.PathRefBase::mask;
-				return (PathRefBase::path & commonMask) < (other.PathRefBase::path & commonMask);
+
+				auto thisMask = PathRefBase::mask;
+				auto thatMask = other.PathRefBase::mask;
+
+				auto thisPath = PathRefBase::path;
+				auto thatPath = other.PathRefBase::path;
+
+				while(true) {
+
+					// if they are the same, we are done
+					if (thisMask == thatMask && thisPath == thatPath) return false;
+
+					// check last mask bit
+					auto thisMbit = thisMask & 0x1;
+					auto thatMbit = thatMask & 0x1;
+
+					if (thisMbit < thatMbit) return true;
+					if (thisMbit > thatMbit) return false;
+
+					auto thisPbit = thisMbit & thisPath;
+					auto thatPbit = thatMbit & thatPath;
+
+					if (thisPbit < thatPbit) return true;
+					if (thisPbit > thatPbit) return false;
+
+					thisMask >>= 1;
+					thatMask >>= 1;
+					thisPath >>= 1;
+					thatPath >>= 1;
+				}
 			}
 
+			bool operator<=(const Derived& other) const {
+				return *this == other || *this < other;
+			}
+
+			bool operator>=(const Derived& other) const {
+				return !(static_cast<const Derived&>(*this) < other);
+			}
+
+			bool operator>(const Derived& other) const {
+				return !(*this <= other);
+			}
+
+			bool covers(const Derived& other) const {
+				if (getDepth() > other.getDepth()) return false;
+				if (PathRefBase::mask != (PathRefBase::mask & other.PathRefBase::mask)) return false;
+				return (PathRefBase::mask & PathRefBase::path) == (PathRefBase::mask & other.PathRefBase::path);
+			}
+
+			bool tryMerge(const Derived& other) {
+
+				if (covers(other)) return true;
+
+				if (other.covers(static_cast<const Derived&>(*this))) {
+					*this = other;
+					return true;
+				}
+
+				// the masks need to be identical
+				auto thisMask = PathRefBase::mask;
+				auto thatMask = other.PathRefBase::mask;
+				if (thisMask != thatMask) return false;
+
+
+				// the valid portion of the paths must only differe in one bit
+				auto thisPath = PathRefBase::path;
+				auto thatPath = other.PathRefBase::path;
+
+				auto thisValid = thisPath & thisMask;
+				auto thatValid = thatPath & thatMask;
+
+				auto diff = thisValid ^ thatValid;
+
+				// if there is more than 1 bit difference, there is nothing we can do
+				if (__builtin_popcount(diff) != 1) return false;
+
+				// ignore this one bit in the mask
+				PathRefBase::mask = PathRefBase::mask & (~diff);
+
+				// done
+				return true;
+			}
 		};
 
 
@@ -1546,6 +1590,21 @@ namespace data {
 				SubTreeRef res = *this;
 				res.PathRefBase::mask = res.PathRefBase::mask & ~(1 << (getDepth()-1));
 				return res;
+			}
+
+
+			template<unsigned DepthLimit, bool preOrder, typename Body>
+			void enumerate(const Body& body) {
+
+				if (preOrder) body(*this);
+
+				if (getDepth() < DepthLimit) {
+					getLeftChild().enumerate<DepthLimit,preOrder>(body);
+					getRightChild().enumerate<DepthLimit,preOrder>(body);
+				}
+
+				if (!preOrder) body(*this);
+
 			}
 
 
@@ -1594,6 +1653,13 @@ namespace data {
 				return res;
 			}
 
+			SubTreeRef getEnclosingSubTree() const {
+				return SubTreeRef(
+					super::path,
+					(1 << __builtin_ctz(~super::mask)) - 1
+				);
+			}
+
 			template<typename Body>
 			void scan(const Body& body) const {
 
@@ -1615,6 +1681,15 @@ namespace data {
 				copy.super::path = copy.super::path |  ( 1 << zeroPos );
 				copy.scan(body);
 			}
+
+
+			template<typename NodeKind, unsigned Level, typename PartitionTree, typename Body>
+			void scan(const PartitionTree& ptree, const Body& body) const {
+				scan([&](const SubTreeRef& ref){
+					ptree.template getNodeRange<NodeKind,Level>(ref).forAll(body);
+				});
+			}
+
 
 			friend std::ostream& operator<<(std::ostream& out, const SubMeshRef& ref) {
 				out << "r";
@@ -1650,6 +1725,7 @@ namespace data {
 				std::sort(refs.begin(),refs.end());
 				auto newEnd = std::unique(refs.begin(),refs.end());
 				refs.erase(newEnd,refs.end());
+				compress();
 			}
 
 			bool operator==(const MeshRegion& other) const {
@@ -1664,6 +1740,12 @@ namespace data {
 				return refs.empty();
 			}
 
+			bool covers(const SubMeshRef& ref) const {
+				return std::any_of(refs.begin(),refs.end(),[&](const SubMeshRef& a) {
+					return a.covers(ref);
+				});
+			}
+
 			static MeshRegion merge(const MeshRegion& a, const MeshRegion& b) {
 				MeshRegion res;
 				std::set_union(
@@ -1671,6 +1753,7 @@ namespace data {
 					b.refs.begin(), b.refs.end(),
 					std::back_inserter(res.refs)
 				);
+				res.compress();
 				return res;
 			}
 
@@ -1686,6 +1769,7 @@ namespace data {
 					b.refs.begin(), b.refs.end(),
 					std::back_inserter(res.refs)
 				);
+				res.compress();
 				return res;
 			}
 
@@ -1696,6 +1780,7 @@ namespace data {
 					b.refs.begin(), b.refs.end(),
 					std::back_inserter(res.refs)
 				);
+				res.compress();
 				return res;
 			}
 
@@ -1722,8 +1807,81 @@ namespace data {
 				}
 			}
 
+			template<typename NodeKind, unsigned Level, typename PartitionTree, typename Body>
+			void scan(const PartitionTree& ptree, const Body& body) const {
+				for(const auto& cur : refs) {
+					cur.scan<NodeKind,Level>(ptree,body);
+				}
+			}
+
+
 			friend std::ostream& operator<<(std::ostream& out, const MeshRegion& reg) {
 				return out << reg.refs;
+			}
+
+		private:
+
+			void compress() {
+
+				// check precondition
+				assert_true(std::is_sorted(refs.begin(),refs.end()));
+
+				// Phase 1:  remove redundant entries
+				removeCovered();
+
+				// Phase 2:  collapse adjacent entries
+				collapseSiblings();
+			}
+
+
+			void removeCovered() {
+
+				auto size = refs.size();
+
+				std::vector<bool> toDelete(size,false);
+
+				for(std::size_t i = 0; i<refs.size(); ++i) {
+
+					auto& cur = refs[i];
+					auto closure = cur.getEnclosingSubTree();
+
+					std::size_t j = i+1;
+					while(j < refs.size() && closure.covers(refs[j].getEnclosingSubTree())) {
+						if (cur.covers(refs[j])) {
+							toDelete[j] = true;
+						}
+						++j;
+					}
+
+				}
+
+				// remove elements marked to be deleted
+				for(std::size_t i = 0; i < size; ++i) {
+					std::size_t j = size - i;
+					if (toDelete[j]) refs.erase(refs.begin() + j);
+				}
+
+			}
+
+			void collapseSiblings() {
+
+				auto size = refs.size();
+				std::vector<bool>toDelete(size,false);
+				for(std::size_t i = 0; i<size; ++i) {
+					for(std::size_t j = i+1; j<size; ++j) {
+						if (toDelete[j]) continue;
+						if (refs[i].tryMerge(refs[j])) {
+							toDelete[j] = true;
+						}
+					}
+				}
+
+				// remove elements marked to be deleted
+				for(std::size_t i = 0; i < size; ++i) {
+					std::size_t j = size - i;
+					if (toDelete[j]) refs.erase(refs.begin() + j);
+				}
+
 			}
 
 		};
@@ -1768,9 +1926,15 @@ namespace data {
 			typename ... Edges,
 			typename ... Hierarchies,
 			unsigned Levels,
-			unsigned depth
+			unsigned PartitionDepth
 		>
-		class PartitionTree<nodes<Nodes...>,edges<Edges...>,hierarchies<Hierarchies...>,Levels,depth> {
+		class PartitionTree<nodes<Nodes...>,edges<Edges...>,hierarchies<Hierarchies...>,Levels,PartitionDepth> {
+
+		public:
+
+			enum { depth = PartitionDepth };
+
+		private:
 
 			static_assert(Levels > 0, "There must be at least one level!");
 
@@ -1861,13 +2025,23 @@ namespace data {
 
 			template<typename Body>
 			void visitPreOrder(const Body& body) {
-				visitPreOrder(body,SubTreeRef::root());
+				SubTreeRef::root().enumerate<depth,true>(body);
 			}
 
 			template<typename Body>
 			void visitPostOrder(const Body& body) {
-				visitPostOrder(body,SubTreeRef::root());
+				SubTreeRef::root().enumerate<depth,false>(body);
 			}
+
+			void save(utils::Archive&) const {
+				assert_not_implemented();
+			}
+
+			static PartitionTree load(utils::Archive&) {
+				assert_not_implemented();
+				return PartitionTree();
+			}
+
 
 		private:
 
@@ -1879,32 +2053,6 @@ namespace data {
 			Node& getNode(const SubTreeRef& ref) {
 				assert_lt(ref.getIndex(),num_elements);
 				return data[ref.getIndex()];
-			}
-
-			template<typename Body>
-			void visitPreOrder(const Body& body, const SubTreeRef& cur) {
-
-				// visit this reference first
-				body(cur);
-
-				// visit children second
-				if (cur.getDepth() < depth) {
-					visitPreOrder(body,cur.getLeftChild());
-					visitPreOrder(body,cur.getRightChild());
-				}
-			}
-
-
-			template<typename Body>
-			void visitPostOrder(const Body& body, const SubTreeRef& cur) {
-				// visit children first
-				if (cur.getDepth() < depth) {
-					visitPostOrder(body,cur.getLeftChild());
-					visitPostOrder(body,cur.getRightChild());
-				}
-
-				// visit this reference
-				body(cur);
 			}
 
 		};
@@ -2027,7 +2175,147 @@ namespace data {
 		};
 
 
+		template<
+			typename NodeKind,
+			typename ElementType,
+			unsigned Level,
+			typename PartitionTree
+		>
+		class MeshDataFragment {
+		public:
+
+			using facade_type = MeshData<NodeKind,ElementType,Level,PartitionTree>;
+			using region_type = MeshRegion;
+			using shared_data_type = PartitionTree;
+
+		private:
+
+			using partition_tree_type = PartitionTree;
+
+			const partition_tree_type& partitionTree;
+
+			region_type coveredRegion;
+
+			std::vector<ElementType> data;
+
+			friend facade_type;
+
+		public:
+
+			MeshDataFragment() = delete;
+
+			MeshDataFragment(const partition_tree_type& ptree, const region_type& region)
+				: partitionTree(ptree), coveredRegion(region) {
+
+				// get upper boundary of covered node ranges
+				std::size_t max = 0;
+				region.scan([&](const SubTreeRef& cur){
+					max = std::max<std::size_t>(max,ptree.template getNodeRange<NodeKind,Level>(cur).getEnd().id);
+				});
+
+				// resize data storage
+				data.resize(max);
+
+			}
+
+			MeshDataFragment(const MeshDataFragment&) = delete;
+			MeshDataFragment(MeshDataFragment&&) = default;
+
+			MeshDataFragment& operator=(const MeshDataFragment&) = delete;
+			MeshDataFragment& operator=(MeshDataFragment&&) = default;
+
+
+			facade_type mask() {
+				return facade_type(*this);
+			}
+
+			const region_type& getCoveredRegion() const {
+				return coveredRegion;
+			}
+
+			const ElementType& operator[](const NodeRef<NodeKind,Level>& id) const {
+				return data[id.getOrdinal()];
+			}
+
+			ElementType& operator[](const NodeRef<NodeKind,Level>& id) {
+				return data[id.getOrdinal()];
+			}
+
+			std::size_t size() const {
+				return data.size();
+			}
+
+			void resize(const region_type&) {
+
+			}
+
+			void insert(const MeshDataFragment& other, const region_type& area) {
+				assert_true(core::isSubRegion(area,other.coveredRegion)) << "New data " << area << " not covered by source of size " << coveredRegion << "\n";
+				assert_true(core::isSubRegion(area,coveredRegion))       << "New data " << area << " not covered by target of size " << coveredRegion << "\n";
+
+				assert_not_implemented();
+//				// copy data line by line using memcpy
+//				area.scanByLines([&](const point& a, const point& b){
+//					auto start = flatten(a);
+//					auto length = (flatten(b) - start) * sizeof(T);
+//					std::memcpy(&data[start],&other.data[start],length);
+//				});
+			}
+
+			void save(utils::Archive&, const region_type&) const {
+				assert_not_implemented();
+			}
+
+			void load(utils::Archive&) {
+				assert_not_implemented();
+			}
+		};
+
 	} // end namespace detail
+
+	template<
+		typename NodeKind,
+		typename ElementType,
+		unsigned Level,
+		typename PartitionTree
+	>
+	class MeshData : public core::data_item<detail::MeshDataFragment<NodeKind,ElementType,Level,PartitionTree>> {
+
+		template<typename NodeKinds,typename EdgeKinds,typename Hierarchies,unsigned Levels,unsigned PartitionDepth>
+		friend class Mesh;
+
+	public:
+
+		using fragment_type = detail::MeshDataFragment<NodeKind,ElementType,Level,PartitionTree>;
+
+	private:
+
+		std::unique_ptr<fragment_type> owned;
+
+		fragment_type* data;
+
+
+		friend fragment_type;
+
+		MeshData(fragment_type& data) : data(&data) {}
+
+		MeshData(const PartitionTree& ptree, const detail::MeshRegion& region)
+			: owned(std::make_unique<fragment_type>(ptree,region)), data(owned.get()) {}
+
+	public:
+
+		const ElementType& operator[](const NodeRef<NodeKind,Level>& id) const {
+			return (*data)[id.getOrdinal()];
+		}
+
+		ElementType& operator[](const NodeRef<NodeKind,Level>& id) {
+			return (*data)[id.getOrdinal()];
+		}
+
+		std::size_t size() const {
+			return (*data).size();
+		}
+	};
 
 
 	/**
@@ -2242,8 +2530,8 @@ namespace data {
 		// -- graph data --
 
 		template<typename NodeKind, typename T, unsigned Level = 0>
-		MeshData<NodeKind,T,Level> createNodeData() const {
-			return MeshData<NodeKind,T,Level>(numNodes<NodeKind,Level>());
+		MeshData<NodeKind,T,Level,partition_tree_type> createNodeData() const {
+			return MeshData<NodeKind,T,Level,partition_tree_type>(partitionTree,detail::SubMeshRef::root());
 		}
 
 	};

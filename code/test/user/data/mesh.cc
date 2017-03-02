@@ -11,6 +11,120 @@ namespace data {
 
 	#include "data_item_test.inl"
 
+
+	struct Vertex {};
+	struct Edge : public edge<Vertex,Vertex> {};
+	struct Refine : public hierarchy<Vertex,Vertex> {};
+
+
+	template<unsigned levels, unsigned partitionDepth = 5>
+	using BarMesh = Mesh<nodes<Vertex>,edges<Edge>,hierarchies<Refine>,levels,partitionDepth>;
+
+	template<unsigned levels>
+	using BarMeshBuilder = MeshBuilder<nodes<Vertex>,edges<Edge>,hierarchies<Refine>,levels>;
+
+	namespace detail {
+
+		template<unsigned level, unsigned levels>
+		void createLevelVertices(BarMeshBuilder<levels>& builder, unsigned numVertices) {
+
+			// insert vertices
+			auto vertices = builder.template create<Vertex,level>(numVertices);
+			assert_eq(numVertices,vertices.size());
+
+			// connect vertices through edges
+			for(unsigned i = 0; i < numVertices - 1; ++i) {
+				builder.template link<Edge>(vertices[i],vertices[i+1]);
+			}
+
+		}
+
+
+		template<unsigned level>
+		struct BarMeshLevelBuilder {
+
+			template<unsigned levels>
+			void operator()(BarMeshBuilder<levels>& builder, unsigned numVertices) {
+				createLevelVertices<level>(builder,numVertices);
+				BarMeshLevelBuilder<level-1>()(builder,numVertices * 2);
+
+				// connect hierarchical edges
+				for(unsigned i = 0; i<numVertices; ++i) {
+					builder.template link<Refine>(
+							NodeRef<Vertex,level>(i),
+							NodeRef<Vertex,level-1>(2*i)
+					);
+
+					builder.template link<Refine>(
+							NodeRef<Vertex,level>(i),
+							NodeRef<Vertex,level-1>(2*i+1)
+					);
+				}
+			}
+
+		};
+
+		template<>
+		struct BarMeshLevelBuilder<0> {
+
+			template<unsigned levels>
+			void operator()(BarMeshBuilder<levels>& builder, unsigned numVertices) {
+				createLevelVertices<0>(builder,numVertices);
+			}
+
+		};
+
+
+	}
+
+
+	template<unsigned levels = 1, unsigned partitionDepth = 5>
+	BarMesh<levels,partitionDepth> createBarMesh(std::size_t length) {
+		using builder_type = MeshBuilder<nodes<Vertex>,edges<Edge>,hierarchies<Refine>,levels>;
+
+		// create a mesh builder
+		builder_type builder;
+
+		// fill mesh on all levels
+		detail::BarMeshLevelBuilder<levels-1>()(builder,length);
+
+		// finish the mesh
+		return std::move(builder).template build<partitionDepth>();
+
+	}
+
+
+	template<unsigned depth = 4>
+	std::vector<detail::SubMeshRef> createListOfSubMeshRefs() {
+
+		using namespace detail;
+
+		std::vector<SubMeshRef> list;
+
+		// insert all references of up to length 4
+		SubTreeRef::root().enumerate<depth,true>([&](const SubTreeRef& ref) {
+			list.push_back(ref);
+		});
+
+
+		// check also with wild-cards
+		SubTreeRef::root().enumerate<depth,true>([&](const SubTreeRef& ref) {
+
+			auto curDepth = ref.getDepth();
+			for(int c = 0; c < (1 << curDepth); ++c) {
+
+				SubMeshRef cur = ref;
+				for(unsigned i = 0; i<curDepth; ++i) {
+					if ((c >> i) % 2) cur = cur.mask(i);
+				}
+				list.push_back(cur);
+
+			}
+		});
+
+		return list;
+	}
+
 	TEST(NodeRef, TypeProperties) {
 
 		using node_type = NodeRef<int,4>;
@@ -36,7 +150,9 @@ namespace data {
 
 	TEST(MeshData, TypeProperties) {
 
-		using data = MeshData<int,int>;
+
+		using ptree = detail::PartitionTree<nodes<int>,edges<>>;
+		using data = MeshData<int,int,1,ptree>;
 
 		EXPECT_FALSE(std::is_default_constructible<data>::value);
 		EXPECT_FALSE(std::is_trivially_default_constructible<data>::value);
@@ -52,6 +168,120 @@ namespace data {
 
 		EXPECT_FALSE(std::is_copy_assignable<data>::value);
 		EXPECT_TRUE(std::is_move_assignable<data>::value);
+
+
+		// check that it qualifies as a region
+		EXPECT_TRUE(allscale::api::core::is_data_item<data>::value);
+
+	}
+
+	TEST(DISABLED_MeshData, SharedUsage) {
+
+		using namespace detail;
+
+		auto mesh = createBarMesh(100);
+
+		using facade = decltype(mesh.createNodeData<Vertex,int>());
+		using fragment = typename facade::fragment_type;
+		using region = typename fragment::region_type;
+		using shared_data = typename fragment::shared_data_type;
+
+		// get shared data
+		const shared_data& shared = mesh.getPartitionTree();
+
+		// create two regions of nodes
+		SubMeshRef r = SubMeshRef::root();
+
+		MeshRegion partA = r.getLeftChild();
+		MeshRegion partB = r.getRightChild();
+
+		// create fragments
+		fragment fA(shared,partA);
+		fragment fB(shared,partB);
+
+		// fill the data buffer
+		auto a = fA.mask();
+		partA.scan<Vertex,0>(shared,[&](const NodeRef<Vertex,0>& node) {
+			a[node] = 0;
+		});
+
+		auto b = fB.mask();
+		partB.scan<Vertex,0>(shared,[&](const NodeRef<Vertex,0>& node) {
+			b[node] = 0;
+		});
+
+		for(int t = 0; t<10; t++) {
+
+			partA.scan<Vertex,0>(shared,[&](const NodeRef<Vertex,0>& node) {
+				EXPECT_EQ(t,a[node]);
+				a[node]++;
+			});
+
+			partB.scan<Vertex,0>(shared,[&](const NodeRef<Vertex,0>& node) {
+				EXPECT_EQ(t,b[node]);
+				b[node]++;
+			});
+
+		}
+
+
+		// --- alter data distribution ---
+
+		MeshRegion newPartA = r.getLeftChild().getLeftChild();
+		MeshRegion newPartB = r.getRightChild().getRightChild();
+		MeshRegion newPartC {
+			r.getLeftChild().getRightChild(),
+			r.getRightChild().getLeftChild()
+		};
+
+		fragment fC(shared,newPartC);
+
+		std::cout << "PartA:     " << partA << "\n";
+		std::cout << "newPartC:  " << newPartC << "\n";
+		std::cout << "intersect: " << region::intersect(newPartC,partA) << "\n";
+
+		// move data from A and B to C
+		fC.insert(fA,region::intersect(newPartC,partA));
+		fC.insert(fB,region::intersect(newPartC,partB));
+
+//		Region newPartA = Region(size, {0,0}, {250,750});
+//		Region newPartB = Region(size, {250,0}, {500,750});
+//		Region newPartC = Region(size, {0,750}, {500,1000});
+//		EXPECT_EQ(full,Region::merge(newPartA,newPartB,newPartC));
+//
+//		Fragment fC(shared,newPartC);
+//
+//
+//		// shrink A and B
+//		fA.resize(newPartA);
+//		fB.resize(newPartB);
+//
+//		for(int t = 10; t<20; t++) {
+//
+//			auto a = fA.mask();
+//			for(unsigned i=0; i<250; i++) {
+//				for(unsigned j=0; j<750; j++) {
+//					EXPECT_EQ((i*j*(t-1)),(a[{i,j}]));
+//					a[{i,j}] = i * j * t;
+//				}
+//			}
+//
+//			auto b = fB.mask();
+//			for(unsigned i=250; i<500; i++) {
+//				for(unsigned j=0; j<750; j++) {
+//					EXPECT_EQ((i*j*(t-1)),(b[{i,j}]));
+//					b[{i,j}] = i * j * t;
+//				}
+//			}
+//
+//			auto c = fC.mask();
+//			for(unsigned i=0; i<500; i++) {
+//				for(unsigned j=750; j<1000; j++) {
+//					EXPECT_EQ((i*j*(t-1)),(c[{i,j}]));
+//					c[{i,j}] = i * j * t;
+//				}
+//			}
+//		}
 
 	}
 
@@ -188,6 +418,34 @@ namespace data {
 	}
 
 
+	TEST(SubTreeRef, Covers) {
+
+		using namespace detail;
+
+		SubTreeRef r = SubTreeRef::root();
+
+		auto r0 = r.getLeftChild();
+		auto r1 = r.getRightChild();
+
+		auto covers = [](const auto& a, const auto& b) {
+			return a.covers(b);
+		};
+
+		auto not_covers = [](const auto& a, const auto& b) {
+			return !a.covers(b);
+		};
+
+		EXPECT_PRED2(covers,r,r0);
+		EXPECT_PRED2(covers,r,r1);
+
+		EXPECT_PRED2(not_covers,r0,r);
+		EXPECT_PRED2(not_covers,r1,r);
+
+		EXPECT_PRED2(not_covers,r0,r1);
+		EXPECT_PRED2(not_covers,r1,r0);
+
+	}
+
 
 	TEST(SubMeshRef, TypeProperties) {
 
@@ -288,7 +546,91 @@ namespace data {
 
 	}
 
+	TEST(SubMeshRef, Order) {
 
+		using namespace detail;
+
+		auto list = createListOfSubMeshRefs<3>();
+
+		// check each pair of references
+		for(const auto& a : list) {
+			for(const auto& b : list) {
+				EXPECT_EQ(toString(a) < toString(b), a < b)
+					<< "a = " << a << "\n"
+					<< "b = " << b << "\n";
+
+				EXPECT_EQ(toString(a) > toString(b), a > b)
+					<< "a = " << a << "\n"
+					<< "b = " << b << "\n";
+
+				EXPECT_EQ(toString(a) <= toString(b), a <= b)
+					<< "a = " << a << "\n"
+					<< "b = " << b << "\n";
+
+				EXPECT_EQ(toString(a) >= toString(b), a >= b)
+					<< "a = " << a << "\n"
+					<< "b = " << b << "\n";
+			}
+		}
+
+	}
+
+	TEST(SubMeshRef, Covers) {
+
+		using namespace detail;
+
+		SubMeshRef r = SubMeshRef::root();
+
+		auto r0 = r.getLeftChild();
+		auto r1 = r.getRightChild();
+
+		auto covers = [](const auto& a, const auto& b) {
+			return a.covers(b);
+		};
+
+		auto not_covers = [](const auto& a, const auto& b) {
+			return !a.covers(b);
+		};
+
+		EXPECT_PRED2(covers,r,r0);
+		EXPECT_PRED2(covers,r,r1);
+
+		EXPECT_PRED2(not_covers,r0,r);
+		EXPECT_PRED2(not_covers,r1,r);
+
+		EXPECT_PRED2(not_covers,r0,r1);
+		EXPECT_PRED2(not_covers,r1,r0);
+
+
+
+		auto a = r.getLeftChild().getLeftChild().getLeftChild().getLeftChild();
+		auto b = r.getLeftChild().getLeftChild().getLeftChild();
+
+		EXPECT_PRED2(covers,b,a);
+
+		a = a.mask(2);
+		EXPECT_PRED2(not_covers,b,a);
+
+		b = b.mask(2);
+		EXPECT_PRED2(covers,b,a);
+
+	}
+
+	TEST(SubMeshRef, EnclosingTree) {
+
+		using namespace detail;
+
+		SubMeshRef r = SubMeshRef::root();
+
+		EXPECT_EQ("r",toString(r.getEnclosingSubTree()));
+		EXPECT_EQ("r.0",toString(r.getLeftChild().getEnclosingSubTree()));
+		EXPECT_EQ("r.0.1",toString(r.getLeftChild().getRightChild().getEnclosingSubTree()));
+		EXPECT_EQ("r.0.1.0",toString(r.getLeftChild().getRightChild().getLeftChild().getEnclosingSubTree()));
+
+		EXPECT_EQ("r",toString(r.getLeftChild().getRightChild().mask(0).getEnclosingSubTree()));
+		EXPECT_EQ("r.0",toString(r.getLeftChild().getRightChild().getLeftChild().mask(1).getEnclosingSubTree()));
+
+	}
 
 
 	TEST(MeshRegion, TypeProperties) {
@@ -322,17 +664,17 @@ namespace data {
 		MeshRegion e;
 		EXPECT_EQ("[]",toString(e));
 
-		MeshRegion sl = SubMeshRef::root().getLeftChild();
-		EXPECT_EQ("[r.0]",toString(sl));
+		MeshRegion sl = SubMeshRef::root().getLeftChild().getRightChild();
+		EXPECT_EQ("[r.0.1]",toString(sl));
 
-		MeshRegion sr = SubMeshRef::root().getRightChild();
-		EXPECT_EQ("[r.1]",toString(sr));
+		MeshRegion sr = SubMeshRef::root().getRightChild().getLeftChild();
+		EXPECT_EQ("[r.1.0]",toString(sr));
 
 		MeshRegion s2 = MeshRegion::merge(sl,sr);
-		EXPECT_EQ("[r.0,r.1]",toString(s2));
+		EXPECT_EQ("[r.0.1,r.1.0]",toString(s2));
 	}
 
-	TEST(MeshRegion, SetOps) {
+	TEST(MeshRegion, SimpleSetOps) {
 
 		using namespace detail;
 
@@ -346,37 +688,123 @@ namespace data {
 		EXPECT_EQ("[r.1]",toString(sr));
 
 		MeshRegion s2 = MeshRegion::merge(sl,sr);
-		EXPECT_EQ("[r.0,r.1]",toString(s2));
+		EXPECT_EQ("[r]",toString(s2));
 
 		// -- test union --
 		EXPECT_EQ("[]",toString(MeshRegion::merge(e,e)));
 		EXPECT_EQ("[r.0]",toString(MeshRegion::merge(e,sl)));
 		EXPECT_EQ("[r.0]",toString(MeshRegion::merge(sl,e)));
-		EXPECT_EQ("[r.0,r.1]",toString(MeshRegion::merge(e,s2)));
-		EXPECT_EQ("[r.0,r.1]",toString(MeshRegion::merge(s2,e)));
+		EXPECT_EQ("[r]",toString(MeshRegion::merge(e,s2)));
+		EXPECT_EQ("[r]",toString(MeshRegion::merge(s2,e)));
 
-		EXPECT_EQ("[r.0,r.1]",toString(MeshRegion::merge(sl,sr)));
-		EXPECT_EQ("[r.0,r.1]",toString(MeshRegion::merge(s2,sr)));
-		EXPECT_EQ("[r.0,r.1]",toString(MeshRegion::merge(sl,s2)));
-		EXPECT_EQ("[r.0,r.1]",toString(MeshRegion::merge(s2,e)));
-		EXPECT_EQ("[r.0,r.1]",toString(MeshRegion::merge(e,s2)));
+		EXPECT_EQ("[r]",toString(MeshRegion::merge(sl,sr)));
+		EXPECT_EQ("[r]",toString(MeshRegion::merge(s2,sr)));
+		EXPECT_EQ("[r]",toString(MeshRegion::merge(sl,s2)));
+		EXPECT_EQ("[r]",toString(MeshRegion::merge(s2,e)));
+		EXPECT_EQ("[r]",toString(MeshRegion::merge(e,s2)));
 
 
-		// -- test intersection --
-		EXPECT_EQ("[]",toString(MeshRegion::intersect(e,e)));
-		EXPECT_EQ("[]",toString(MeshRegion::intersect(e,sl)));
-		EXPECT_EQ("[]",toString(MeshRegion::intersect(sl,e)));
-
-		EXPECT_EQ("[]",toString(MeshRegion::intersect(sl,sr)));
-
-		EXPECT_EQ("[r.0]",toString(MeshRegion::intersect(sl,s2)));
-		EXPECT_EQ("[r.0]",toString(MeshRegion::intersect(s2,sl)));
-		EXPECT_EQ("[r.1]",toString(MeshRegion::intersect(sr,s2)));
-		EXPECT_EQ("[r.1]",toString(MeshRegion::intersect(s2,sr)));
+//		// -- test intersection --
+//		EXPECT_EQ("[]",toString(MeshRegion::intersect(e,e)));
+//		EXPECT_EQ("[]",toString(MeshRegion::intersect(e,sl)));
+//		EXPECT_EQ("[]",toString(MeshRegion::intersect(sl,e)));
+//
+//		EXPECT_EQ("[]",toString(MeshRegion::intersect(sl,sr)));
+//
+//		EXPECT_EQ("[r.0]",toString(MeshRegion::intersect(sl,s2)));
+//		EXPECT_EQ("[r.0]",toString(MeshRegion::intersect(s2,sl)));
+//		EXPECT_EQ("[r.1]",toString(MeshRegion::intersect(sr,s2)));
+//		EXPECT_EQ("[r.1]",toString(MeshRegion::intersect(s2,sr)));
 
 	}
 
-	TEST(MeshRegion, DataItemRegionConcept) {
+
+	TEST(MeshRegion, UnionOp) {
+
+		using namespace detail;
+
+		MeshRegion e;
+		EXPECT_EQ("[]",toString(e));
+
+		SubMeshRef r = SubMeshRef::root();
+
+		SubMeshRef r0 = r.getLeftChild();
+		SubMeshRef r1 = r.getRightChild();
+
+		SubMeshRef r00 = r.getLeftChild().getLeftChild();
+		SubMeshRef r01 = r.getLeftChild().getRightChild();
+		SubMeshRef r10 = r.getRightChild().getLeftChild();
+		SubMeshRef r11 = r.getRightChild().getRightChild();
+
+		SubMeshRef r000 = r.getLeftChild().getLeftChild().getLeftChild();
+		SubMeshRef r001 = r.getLeftChild().getLeftChild().getRightChild();
+		SubMeshRef r010 = r.getLeftChild().getRightChild().getLeftChild();
+		SubMeshRef r011 = r.getLeftChild().getRightChild().getRightChild();
+		SubMeshRef r100 = r.getRightChild().getLeftChild().getLeftChild();
+		SubMeshRef r101 = r.getRightChild().getLeftChild().getRightChild();
+		SubMeshRef r110 = r.getRightChild().getRightChild().getLeftChild();
+		SubMeshRef r111 = r.getRightChild().getRightChild().getRightChild();
+
+		SubMeshRef r0s1 = r001.mask(1);
+		SubMeshRef rss1 = r001.mask(0).mask(1);
+
+
+		// check cases where one reference is covering other
+		EXPECT_EQ("[r]",toString(MeshRegion{ r, r00, r01 }));
+		EXPECT_EQ("[r.0.*.1,r.0.0.0]",toString(MeshRegion{ r0s1, r000, r001, r011 }));
+		EXPECT_EQ("[r.0.*.1,r.0.0.0]",toString(MeshRegion{ r011, r000, r0s1, r001 }));
+		EXPECT_EQ("[r.*.*.1,r.0.0.0]",toString(MeshRegion{ r011, r000, r0s1, r001, rss1 }));
+
+
+		// check situations where references may be merged
+		EXPECT_EQ("[r]",toString(MeshRegion{ r01, r00, r1 }));
+
+		// check sibling merges
+		EXPECT_EQ("[r.0.*.0]",toString(MeshRegion{ r010, r000 }));
+		EXPECT_EQ("[r.0.0]",toString(MeshRegion{ r000, r001 }));
+		EXPECT_EQ("[r.0.0.1,r.0.1]",toString(MeshRegion{ r01, r001 }));
+
+
+		EXPECT_EQ("[r]",toString(MeshRegion{
+			r0,  r00,  r000,
+			r1,  r01,  r001,
+                 r10,  r010,
+			     r11,  r011,
+			           r100,
+			           r101,
+			           r110,
+                       r111
+
+		}));
+
+	}
+
+	TEST(MeshRegion, AdvancedSetOps) {
+
+		using namespace detail;
+
+		MeshRegion e;
+		EXPECT_EQ("[]",toString(e));
+
+		MeshRegion a = SubMeshRef::root().getLeftChild();
+		EXPECT_EQ("[r.0]",toString(a));
+
+		MeshRegion b = SubMeshRef::root().getLeftChild().getRightChild();
+		EXPECT_EQ("[r.0.1]",toString(b));
+
+		// -- test union --
+		EXPECT_EQ("[r.0]",toString(MeshRegion::merge(a,b)));
+
+//		// -- test intersect --
+//		EXPECT_EQ("[r.0.1]",toString(MeshRegion::merge(a,b)));
+//
+//		// -- test difference --
+//		EXPECT_EQ("[r.0.0]",toString(MeshRegion::difference(a,b)));
+//		EXPECT_EQ("[]",toString(MeshRegion::difference(b,a)));
+	}
+
+
+	TEST(DISABLED_MeshRegion, DataItemRegionConcept) {
 
 		using namespace detail;
 
@@ -389,8 +817,8 @@ namespace data {
 		MeshRegion a { r00, r01 };
 		MeshRegion b { r01, r11 };
 
-		EXPECT_EQ("[r.0.0,r.0.1]",toString(a));
-		EXPECT_EQ("[r.0.1,r.1.1]",toString(b));
+		EXPECT_EQ("[r.0]",toString(a));
+		EXPECT_EQ("[r.*.1]",toString(b));
 
 		testRegion(a,b);
 	}
@@ -418,90 +846,8 @@ namespace data {
 		MeshRegion a { r00, r01 };
 		MeshRegion b { r01, r11 };
 
-		EXPECT_EQ("[r.0.0,r.0.1]",toString(toList(a)));
+		EXPECT_EQ("[r.0]",toString(toList(a)));
 		EXPECT_EQ("[r.0.1,r.1.1]",toString(toList(b)));
-
-	}
-
-
-	struct Vertex {};
-	struct Edge : public edge<Vertex,Vertex> {};
-	struct Refine : public hierarchy<Vertex,Vertex> {};
-
-
-	template<unsigned levels, unsigned partitionDepth = 5>
-	using BarMesh = Mesh<nodes<Vertex>,edges<Edge>,hierarchies<Refine>,levels,partitionDepth>;
-
-	template<unsigned levels>
-	using BarMeshBuilder = MeshBuilder<nodes<Vertex>,edges<Edge>,hierarchies<Refine>,levels>;
-
-	namespace detail {
-
-		template<unsigned level, unsigned levels>
-		void createLevelVertices(BarMeshBuilder<levels>& builder, unsigned numVertices) {
-
-			// insert vertices
-			auto vertices = builder.template create<Vertex,level>(numVertices);
-			assert_eq(numVertices,vertices.size());
-
-			// connect vertices through edges
-			for(unsigned i = 0; i < numVertices - 1; ++i) {
-				builder.template link<Edge>(vertices[i],vertices[i+1]);
-			}
-
-		}
-
-
-		template<unsigned level>
-		struct BarMeshLevelBuilder {
-
-			template<unsigned levels>
-			void operator()(BarMeshBuilder<levels>& builder, unsigned numVertices) {
-				createLevelVertices<level>(builder,numVertices);
-				BarMeshLevelBuilder<level-1>()(builder,numVertices * 2);
-
-				// connect hierarchical edges
-				for(unsigned i = 0; i<numVertices; ++i) {
-					builder.template link<Refine>(
-							NodeRef<Vertex,level>(i),
-							NodeRef<Vertex,level-1>(2*i)
-					);
-
-					builder.template link<Refine>(
-							NodeRef<Vertex,level>(i),
-							NodeRef<Vertex,level-1>(2*i+1)
-					);
-				}
-			}
-
-		};
-
-		template<>
-		struct BarMeshLevelBuilder<0> {
-
-			template<unsigned levels>
-			void operator()(BarMeshBuilder<levels>& builder, unsigned numVertices) {
-				createLevelVertices<0>(builder,numVertices);
-			}
-
-		};
-
-
-	}
-
-
-	template<unsigned levels = 1, unsigned partitionDepth = 5>
-	BarMesh<levels,partitionDepth> createBarMesh(std::size_t length) {
-		using builder_type = MeshBuilder<nodes<Vertex>,edges<Edge>,hierarchies<Refine>,levels>;
-
-		// create a mesh builder
-		builder_type builder;
-
-		// fill mesh on all levels
-		detail::BarMeshLevelBuilder<levels-1>()(builder,length);
-
-		// finish the mesh
-		return std::move(builder).template build<partitionDepth>();
 
 	}
 
