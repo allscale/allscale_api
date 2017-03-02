@@ -424,6 +424,88 @@ namespace data {
 	}
 
 
+	struct Vertex {};
+	struct Edge : public edge<Vertex,Vertex> {};
+	struct Refine : public hierarchy<Vertex,Vertex> {};
+
+
+	template<unsigned levels, unsigned partitionDepth = 5>
+	using BarMesh = Mesh<nodes<Vertex>,edges<Edge>,hierarchies<Refine>,levels,partitionDepth>;
+
+	template<unsigned levels>
+	using BarMeshBuilder = MeshBuilder<nodes<Vertex>,edges<Edge>,hierarchies<Refine>,levels>;
+
+	namespace detail {
+
+		template<unsigned level, unsigned levels>
+		void createLevelVertices(BarMeshBuilder<levels>& builder, unsigned numVertices) {
+
+			// insert vertices
+			auto vertices = builder.template create<Vertex,level>(numVertices);
+			assert_eq(numVertices,vertices.size());
+
+			// connect vertices through edges
+			for(unsigned i = 0; i < numVertices - 1; ++i) {
+				builder.template link<Edge>(vertices[i],vertices[i+1]);
+			}
+
+		}
+
+
+		template<unsigned level>
+		struct BarMeshLevelBuilder {
+
+			template<unsigned levels>
+			void operator()(BarMeshBuilder<levels>& builder, unsigned numVertices) {
+				createLevelVertices<level>(builder,numVertices);
+				BarMeshLevelBuilder<level-1>()(builder,numVertices * 2);
+
+				// connect hierarchical edges
+				for(unsigned i = 0; i<numVertices; ++i) {
+					builder.template link<Refine>(
+							NodeRef<Vertex,level>(i),
+							NodeRef<Vertex,level-1>(2*i)
+					);
+
+					builder.template link<Refine>(
+							NodeRef<Vertex,level>(i),
+							NodeRef<Vertex,level-1>(2*i+1)
+					);
+				}
+			}
+
+		};
+
+		template<>
+		struct BarMeshLevelBuilder<0> {
+
+			template<unsigned levels>
+			void operator()(BarMeshBuilder<levels>& builder, unsigned numVertices) {
+				createLevelVertices<0>(builder,numVertices);
+			}
+
+		};
+
+
+	}
+
+
+	template<unsigned levels = 1, unsigned partitionDepth = 5>
+	BarMesh<levels,partitionDepth> createBarMesh(std::size_t length) {
+		using builder_type = MeshBuilder<nodes<Vertex>,edges<Edge>,hierarchies<Refine>,levels>;
+
+		// create a mesh builder
+		builder_type builder;
+
+		// fill mesh on all levels
+		detail::BarMeshLevelBuilder<levels-1>()(builder,length);
+
+		// finish the mesh
+		return std::move(builder).template build<partitionDepth>();
+
+	}
+
+
 	TEST(PartitionTree, Basic) {
 
 		using namespace detail;
@@ -432,7 +514,6 @@ namespace data {
 		struct Edge : public edge<Vertex,Vertex> {};
 
 		using Ptree = PartitionTree<nodes<Vertex>,edges<Edge>>;
-
 
 		EXPECT_TRUE(std::is_default_constructible<Ptree>::value);
 		EXPECT_FALSE(std::is_trivially_default_constructible<Ptree>::value);
@@ -449,6 +530,137 @@ namespace data {
 		EXPECT_TRUE(std::is_copy_assignable<Ptree>::value);
 		EXPECT_TRUE(std::is_move_assignable<Ptree>::value);
 
+
+	}
+
+
+	TEST(PartitionTree,Initialization) {
+
+		using namespace detail;
+
+		auto bar = createBarMesh<2,2>(5);
+		auto& ptree = bar.getPartitionTree();
+
+		SubTreeRef r = SubTreeRef::root();
+
+		// root level
+		EXPECT_EQ("[0,10)",toString(ptree.getNodeRange<Vertex,0>(r)));
+
+		// 1st level
+		EXPECT_EQ("[0,5)",toString(ptree.getNodeRange<Vertex,0>(r.getLeftChild())));
+		EXPECT_EQ("[5,10)",toString(ptree.getNodeRange<Vertex,0>(r.getRightChild())));
+
+		// 2nd level
+		EXPECT_EQ("[0,2)",toString(ptree.getNodeRange<Vertex,0>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[2,5)",toString(ptree.getNodeRange<Vertex,0>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[5,7)",toString(ptree.getNodeRange<Vertex,0>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[7,10)",toString(ptree.getNodeRange<Vertex,0>(r.getRightChild().getRightChild())));
+
+
+		// root level
+		EXPECT_EQ("[0,5)",toString(ptree.getNodeRange<Vertex,1>(r)));
+
+		// 1st level
+		EXPECT_EQ("[0,2)",toString(ptree.getNodeRange<Vertex,1>(r.getLeftChild())));
+		EXPECT_EQ("[2,5)",toString(ptree.getNodeRange<Vertex,1>(r.getRightChild())));
+
+		// 2nd level
+		EXPECT_EQ("[0,1)",toString(ptree.getNodeRange<Vertex,1>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[1,2)",toString(ptree.getNodeRange<Vertex,1>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[2,3)",toString(ptree.getNodeRange<Vertex,1>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[3,5)",toString(ptree.getNodeRange<Vertex,1>(r.getRightChild().getRightChild())));
+
+
+
+		// --- check closures ---
+
+		// root level
+		EXPECT_EQ("[r]",toString(ptree.getForwardClosure<Edge,0>(r)));
+
+		// 1st level
+		EXPECT_EQ("[r]",toString(ptree.getForwardClosure<Edge,0>(r.getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.getForwardClosure<Edge,0>(r.getRightChild())));
+
+		// 2nd level
+		EXPECT_EQ("[r]",toString(ptree.getForwardClosure<Edge,0>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.getForwardClosure<Edge,0>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[r]",toString(ptree.getForwardClosure<Edge,0>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.getForwardClosure<Edge,0>(r.getRightChild().getRightChild())));
+
+
+		// root level
+		EXPECT_EQ("[r]",toString(ptree.getBackwardClosure<Edge,0>(r)));
+
+		// 1st level
+		EXPECT_EQ("[r]",toString(ptree.getBackwardClosure<Edge,0>(r.getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.getBackwardClosure<Edge,0>(r.getRightChild())));
+
+
+		// 2nd level
+		EXPECT_EQ("[r]",toString(ptree.getBackwardClosure<Edge,0>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.getBackwardClosure<Edge,0>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[r]",toString(ptree.getBackwardClosure<Edge,0>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.getBackwardClosure<Edge,0>(r.getRightChild().getRightChild())));
+
+
+		// --- check hierarchical closures ---
+
+		// root level
+		EXPECT_EQ("[r]",toString(ptree.getParentClosure<Refine,0>(r)));
+
+		// 1st level
+		EXPECT_EQ("[r]",toString(ptree.getParentClosure<Refine,0>(r.getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.getParentClosure<Refine,0>(r.getRightChild())));
+
+		// 2nd level
+		EXPECT_EQ("[r]",toString(ptree.getParentClosure<Refine,0>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.getParentClosure<Refine,0>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[r]",toString(ptree.getParentClosure<Refine,0>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.getParentClosure<Refine,0>(r.getRightChild().getRightChild())));
+
+
+		// root level
+		EXPECT_EQ("[]",toString(ptree.getChildClosure<Refine,0>(r)));
+
+		// 1st level
+		EXPECT_EQ("[]",toString(ptree.getChildClosure<Refine,0>(r.getLeftChild())));
+		EXPECT_EQ("[]",toString(ptree.getChildClosure<Refine,0>(r.getRightChild())));
+
+		// 2nd level
+		EXPECT_EQ("[]",toString(ptree.getChildClosure<Refine,0>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[]",toString(ptree.getChildClosure<Refine,0>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[]",toString(ptree.getChildClosure<Refine,0>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[]",toString(ptree.getChildClosure<Refine,0>(r.getRightChild().getRightChild())));
+
+
+		// - level 1 -
+
+		// root level
+		EXPECT_EQ("[]",toString(ptree.getParentClosure<Refine,1>(r)));
+
+		// 1st level
+		EXPECT_EQ("[]",toString(ptree.getParentClosure<Refine,1>(r.getLeftChild())));
+		EXPECT_EQ("[]",toString(ptree.getParentClosure<Refine,1>(r.getRightChild())));
+
+		// 2nd level
+		EXPECT_EQ("[]",toString(ptree.getParentClosure<Refine,1>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[]",toString(ptree.getParentClosure<Refine,1>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[]",toString(ptree.getParentClosure<Refine,1>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[]",toString(ptree.getParentClosure<Refine,1>(r.getRightChild().getRightChild())));
+
+
+		// root level
+		EXPECT_EQ("[r]",toString(ptree.getChildClosure<Refine,1>(r)));
+
+		// 1st level
+		EXPECT_EQ("[r]",toString(ptree.getChildClosure<Refine,1>(r.getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.getChildClosure<Refine,1>(r.getRightChild())));
+
+		// 2nd level
+		EXPECT_EQ("[r]",toString(ptree.getChildClosure<Refine,1>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.getChildClosure<Refine,1>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[r]",toString(ptree.getChildClosure<Refine,1>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.getChildClosure<Refine,1>(r.getRightChild().getRightChild())));
 
 	}
 

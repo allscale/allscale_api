@@ -168,6 +168,155 @@ namespace data {
 	};
 
 
+	template<typename Kind, unsigned Level>
+	class NodeRange {
+
+		NodeRef<Kind,Level> _begin;
+
+		NodeRef<Kind,Level> _end;
+
+	public:
+
+		NodeRange(const NodeRef<Kind,Level>& a, const NodeRef<Kind,Level>& b) : _begin(a), _end(b) {
+			assert_le(_begin.id,_end.id);
+		}
+
+		NodeRef<Kind,Level> getBegin() const {
+			return _begin;
+		}
+
+		NodeRef<Kind,Level> getEnd() const {
+			return _end;
+		}
+
+		NodeRef<Kind,Level> operator[](std::size_t index) const {
+			return NodeRef<Kind,Level> { _begin.id + index };
+		}
+
+		std::size_t size() const {
+			return _end.id - _begin.id;
+		}
+
+
+		class const_iterator : public std::iterator<std::random_access_iterator_tag, NodeRef<Kind,Level>> {
+
+			std::size_t cur;
+
+		public:
+
+			const_iterator(std::size_t pos) : cur(pos) {};
+
+			bool operator==(const const_iterator& other) const {
+				return cur == other.cur;
+			}
+
+			bool operator!=(const const_iterator& other) const {
+				return !(*this == other);
+			}
+
+			bool operator<(const const_iterator& other) const {
+				return cur < other.cur;
+			}
+
+			bool operator<=(const const_iterator& other) const {
+				return cur <= other.cur;
+			}
+
+			bool operator>=(const const_iterator& other) const {
+				return cur >= other.cur;
+			}
+
+			bool operator>(const const_iterator& other) const {
+				return cur > other.cur;
+			}
+
+			NodeRef<Kind,Level> operator*() const {
+				return NodeRef<Kind,Level>{cur};
+			}
+
+			const_iterator& operator++() {
+				++cur;
+				return *this;
+			}
+
+			const_iterator operator++(int) {
+				const_iterator res = *this;
+				++cur;
+				return res;
+			}
+
+			const_iterator& operator--() {
+				--cur;
+				return *this;
+			}
+
+			const_iterator operator--(int) {
+				const_iterator res = *this;
+				--cur;
+				return res;
+			}
+
+			const_iterator& operator+=(std::ptrdiff_t n) {
+				cur += n;
+				return *this;
+			}
+
+			const_iterator& operator-=(std::ptrdiff_t n) {
+				cur -= n;
+				return *this;
+			}
+
+			friend const_iterator operator+(const_iterator& iter, std::ptrdiff_t n) {
+				const_iterator res = iter;
+				res.cur += n;
+				return res;
+
+			}
+
+			friend const_iterator& operator+(std::ptrdiff_t n, const_iterator& iter) {
+				const_iterator res = iter;
+				res.cur += n;
+				return res;
+			}
+
+			const_iterator operator-(std::ptrdiff_t n) {
+				const_iterator res = *this;
+				res.cur -= n;
+				return res;
+			}
+
+			std::ptrdiff_t operator-(const_iterator& other) const {
+				return std::ptrdiff_t(cur - other.cur);
+			}
+
+			NodeRef<Kind,Level> operator[](std::ptrdiff_t n) const {
+				return *(*this + n);
+			}
+
+		};
+
+		const_iterator begin() const {
+			return const_iterator(_begin.id);
+		}
+
+		const_iterator end() const {
+			return const_iterator(_end.id);
+		}
+
+		template<typename Body>
+		void forEach(const Body& body) {
+			for(const auto& cur : *this) {
+				body(cur);
+			}
+		}
+
+		friend std::ostream& operator<<(std::ostream& out, const NodeRange& range) {
+			return out << "[" << range._begin.id << "," << range._end.id << ")";
+		}
+
+	};
+
+
 	template<
 		typename NodeKind,
 		typename ElementType,
@@ -261,6 +410,9 @@ namespace data {
 			}
 		}
 
+
+
+
 		template<unsigned Level, typename ... NodeTypes>
 		struct NodeSet;
 
@@ -300,6 +452,13 @@ namespace data {
 
 			NodeRef<First,Level> create() {
 				return { node_counter++ };
+			}
+
+			NodeRange<First,Level> create(unsigned num) {
+				NodeRef<First,Level> begin(node_counter);
+				node_counter += num;
+				NodeRef<First,Level> end(node_counter);
+				return { begin, end };
 			}
 
 			std::size_t numNodes() const {
@@ -1279,24 +1438,6 @@ namespace data {
 */
 		};
 
-
-		template<typename Kind, unsigned Level>
-		struct NodeRange {
-
-			NodeRef<Kind,Level> begin;
-
-			NodeRef<Kind,Level> end;
-
-			template<typename Body>
-			void forEach(const Body& body) {
-				for(auto i = begin.id; i < end.id; ++i) {
-					body(NodeRef<Kind,Level>(i));
-				}
-			}
-
-		};
-
-
 		/**
 		 * A common basis class for sub-tree and sub-graph references, which are both based on paths
 		 * within a tree.
@@ -1323,6 +1464,20 @@ namespace data {
 			value_t getDepth() const {
 				if (PathRefBase::mask == 0) return 0;
 				return sizeof(PathRefBase::mask) * 8 - __builtin_clz(PathRefBase::mask);
+			}
+
+			bool isRoot() const {
+				return PathRefBase::mask == 0;
+			}
+
+			bool isLeftChild() const {
+				assert_false(isRoot());
+				return !isRightChild();
+			}
+
+			bool isRightChild() const {
+				assert_false(isRoot());
+				return PathRefBase::path & (1 << (getDepth()-1));
 			}
 
 			Derived getLeftChild() const {
@@ -1385,18 +1540,12 @@ namespace data {
 				return res;
 			}
 
-			template<typename Body>
-			void visitPostOrder(unsigned max_depth, const Body& body) {
 
-				// visit children first
-				if (getDepth() < max_depth) {
-					getLeftChild().visitPostOrder(max_depth,body);
-					getRightChild().visitPostOrder(max_depth,body);
-				}
-
-				// visit this reference
-				body(*this);
-
+			SubTreeRef getParent() const {
+				assert_false(isRoot());
+				SubTreeRef res = *this;
+				res.PathRefBase::mask = res.PathRefBase::mask & ~(1 << (getDepth()-1));
+				return res;
 			}
 
 
@@ -1651,8 +1800,6 @@ namespace data {
 
 			PartitionTree() {}
 
-			// TODO: return references
-
 			template<typename Kind, unsigned Level = 0>
 			NodeRange<Kind,Level> getNodeRange(const SubTreeRef& ref) const {
 				assert_lt(ref.getIndex(),num_elements);
@@ -1666,8 +1813,8 @@ namespace data {
 			template<typename Kind, unsigned Level = 0>
 			void setNodeRange(const SubTreeRef& ref, const NodeRange<Kind,Level>& range) {
 				auto& pair = getNode(ref).data[Level].nodeRanges.template get<Kind>();
-				pair.first = range.begin.id;
-				pair.second = range.end.id;
+				pair.first = range.getBegin().id;
+				pair.second = range.getEnd().id;
 			}
 
 			template<typename EdgeKind, unsigned Level = 0>
@@ -1711,6 +1858,17 @@ namespace data {
 				getNode(ref).data[Level].childClosure.template get<HierarchyKind>() = region;
 			}
 
+
+			template<typename Body>
+			void visitPreOrder(const Body& body) {
+				visitPreOrder(body,SubTreeRef::root());
+			}
+
+			template<typename Body>
+			void visitPostOrder(const Body& body) {
+				visitPostOrder(body,SubTreeRef::root());
+			}
+
 		private:
 
 			const Node& getNode(const SubTreeRef& ref) const {
@@ -1721,6 +1879,32 @@ namespace data {
 			Node& getNode(const SubTreeRef& ref) {
 				assert_lt(ref.getIndex(),num_elements);
 				return data[ref.getIndex()];
+			}
+
+			template<typename Body>
+			void visitPreOrder(const Body& body, const SubTreeRef& cur) {
+
+				// visit this reference first
+				body(cur);
+
+				// visit children second
+				if (cur.getDepth() < depth) {
+					visitPreOrder(body,cur.getLeftChild());
+					visitPreOrder(body,cur.getRightChild());
+				}
+			}
+
+
+			template<typename Body>
+			void visitPostOrder(const Body& body, const SubTreeRef& cur) {
+				// visit children first
+				if (cur.getDepth() < depth) {
+					visitPostOrder(body,cur.getLeftChild());
+					visitPostOrder(body,cur.getRightChild());
+				}
+
+				// visit this reference
+				body(cur);
 			}
 
 		};
@@ -1745,35 +1929,96 @@ namespace data {
 				// set up node ranges for partitions
 				data.forAllNodeKinds([&](const auto& nodeKind, const auto& level) {
 
-						// get NodeType and level from nodetype
+						// get node kind and level
 						using NodeKind = plain_type<decltype(nodeKind)>;
 						const unsigned lvl = get_level<decltype(level)>::value;
 
 
-
+						// set root node to cover the full range
 						auto num_nodes = data.template numNodes<NodeKind,lvl>();
+						res.template setNodeRange<NodeKind,lvl>(
+								SubTreeRef::root(),
+								NodeRange<NodeKind,lvl>(
+									NodeRef<NodeKind,lvl>{ 0 },
+									NodeRef<NodeKind,lvl>{ num_nodes }
+								)
+						);
 
-						SubTreeRef root = SubTreeRef::root();
+						// recursively sub-divide ranges
+						res.visitPreOrder([&](const SubTreeRef& ref) {
 
-						root.visitPostOrder(PartitionDepth,[](const SubTreeRef& ref) {
+							if (ref.isRoot()) return;
 
-							// TODO: fill in values!
+							// get the range of the parent
+							auto range = res.template getNodeRange<NodeKind,lvl>(ref.getParent());
 
-							std::cout << ref << "\n";
+							// extract begin / end
+							auto begin = range.getBegin();
+							auto end = range.getEnd();
+
+							// compute mid
+							auto mid = begin.id + (end.id - begin.id) / 2;
+
+							// get range for this node
+							if (ref.isLeftChild()) {
+								range = NodeRange<NodeKind,lvl>(begin,mid);
+							} else {
+								range = NodeRange<NodeKind,lvl>(mid,end);
+							}
+
+							// update the range
+							res.template setNodeRange<NodeKind,lvl>(ref,range);
+
 						});
 
+				});
 
-						// TODO:
+				// set up closures for edges
+				data.forAllEdgeKinds([&](const auto& edgeKind, const auto& level) {
 
-						NodeRange<NodeKind,lvl> range;
-						range.begin = NodeRef<NodeKind,lvl>{ 0 };
-						range.end = NodeRef<NodeKind,lvl>{ num_nodes };
-						res.template setNodeRange<NodeKind,lvl>(root,range);
+					// get edge kind and level
+					using EdgeKind = plain_type<decltype(edgeKind)>;
+					const unsigned lvl = get_level<decltype(level)>::value;
+
+					// the closure is everything for now
+					MeshRegion closure = SubMeshRef::root();
+
+					// initialize all the closured with the full region
+					res.visitPreOrder([&](const SubTreeRef& ref) {
+						// fix forward closure
+						res.template setForwardClosure<EdgeKind,lvl>(ref,closure);
+
+						// fix backward closure
+						res.template setBackwardClosure<EdgeKind,lvl>(ref,closure);
+					});
 
 				});
 
 
-				// set up closures for partitions
+				// set up closures for hierarchies
+				data.forAllHierarchyKinds([&](const auto& hierarchyKind, const auto& level) {
+
+					// get hierarchy kind and level
+					using HierarchyKind = plain_type<decltype(hierarchyKind)>;
+					const unsigned lvl = get_level<decltype(level)>::value;
+
+					// make sure this is not called for level 0
+					assert_gt(lvl,0) << "There should not be any hierarchies on level 0.";
+
+					// the closure is everything for now
+					MeshRegion closure = SubMeshRef::root();
+
+					// initialize all the closured with the full region
+					res.visitPreOrder([&](const SubTreeRef& ref) {
+
+						// fix parent closure
+						res.template setParentClosure<HierarchyKind,lvl-1>(ref,closure);
+
+						// fix child closure
+						res.template setChildClosure<HierarchyKind,lvl>(ref,closure);
+					});
+
+				});
 
 				// done
 				return res;
@@ -1857,6 +2102,16 @@ namespace data {
 		Mesh& operator=(const Mesh&) = delete;
 		Mesh& operator=(Mesh&&) = default;
 
+
+		// -- provide access to components --
+
+		const topology_type& getTopologyData() const {
+			return data;
+		}
+
+		const partition_tree_type& getPartitionTree() const {
+			return partitionTree;
+		}
 
 		// -- mesh querying --
 
@@ -2053,10 +2308,12 @@ namespace data {
 			return data.template getNodes<Level>().template get<Kind>().create();
 		}
 
-//		template<typename Kind,unsigned Level = 0>
-//		node_list_type<Kind,Level> create(unsigned num) {
-//			return impl.template create<Kind,Level>(num);
-//		}
+		template<typename Kind,unsigned Level = 0>
+		NodeRange<Kind,Level> create(unsigned num) {
+			// TODO: check that Kind is a valid node kind
+			static_assert(Level < Levels, "Trying to create a node on invalid level.");
+			return data.template getNodes<Level>().template get<Kind>().create(num);
+		}
 
 		template<typename EdgeKind, typename NodeKindA, typename NodeKindB, unsigned Level>
 		void link(const NodeRef<NodeKindA,Level>& a, const NodeRef<NodeKindB,Level>& b) {
