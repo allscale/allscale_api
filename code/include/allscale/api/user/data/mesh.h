@@ -1622,11 +1622,11 @@ namespace data {
 
 				// follow the 0 path
 				cpy.PathRefBase::path = PathRefBase::path & ~bitMask;
-				cpy.visitComplement<Body>(body,depth+1);
+				cpy.template visitComplement<Body>(body,depth+1);
 
 				// follow the 1 path
 				cpy.PathRefBase::path = PathRefBase::path | bitMask;
-				cpy.visitComplement<Body>(body,depth+1);
+				cpy.template visitComplement<Body>(body,depth+1);
 
 			}
 
