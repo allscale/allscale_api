@@ -764,7 +764,6 @@ namespace data {
 		EXPECT_EQ("[r.0.0]",toString(MeshRegion{ r000, r001 }));
 		EXPECT_EQ("[r.0.0.1,r.0.1]",toString(MeshRegion{ r01, r001 }));
 
-
 		EXPECT_EQ("[r]",toString(MeshRegion{
 			r0,  r00,  r000,
 			r1,  r01,  r001,
@@ -777,6 +776,40 @@ namespace data {
 
 		}));
 
+		EXPECT_EQ("[r]",toString(MeshRegion{
+			r00,
+			r01,
+			r10,
+			r11
+		}));
+
+		EXPECT_EQ("[r]",toString(MeshRegion{
+			r000,
+			r001,
+			r010,
+			r011,
+			r100,
+			r101,
+			r110,
+			r111
+		}));
+
+
+		EXPECT_EQ("[r.0,r.1.1]",toString(MeshRegion{
+			r00,
+			r01,
+			r11
+		}));
+
+		EXPECT_EQ("[r.0,r.1.*.0,r.1.1.1]",toString(MeshRegion{
+			r000,
+			r001,
+			r010,
+			r011,
+			r100,
+			r110,
+			r111
+		}));
 	}
 
 	TEST(MeshRegion, AdvancedSetOps) {

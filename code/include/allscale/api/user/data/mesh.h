@@ -1829,17 +1829,15 @@ namespace data {
 				// Phase 1:  remove redundant entries
 				removeCovered();
 
-				// Phase 2:  collapse adjacent entries
-				collapseSiblings();
+				// Phase 2:  collapse adjacent entries (iteratively)
+				while (collapseSiblings()) {}
 			}
 
 
-			void removeCovered() {
+			bool removeCovered() {
 
-				auto size = refs.size();
-
-				std::vector<bool> toDelete(size,false);
-
+				// see whether any change happend
+				bool changed = false;
 				for(std::size_t i = 0; i<refs.size(); ++i) {
 
 					auto& cur = refs[i];
@@ -1848,40 +1846,48 @@ namespace data {
 					std::size_t j = i+1;
 					while(j < refs.size() && closure.covers(refs[j].getEnclosingSubTree())) {
 						if (cur.covers(refs[j])) {
-							toDelete[j] = true;
+							refs[j] = cur;
+							changed = true;
 						}
 						++j;
 					}
 
 				}
 
-				// remove elements marked to be deleted
-				for(std::size_t i = 0; i < size; ++i) {
-					std::size_t j = size - i;
-					if (toDelete[j]) refs.erase(refs.begin() + j);
-				}
+				// restore set condition
+				if (changed) restoreSet();
 
+				// report whether the content has been changed
+				return changed;
 			}
 
-			void collapseSiblings() {
+			bool collapseSiblings() {
 
+				// see whether any change happend
+				bool changed = false;
 				auto size = refs.size();
-				std::vector<bool>toDelete(size,false);
 				for(std::size_t i = 0; i<size; ++i) {
 					for(std::size_t j = i+1; j<size; ++j) {
-						if (toDelete[j]) continue;
 						if (refs[i].tryMerge(refs[j])) {
-							toDelete[j] = true;
+							refs[j] = refs[i];
+							changed = true;
 						}
 					}
 				}
 
-				// remove elements marked to be deleted
-				for(std::size_t i = 0; i < size; ++i) {
-					std::size_t j = size - i;
-					if (toDelete[j]) refs.erase(refs.begin() + j);
-				}
+				// restore set condition
+				if (changed) restoreSet();
 
+				// report whether the content has been changed
+				return changed;
+
+			}
+
+			void restoreSet() {
+				// sort elements
+				std::sort(refs.begin(),refs.end());
+				// remove duplicates
+				refs.erase(std::unique(refs.begin(),refs.end()),refs.end());
 			}
 
 		};
