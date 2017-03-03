@@ -729,6 +729,9 @@ namespace data {
 		using Point = GridPoint<2>;
 		using Region = GridRegion<2>;
 		using Fragment = GridFragment<int,2>;
+		using SharedData = core::no_shared_data;
+
+		SharedData shared;
 
 		// total size:
 		Point size = { 500, 1000 };
@@ -744,8 +747,8 @@ namespace data {
 		EXPECT_EQ("{[[0,0] - [500,1000]]}",toString(full));
 
 		// create fragments
-		Fragment fA(partA);
-		Fragment fB(partB);
+		Fragment fA(shared,partA);
+		Fragment fB(shared,partB);
 
 		// fill the data set
 		for(int t = 1; t<10; t++) {
@@ -776,7 +779,7 @@ namespace data {
 		Region newPartC = Region(size, {0,750}, {500,1000});
 		EXPECT_EQ(full,Region::merge(newPartA,newPartB,newPartC));
 
-		Fragment fC(newPartC);
+		Fragment fC(shared,newPartC);
 
 		// move data from A and B to C
 		fC.insert(fA,Region::intersect(newPartC,partA));

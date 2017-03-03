@@ -59,7 +59,7 @@ namespace core {
 			is_region<typename F::region_type>::value &&
 
 			// fragments need to be constructible for a given region
-			std::is_same<decltype(F(std::declval<const typename F::region_type&>())),F>::value &&
+			std::is_same<decltype(F(std::declval<const typename F::shared_data_type&>(),std::declval<const typename F::region_type&>())),F>::value &&
 
 			// fragments need to be destructible
 			std::is_destructible<F>::value &&
@@ -83,6 +83,33 @@ namespace core {
 			std::is_same<decltype(std::declval<F&>().mask()), typename F::facade_type>::value,
 
 		void>::type> : public std::true_type {};
+
+
+
+
+	// ---------------------------------------------------------------------------------
+	//									SharedData
+	// ---------------------------------------------------------------------------------
+
+
+	template<typename S, typename _ = void>
+	struct is_shared_data : public std::false_type {};
+
+	template<typename S>
+	struct is_shared_data<S,typename std::enable_if<
+
+			// fragments need to be destructible
+			std::is_destructible<S>::value &&
+
+			// there is a save operator
+			std::is_same<decltype(std::declval<const S&>().save(std::declval<utils::Archive&>())),void>::value &&
+
+			// there is a static load operator
+			std::is_same<decltype(S::load(std::declval<utils::Archive&>())),S>::value,
+
+		void>::type> : public std::true_type {};
+
+
 
 
 	// ---------------------------------------------------------------------------------
@@ -116,7 +143,8 @@ namespace core {
 	template<typename D>
 	struct is_data_item<D,typename std::enable_if<
 			std::is_same<D,typename D::facade_type>::value &&
-			is_fragment<typename D::fragment_type>::value,
+			is_fragment<typename D::fragment_type>::value &&
+			is_shared_data<typename D::shared_data_type>::value,
 		void>::type> : public std::true_type {};
 
 
@@ -126,12 +154,14 @@ namespace core {
 	struct data_item {
 
 		// make sure the region type is satisfying the concept
-		static_assert(is_fragment<Fragment>::value, "Fragment type must fit fragment concept!");
 		static_assert(is_region<typename Fragment::region_type>::value, "Region type must fit region concept!");
+		static_assert(is_fragment<Fragment>::value, "Fragment type must fit fragment concept!");
+		static_assert(is_shared_data<typename Fragment::shared_data_type>::value, "Shared data type must fit shared data concept!");
 
 		using fragment_type = Fragment;
 		using region_type = typename Fragment::region_type;
 		using facade_type = typename Fragment::facade_type;
+		using shared_data_type = typename Fragment::shared_data_type;
 	};
 
 
@@ -149,6 +179,23 @@ namespace core {
 		return R::difference(a,b).empty();
 	}
 
+	/**
+	 * A default implementation of shared data for data items that do not need shared any shared data.
+	 */
+	struct no_shared_data {
+
+		void save(utils::Archive&) const {
+			// nothing to do
+		}
+
+		static no_shared_data load(utils::Archive&) {
+			return no_shared_data();
+		}
+
+	};
+
+	// make sure the no_shared_data is a shared data instance
+	static_assert(is_shared_data<no_shared_data>::value, "no_shared_data type does not fulfill shared data concept!");
 
 } // end namespace core
 } // end namespace api

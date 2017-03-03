@@ -564,6 +564,7 @@ namespace data {
 	class GridFragment {
 	public:
 
+		using shared_data_type = core::no_shared_data;
 		using facade_type = Grid<T,Dims>;
 		using region_type = GridRegion<Dims>;
 
@@ -578,7 +579,10 @@ namespace data {
 
 	public:
 
-		GridFragment(const region_type& size) : size(size), data(area(size.getTotal())) {
+		GridFragment(const region_type& size)
+			: GridFragment(core::no_shared_data(), size) {}
+
+		GridFragment(const core::no_shared_data&, const region_type& size) : size(size), data(area(size.getTotal())) {
 			// allocate covered data space
 			size.scanByLines([&](const point& a, const point& b) {
 				data.allocate(flatten(a),flatten(b));
