@@ -1426,6 +1426,14 @@ namespace data {
 				return { 0u , 0u };
 			}
 
+			value_t getPath() const {
+				return path;
+			}
+
+			value_t getMask() const {
+				return mask;
+			}
+
 			value_t getDepth() const {
 				if (PathRefBase::mask == 0) return 0;
 				return sizeof(PathRefBase::mask) * 8 - __builtin_clz(PathRefBase::mask);
@@ -1447,7 +1455,7 @@ namespace data {
 
 			Derived getLeftChild() const {
 				assert_lt(getDepth(),sizeof(PathRefBase::path)*8);
-				Derived res = static_cast<const Derived&>(*this);
+				Derived res = asDerived();
 				res.PathRefBase::mask = res.PathRefBase::mask | (1 << getDepth());
 				return res;
 			}
@@ -1506,7 +1514,7 @@ namespace data {
 			}
 
 			bool operator>=(const Derived& other) const {
-				return !(static_cast<const Derived&>(*this) < other);
+				return !(asDerived() < other);
 			}
 
 			bool operator>(const Derived& other) const {
@@ -1523,7 +1531,7 @@ namespace data {
 
 				if (covers(other)) return true;
 
-				if (other.covers(static_cast<const Derived&>(*this))) {
+				if (other.covers(asDerived())) {
 					*this = other;
 					return true;
 				}
@@ -1552,6 +1560,94 @@ namespace data {
 				// done
 				return true;
 			}
+
+			/**
+			 * @return true if the intersection is not empty;
+			 * 			in this case this instance has been updated to represent the intersection
+			 * 		   false if the intersection is empty, the object has not been altered
+			 */
+			bool tryIntersect(const Derived& other) {
+
+				// if the other covers this, the intersection is empty
+				if (other.covers(asDerived())) return true;
+
+				// if this one is the larger one, this one gets reduced to the smaller one
+				if (covers(other)) {
+					*this = other;
+					return true;
+				}
+
+				// make sure common constraints are identical
+				auto filterMask = PathRefBase::mask & other.PathRefBase::mask;
+				auto thisFilter = PathRefBase::path & filterMask;
+				auto thatFilter = other.PathRefBase::path & filterMask;
+				if (thisFilter != thatFilter) return false;
+
+				// unite (disjunction!) the constraints of both sides
+				PathRefBase::path = (PathRefBase::path & PathRefBase::mask) | (other.PathRefBase::path & other.PathRefBase::mask);
+				PathRefBase::mask = PathRefBase::mask | other.PathRefBase::mask;
+				return true;
+			}
+
+
+
+			template<typename Body>
+			void visitComplement(const Body& body, unsigned depth = 0) const {
+
+				// when we reached the depth of this reference, we are done
+				if (getDepth() == depth) return;
+
+				auto bitMask = (1 << depth);
+
+				// if at this depth there is no wild card
+				if (PathRefBase::mask & bitMask) {
+
+					// invert bit at this position
+					Derived cpy = asDerived();
+					cpy.PathRefBase::path ^= bitMask;
+					cpy.PathRefBase::mask = cpy.PathRefBase::mask & ((bitMask << 1) - 1);
+
+					// this is an element of the complement
+					body(cpy);
+
+					// continue path
+					visitComplement<Body>(body,depth+1);
+
+					return;
+				}
+
+				// follow both paths, do nothing here
+				Derived cpy = asDerived();
+				cpy.PathRefBase::mask = PathRefBase::mask | bitMask;
+
+				// follow the 0 path
+				cpy.PathRefBase::path = PathRefBase::path & ~bitMask;
+				cpy.visitComplement<Body>(body,depth+1);
+
+				// follow the 1 path
+				cpy.PathRefBase::path = PathRefBase::path | bitMask;
+				cpy.visitComplement<Body>(body,depth+1);
+
+			}
+
+			std::vector<Derived> getComplement() const {
+				std::vector<Derived> res;
+				visitComplement([&](const Derived& cur){
+					res.push_back(cur);
+				});
+				return res;
+			}
+
+		private:
+
+			Derived& asDerived() {
+				return static_cast<Derived&>(*this);
+			}
+
+			const Derived& asDerived() const {
+				return static_cast<const Derived&>(*this);
+			}
+
 		};
 
 
@@ -1639,14 +1735,14 @@ namespace data {
 			SubMeshRef(const SubTreeRef& ref)
 				: super(ref.path, ref.mask) {}
 
-			SubMeshRef mask(unsigned pos) const {
+			SubMeshRef getMasked(unsigned pos) const {
 				assert_lt(pos,getDepth());
 				SubMeshRef res = *this;
 				res.super::mask = res.super::mask & ~(1<<pos);
 				return res;
 			}
 
-			SubMeshRef unmask(unsigned pos) const {
+			SubMeshRef getUnmasked(unsigned pos) const {
 				assert_lt(pos,getDepth());
 				SubMeshRef res = *this;
 				res.super::mask = res.super::mask | (1<<pos);
@@ -1671,7 +1767,7 @@ namespace data {
 				}
 
 				// recursive
-				SubMeshRef copy = unmask(zeroPos);
+				SubMeshRef copy = getUnmasked(zeroPos);
 
 				// set bit to 0
 				copy.super::path = copy.super::path & ~( 1 << zeroPos );
@@ -1722,18 +1818,25 @@ namespace data {
 			}
 
 			MeshRegion(std::initializer_list<SubMeshRef> meshRefs) : refs(meshRefs) {
-				std::sort(refs.begin(),refs.end());
-				auto newEnd = std::unique(refs.begin(),refs.end());
-				refs.erase(newEnd,refs.end());
+				restoreSet();
+				compress();
+			}
+
+			MeshRegion(const std::vector<SubMeshRef>& refs) : refs(refs) {
+				restoreSet();
 				compress();
 			}
 
 			bool operator==(const MeshRegion& other) const {
-				return refs == other.refs;
+				return this == &other || refs == other.refs || (difference(*this,other).empty() && difference(other,*this).empty());
 			}
 
 			bool operator!=(const MeshRegion& other) const {
 				return !(*this == other);
+			}
+
+			const std::vector<SubMeshRef>& getSubMeshReferences() const {
+				return refs;
 			}
 
 			bool empty() const {
@@ -1741,9 +1844,15 @@ namespace data {
 			}
 
 			bool covers(const SubMeshRef& ref) const {
+				// cheap: one is covering the given reference
+				// expensive: the union of this and the reference is the same as this
 				return std::any_of(refs.begin(),refs.end(),[&](const SubMeshRef& a) {
 					return a.covers(ref);
-				});
+				}) || (merge(*this,MeshRegion(ref)) == *this);
+			}
+
+			bool operator<(const MeshRegion& other) const {
+				return refs < other.refs;
 			}
 
 			static MeshRegion merge(const MeshRegion& a, const MeshRegion& b) {
@@ -1763,25 +1872,58 @@ namespace data {
 			}
 
 			static MeshRegion intersect(const MeshRegion& a, const MeshRegion& b) {
+
 				MeshRegion res;
-				std::set_intersection(
-					a.refs.begin(), a.refs.end(),
-					b.refs.begin(), b.refs.end(),
-					std::back_inserter(res.refs)
-				);
+
+				// compute pairwise intersections
+				for(const auto& ra : a.refs) {
+					for(const auto& rb : b.refs) {
+						auto tmp = ra;
+						if (tmp.tryIntersect(rb)) {
+							res.refs.push_back(tmp);
+						}
+					}
+				}
+
+				// restore set invariant
+				res.restoreSet();
+
+				// compress the set representation
 				res.compress();
 				return res;
 			}
 
 			static MeshRegion difference(const MeshRegion& a, const MeshRegion& b) {
-				MeshRegion res;
-				std::set_difference(
-					a.refs.begin(), a.refs.end(),
-					b.refs.begin(), b.refs.end(),
-					std::back_inserter(res.refs)
-				);
-				res.compress();
+				return intersect(a,complement(b));
+			}
+
+			MeshRegion complement() const {
+
+				MeshRegion res = SubMeshRef::root();
+
+				// aggregate the complements of all entries
+				for(const auto& cur : refs) {
+
+					// compute the complement of the current entry
+					MeshRegion tmp;
+					cur.visitComplement([&](const SubMeshRef& ref) {
+						tmp.refs.push_back(ref);
+					});
+
+					// restore invariant
+					tmp.restoreSet();
+					tmp.compress();
+
+					// intersect current complement with running complement
+					res = intersect(res,tmp);
+				}
+
+				// done
 				return res;
+			}
+
+			static MeshRegion complement(const MeshRegion& region) {
+				return region.complement();
 			}
 
 			/**
@@ -2260,6 +2402,8 @@ namespace data {
 				assert_true(core::isSubRegion(area,coveredRegion))       << "New data " << area << " not covered by target of size " << coveredRegion << "\n";
 
 				assert_not_implemented();
+				std::cout << core::isSubRegion(area,other.coveredRegion);
+
 //				// copy data line by line using memcpy
 //				area.scanByLines([&](const point& a, const point& b){
 //					auto start = flatten(a);

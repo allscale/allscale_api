@@ -4,6 +4,7 @@
 #include "allscale/api/user/data/mesh.h"
 #include "allscale/utils/string_utils.h"
 
+
 namespace allscale {
 namespace api {
 namespace user {
@@ -95,6 +96,21 @@ namespace data {
 
 
 	template<unsigned depth = 4>
+	std::vector<detail::SubTreeRef> createListOfSubTreeRefs() {
+
+		using namespace detail;
+
+		std::vector<SubTreeRef> list;
+
+		// insert all references of up to length 4
+		SubTreeRef::root().enumerate<depth,true>([&](const SubTreeRef& ref) {
+			list.push_back(ref);
+		});
+
+		return list;
+	}
+
+	template<unsigned depth = 4>
 	std::vector<detail::SubMeshRef> createListOfSubMeshRefs() {
 
 		using namespace detail;
@@ -115,14 +131,53 @@ namespace data {
 
 				SubMeshRef cur = ref;
 				for(unsigned i = 0; i<curDepth; ++i) {
-					if ((c >> i) % 2) cur = cur.mask(i);
+					if ((c >> i) % 2) cur = cur.getMasked(i);
 				}
 				list.push_back(cur);
 
 			}
 		});
 
+		// eliminate duplicates
+		std::sort(list.begin(),list.end());
+		list.erase(std::unique(list.begin(),list.end()),list.end());
+
 		return list;
+	}
+
+	template<unsigned depth = 3>
+	std::vector<detail::MeshRegion> createRegionList() {
+
+		using namespace detail;
+
+		const unsigned num_entries = (1 << depth);
+		const unsigned num_subsets = (1 << num_entries);
+
+		std::vector<MeshRegion> regions;
+		for(unsigned i=0; i<num_subsets; ++i) {
+
+			// use i as a bit mask to add elements
+			std::vector<SubMeshRef> refs;
+			for(unsigned j=0; j<num_entries; ++j) {
+				// only if bit j is set in i
+				if (!((i >> j) % 2)) continue;
+
+				int mask = j;
+				SubMeshRef cur = SubMeshRef::root();
+				for(unsigned k=0; k<depth; k++) {
+					if (mask & 0x1) {
+						cur = cur.getRightChild();
+					} else {
+						cur = cur.getLeftChild();
+					}
+					mask >>= 1;
+				}
+				refs.push_back(cur);
+			}
+			regions.push_back(refs);
+		}
+
+		return regions;
 	}
 
 	TEST(NodeRef, TypeProperties) {
@@ -483,8 +538,8 @@ namespace data {
 		EXPECT_EQ(2,r.getRightChild().getRightChild().getDepth());
 
 
-		EXPECT_EQ(2, r.getRightChild().getLeftChild().mask(0).getDepth());
-		EXPECT_EQ(2, r.getLeftChild().getRightChild().mask(0).getDepth());
+		EXPECT_EQ(2, r.getRightChild().getLeftChild().getMasked(0).getDepth());
+		EXPECT_EQ(2, r.getLeftChild().getRightChild().getMasked(0).getDepth());
 
 	}
 
@@ -508,16 +563,16 @@ namespace data {
 		EXPECT_EQ("[r.0.1.0]",toString(toList(r)));
 
 
-		r = r.mask(1);
+		r = r.getMasked(1);
 		EXPECT_EQ( "r.0.*.0",toString(r));
 		EXPECT_EQ("[r.0.0.0,r.0.1.0]",toString(toList(r)));
 
-		r = r.mask(0);
+		r = r.getMasked(0);
 		EXPECT_EQ( "r.*.*.0",toString(r));
 		EXPECT_EQ("[r.0.0.0,r.0.1.0,r.1.0.0,r.1.1.0]",toString(toList(r)));
 
 
-		r = r.mask(2);
+		r = r.getMasked(2);
 		EXPECT_EQ( "r",toString(r));
 		EXPECT_EQ("[r]",toString(toList(r)));
 
@@ -541,8 +596,8 @@ namespace data {
 		EXPECT_EQ("r.1.0.1",toString(r.getRightChild().getLeftChild().getRightChild()));
 		EXPECT_EQ("r.0.1.0",toString(r.getLeftChild().getRightChild().getLeftChild()));
 
-		EXPECT_EQ("r.*.0",toString(r.getRightChild().getLeftChild().mask(0)));
-		EXPECT_EQ("r.*.1",toString(r.getLeftChild().getRightChild().mask(0)));
+		EXPECT_EQ("r.*.0",toString(r.getRightChild().getLeftChild().getMasked(0)));
+		EXPECT_EQ("r.*.1",toString(r.getLeftChild().getRightChild().getMasked(0)));
 
 	}
 
@@ -608,10 +663,10 @@ namespace data {
 
 		EXPECT_PRED2(covers,b,a);
 
-		a = a.mask(2);
+		a = a.getMasked(2);
 		EXPECT_PRED2(not_covers,b,a);
 
-		b = b.mask(2);
+		b = b.getMasked(2);
 		EXPECT_PRED2(covers,b,a);
 
 	}
@@ -627,11 +682,90 @@ namespace data {
 		EXPECT_EQ("r.0.1",toString(r.getLeftChild().getRightChild().getEnclosingSubTree()));
 		EXPECT_EQ("r.0.1.0",toString(r.getLeftChild().getRightChild().getLeftChild().getEnclosingSubTree()));
 
-		EXPECT_EQ("r",toString(r.getLeftChild().getRightChild().mask(0).getEnclosingSubTree()));
-		EXPECT_EQ("r.0",toString(r.getLeftChild().getRightChild().getLeftChild().mask(1).getEnclosingSubTree()));
+		EXPECT_EQ("r",toString(r.getLeftChild().getRightChild().getMasked(0).getEnclosingSubTree()));
+		EXPECT_EQ("r.0",toString(r.getLeftChild().getRightChild().getLeftChild().getMasked(1).getEnclosingSubTree()));
 
 	}
 
+	TEST(SubMeshRef, TryIntersect) {
+
+		using namespace detail;
+
+		SubMeshRef r = SubMeshRef::root();
+
+		SubMeshRef r00 = r.getLeftChild().getLeftChild();
+
+		SubMeshRef r000 = r.getLeftChild().getLeftChild().getLeftChild();
+		SubMeshRef r001 = r.getLeftChild().getLeftChild().getRightChild();
+		SubMeshRef r010 = r.getLeftChild().getRightChild().getLeftChild();
+		SubMeshRef r011 = r.getLeftChild().getRightChild().getRightChild();
+
+		SubMeshRef r0s0 = r000.getMasked(1);
+		SubMeshRef r0s1 = r001.getMasked(1);
+
+		SubMeshRef rss1 = r0s1.getMasked(0).getMasked(1);
+
+
+		EXPECT_FALSE(r000.tryIntersect(r001));
+		EXPECT_TRUE (r001.tryIntersect(r001));
+		EXPECT_FALSE(r010.tryIntersect(r001));
+		EXPECT_FALSE(r011.tryIntersect(r001));
+
+		SubMeshRef tmp = r;
+
+		tmp = r;
+		EXPECT_TRUE(tmp.tryIntersect(r0s0));
+		EXPECT_EQ(r0s0,tmp);
+
+		tmp = r0s0;
+		EXPECT_TRUE(tmp.tryIntersect(r0s0));
+		EXPECT_EQ(r0s0,tmp);
+
+		tmp = r0s1;
+		EXPECT_TRUE(tmp.tryIntersect(rss1));
+		EXPECT_EQ(r0s1,tmp);
+
+
+		tmp = r00;
+		EXPECT_TRUE(tmp.tryIntersect(r0s1));
+		EXPECT_EQ(r001,tmp);
+
+	}
+
+	TEST(SubMeshRef, Complement) {
+
+		using namespace detail;
+
+		SubMeshRef r = SubMeshRef::root();
+
+		SubMeshRef r0 = r.getLeftChild();
+		SubMeshRef r1 = r.getRightChild();
+
+		SubMeshRef r000 = r.getLeftChild().getLeftChild().getLeftChild();
+		SubMeshRef r001 = r.getLeftChild().getLeftChild().getRightChild();
+		SubMeshRef r010 = r.getLeftChild().getRightChild().getLeftChild();
+		SubMeshRef r011 = r.getLeftChild().getRightChild().getRightChild();
+
+		SubMeshRef r0s0 = r000.getMasked(1);
+		SubMeshRef r0s1 = r001.getMasked(1);
+		SubMeshRef rss1 = r0s1.getMasked(0);
+
+
+		EXPECT_EQ("[]",toString(r.getComplement()));
+
+		EXPECT_EQ("[r.1]",toString(r0.getComplement()));
+		EXPECT_EQ("[r.0]",toString(r1.getComplement()));
+
+		EXPECT_EQ("[r.1,r.0.1,r.0.0.1]",toString(r000.getComplement()));
+		EXPECT_EQ("[r.1,r.0.1,r.0.0.0]",toString(r001.getComplement()));
+		EXPECT_EQ("[r.1,r.0.0,r.0.1.1]",toString(r010.getComplement()));
+		EXPECT_EQ("[r.1,r.0.0,r.0.1.0]",toString(r011.getComplement()));
+
+		EXPECT_EQ("[r.1,r.0.0.1,r.0.1.1]",toString(r0s0.getComplement()));
+		EXPECT_EQ("[r.1,r.0.0.0,r.0.1.0]",toString(r0s1.getComplement()));
+		EXPECT_EQ("[r.0.0.0,r.0.1.0,r.1.0.0,r.1.1.0]",toString(rss1.getComplement()));
+
+	}
 
 	TEST(MeshRegion, TypeProperties) {
 
@@ -704,22 +838,22 @@ namespace data {
 		EXPECT_EQ("[r]",toString(MeshRegion::merge(e,s2)));
 
 
-//		// -- test intersection --
-//		EXPECT_EQ("[]",toString(MeshRegion::intersect(e,e)));
-//		EXPECT_EQ("[]",toString(MeshRegion::intersect(e,sl)));
-//		EXPECT_EQ("[]",toString(MeshRegion::intersect(sl,e)));
-//
-//		EXPECT_EQ("[]",toString(MeshRegion::intersect(sl,sr)));
-//
-//		EXPECT_EQ("[r.0]",toString(MeshRegion::intersect(sl,s2)));
-//		EXPECT_EQ("[r.0]",toString(MeshRegion::intersect(s2,sl)));
-//		EXPECT_EQ("[r.1]",toString(MeshRegion::intersect(sr,s2)));
-//		EXPECT_EQ("[r.1]",toString(MeshRegion::intersect(s2,sr)));
+		// -- test intersection --
+		EXPECT_EQ("[]",toString(MeshRegion::intersect(e,e)));
+		EXPECT_EQ("[]",toString(MeshRegion::intersect(e,sl)));
+		EXPECT_EQ("[]",toString(MeshRegion::intersect(sl,e)));
+
+		EXPECT_EQ("[]",toString(MeshRegion::intersect(sl,sr)));
+
+		EXPECT_EQ("[r.0]",toString(MeshRegion::intersect(sl,s2)));
+		EXPECT_EQ("[r.0]",toString(MeshRegion::intersect(s2,sl)));
+		EXPECT_EQ("[r.1]",toString(MeshRegion::intersect(sr,s2)));
+		EXPECT_EQ("[r.1]",toString(MeshRegion::intersect(s2,sr)));
 
 	}
 
 
-	TEST(MeshRegion, UnionOp) {
+	TEST(MeshRegion, Union) {
 
 		using namespace detail;
 
@@ -745,8 +879,8 @@ namespace data {
 		SubMeshRef r110 = r.getRightChild().getRightChild().getLeftChild();
 		SubMeshRef r111 = r.getRightChild().getRightChild().getRightChild();
 
-		SubMeshRef r0s1 = r001.mask(1);
-		SubMeshRef rss1 = r001.mask(0).mask(1);
+		SubMeshRef r0s1 = r001.getMasked(1);
+		SubMeshRef rss1 = r001.getMasked(0).getMasked(1);
 
 
 		// check cases where one reference is covering other
@@ -812,6 +946,247 @@ namespace data {
 		}));
 	}
 
+	TEST(MeshRegion, Intersection) {
+
+		using namespace detail;
+
+		MeshRegion e;
+		EXPECT_EQ("[]",toString(e));
+
+		SubMeshRef r = SubMeshRef::root();
+
+		SubMeshRef r00 = r.getLeftChild().getLeftChild();
+		SubMeshRef r01 = r.getLeftChild().getRightChild();
+
+		SubMeshRef r001 = r.getLeftChild().getLeftChild().getRightChild();
+		SubMeshRef r011 = r.getLeftChild().getRightChild().getRightChild();
+		SubMeshRef r111 = r.getRightChild().getRightChild().getRightChild();
+
+		SubMeshRef r0s1 = r001.getMasked(1);
+		SubMeshRef rss1 = r001.getMasked(0).getMasked(1);
+
+
+		// check cases where one reference is covering other
+		EXPECT_EQ("[r]",toString(MeshRegion::intersect(MeshRegion{ r, r00, r01 },MeshRegion{ r, r00, r01 })));
+
+		EXPECT_EQ("[]",toString(MeshRegion::intersect(MeshRegion{ r0s1 },MeshRegion{ r111 })));
+		EXPECT_EQ("[r.0.0.1]",toString(MeshRegion::intersect(MeshRegion{ r0s1 },MeshRegion{ r001 })));
+		EXPECT_EQ("[r.*.1.1]",toString(MeshRegion::intersect(MeshRegion{ r0s1, rss1 },MeshRegion{ r011, r111 })));
+
+		EXPECT_EQ("[r.0.0.1]",toString(MeshRegion::intersect(MeshRegion{ r00 },MeshRegion{ r0s1 })));
+
+	}
+
+	TEST(MeshRegion, Complement) {
+
+		using namespace detail;
+
+
+		SubMeshRef r = SubMeshRef::root();
+
+		SubMeshRef r00 = r.getLeftChild().getLeftChild();
+
+		SubMeshRef r000 = r.getLeftChild().getLeftChild().getLeftChild();
+		SubMeshRef r011 = r.getLeftChild().getRightChild().getRightChild();
+
+		SubMeshRef r0s0 = r000.getMasked(1);
+
+		EXPECT_EQ("[r]",toString(MeshRegion{ }.complement()));
+		EXPECT_EQ("[]", toString(MeshRegion{ r }.complement()));
+
+		EXPECT_EQ("[r.0.1.0,r.1]", toString(MeshRegion{ r00, r011 }.complement()));
+		EXPECT_EQ("[r.0.0.1,r.1]", toString(MeshRegion{ r0s0, r011 }.complement()));
+
+	}
+
+	TEST(MeshRegion, Difference) {
+
+		using namespace detail;
+
+		SubMeshRef r = SubMeshRef::root();
+
+		SubMeshRef r00 = r.getLeftChild().getLeftChild();
+
+		SubMeshRef r000 = r.getLeftChild().getLeftChild().getLeftChild();
+		SubMeshRef r011 = r.getLeftChild().getRightChild().getRightChild();
+
+		SubMeshRef r0s0 = r000.getMasked(1);
+
+		EXPECT_EQ("[]", toString(MeshRegion::difference(MeshRegion{},MeshRegion{})));
+		EXPECT_EQ("[r]",toString(MeshRegion::difference(MeshRegion{ r },MeshRegion{})));
+		EXPECT_EQ("[]", toString(MeshRegion::difference(MeshRegion{ },MeshRegion{ r })));
+
+		EXPECT_EQ("[r.0.1,r.1]", toString(MeshRegion::difference(MeshRegion{ r },MeshRegion{ r00 })));
+		EXPECT_EQ("[r.0.0.1,r.0.1,r.1]", toString(MeshRegion::difference(MeshRegion{ r },MeshRegion{ r000 })));
+		EXPECT_EQ("[r.0.0,r.0.1.0,r.1]", toString(MeshRegion::difference(MeshRegion{ r },MeshRegion{ r011 })));
+		EXPECT_EQ("[r.0.*.1,r.1]", toString(MeshRegion::difference(MeshRegion{ r },MeshRegion{ r0s0 })));
+
+
+		EXPECT_EQ("[r.0.1.1]", toString(MeshRegion::difference(MeshRegion{ r000, r011 },MeshRegion{ r0s0 })));
+		EXPECT_EQ("[r.0.1]", toString(MeshRegion::difference(MeshRegion{ r0s0, r011 },MeshRegion{ r000 })));
+
+	}
+
+	TEST(MeshRegion, UnionExaustive) {
+
+		using namespace detail;
+
+		const int depth = 3;
+
+		// create list of regions
+		auto regions = createRegionList<depth>();
+
+		// create list of references
+		auto refs = createListOfSubTreeRefs<depth>();
+
+		// check cross-product of all regions and references
+		for(const auto& a : regions) {
+			for(const auto& b : regions) {
+
+				// compute union
+				auto c = MeshRegion::merge(a,b);
+
+				// check correctness
+				for(const auto& cur : refs) {
+
+					// only check full-depth entries
+					if (cur.getDepth() < depth) continue;
+
+					EXPECT_EQ((a.covers(cur) || b.covers(cur)),(c.covers(cur)))
+						<< "\ta = " << a << "\n"
+						<< "\tb = " << b << "\n"
+						<< "\tc = " << c << "\n"
+						<< "\tr = " << cur << "\n"
+						<< "\tr in a : " << a.covers(cur) << "\n"
+						<< "\tr in b : " << b.covers(cur) << "\n"
+						<< "\tr in c : " << c.covers(cur) << "\n";
+
+				}
+
+			}
+		}
+
+	}
+
+
+	TEST(MeshRegion, IntersectExaustive) {
+
+		using namespace detail;
+
+		const int depth = 3;
+
+		// create list of regions
+		auto regions = createRegionList<depth>();
+
+		// create list of references
+		auto refs = createListOfSubTreeRefs<depth>();
+
+		// check cross-product of all regions and references
+		for(const auto& a : regions) {
+			for(const auto& b : regions) {
+
+				// compute intersect
+				auto c = MeshRegion::intersect(a,b);
+
+				// check correctness
+				for(const auto& cur : refs) {
+
+					// only check full-depth entries
+					if (cur.getDepth() < depth) continue;
+
+					EXPECT_EQ((a.covers(cur) && b.covers(cur)),(c.covers(cur)))
+						<< "\ta = " << a << "\n"
+						<< "\tb = " << b << "\n"
+						<< "\tc = " << c << "\n"
+						<< "\tr = " << cur << "\n"
+						<< "\tr in a : " << a.covers(cur) << "\n"
+						<< "\tr in b : " << b.covers(cur) << "\n"
+						<< "\tr in c : " << c.covers(cur) << "\n";
+
+				}
+
+			}
+		}
+
+	}
+
+	TEST(MeshRegion, DifferenceExaustive) {
+
+		using namespace detail;
+
+		const int depth = 3;
+
+		// create list of regions
+		auto regions = createRegionList<depth>();
+
+		// create list of references
+		auto refs = createListOfSubTreeRefs<depth>();
+
+		// check cross-product of all regions and references
+		for(const auto& a : regions) {
+			for(const auto& b : regions) {
+
+				// compute difference
+				auto c = MeshRegion::difference(a,b);
+
+				// check correctness
+				for(const auto& cur : refs) {
+
+					// only check full-depth entries
+					if (cur.getDepth() < depth) continue;
+
+					EXPECT_EQ((a.covers(cur) && !b.covers(cur)),(c.covers(cur)))
+						<< "\ta = " << a << "\n"
+						<< "\tb = " << b << "\n"
+						<< "\tc = " << c << "\n"
+						<< "\tr = " << cur << "\n"
+						<< "\tr in a : " << a.covers(cur) << "\n"
+						<< "\tr in b : " << b.covers(cur) << "\n"
+						<< "\tr in c : " << c.covers(cur) << "\n";
+
+				}
+
+			}
+		}
+
+	}
+
+	TEST(MeshRegion, ComplementExaustive) {
+
+		using namespace detail;
+
+		const int depth = 3;
+
+		// create list of regions
+		auto regions = createRegionList<depth>();
+
+		// create list of references
+		auto refs = createListOfSubTreeRefs<depth>();
+
+		// check cross-product of all regions and references
+		for(const auto& a : regions) {
+
+			// compute complement
+			auto b = MeshRegion::complement(a);
+
+			// check correctness
+			for(const auto& cur : refs) {
+
+				// only check full-depth entries
+				if (cur.getDepth() < depth) continue;
+
+				EXPECT_NE(a.covers(cur),b.covers(cur))
+					<< "\ta = " << a << "\n"
+					<< "\tb = " << b << "\n"
+					<< "\tr = " << cur << "\n"
+					<< "\tr in a : " << a.covers(cur) << "\n"
+					<< "\tr in b : " << b.covers(cur) << "\n";
+			}
+
+		}
+
+	}
+
 	TEST(MeshRegion, AdvancedSetOps) {
 
 		using namespace detail;
@@ -828,16 +1203,16 @@ namespace data {
 		// -- test union --
 		EXPECT_EQ("[r.0]",toString(MeshRegion::merge(a,b)));
 
-//		// -- test intersect --
-//		EXPECT_EQ("[r.0.1]",toString(MeshRegion::merge(a,b)));
-//
-//		// -- test difference --
-//		EXPECT_EQ("[r.0.0]",toString(MeshRegion::difference(a,b)));
-//		EXPECT_EQ("[]",toString(MeshRegion::difference(b,a)));
+		// -- test intersect --
+		EXPECT_EQ("[r.0.1]",toString(MeshRegion::intersect(a,b)));
+
+		// -- test difference --
+		EXPECT_EQ("[r.0.0]",toString(MeshRegion::difference(a,b)));
+		EXPECT_EQ("[]",toString(MeshRegion::difference(b,a)));
 	}
 
 
-	TEST(DISABLED_MeshRegion, DataItemRegionConcept) {
+	TEST(MeshRegion, DataItemRegionConcept) {
 
 		using namespace detail;
 
