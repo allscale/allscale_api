@@ -1392,6 +1392,9 @@ namespace reference {
 			// remove release dependency
 			if (task.state == State::New) numDependencies -= 1;
 
+			// remove delete dependency
+			numDependencies -= 1;
+
 			// print number of task dependencies
 			if (numDependencies > 0) {
 				out << " waiting for " << numDependencies << " task(s)";

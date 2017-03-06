@@ -78,7 +78,7 @@ inline namespace simple {
 			friend class OptimisticReadWriteLock;
 			version_t version;
 		public:
-			Lease(int version = 0) : version(version) {}
+			Lease(version_t version = 0) : version(version) {}
 			Lease(const Lease& lease) = default;
 			Lease& operator=(const Lease& other) = default;
 			Lease& operator=(Lease&& other) = default;
