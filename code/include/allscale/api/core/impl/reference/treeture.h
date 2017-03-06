@@ -70,11 +70,6 @@ namespace reference {
 	template<typename T>
 	class Task;
 
-//	using TaskBasePtr = std::shared_ptr<TaskBase>;
-//
-//	template<typename T>
-//	using TaskPtr = std::shared_ptr<Task<T>>;
-
 
 	// ---------------------------------------------------------------------------------------------
 	//											  Debugging
@@ -403,10 +398,6 @@ namespace reference {
 			return dependencies.getEpoch();
 		}
 
-//		bool validateID(std::size_t id) const {
-//			return this->id.load() == id;
-//		}
-
 		/**
 		 * Tests whether the given sub-task is complete.
 		 */
@@ -434,7 +425,6 @@ namespace reference {
 		static unsigned getNextID() {
 			static std::atomic<int> counter(0);
 			return ++counter;
-//			return (DEBUG || DEBUG_SCHEDULE || DEBUG_TASKS || MONITORING_ENABLED || PROFILING_ENABLED) ? ++counter : 0;
 		}
 
 	};
@@ -533,7 +523,6 @@ namespace reference {
 
 		TaskFamilyPtr getFamily() const {
 			return family;
-//			return family.lock();
 		}
 
 		const TaskPath& getPath() const {
@@ -831,12 +820,6 @@ namespace reference {
 
 	public:
 
-		// TODO: remove those
-
-		std::atomic<bool> scheduled;
-
-		std::atomic<bool> processed;
-
 		TaskBase(bool done = false)
 			: family(), path(TaskPath::root()), id(TaskFamily::getNextID()),
 			  state(done ? State::Done : State::New),
@@ -845,7 +828,7 @@ namespace reference {
 			  splitable(false),
 			  left(nullptr), right(nullptr), substitute(nullptr),
 			  parallel(false), parent(nullptr),
-			  substituted(false), scheduled(false), processed(false) {
+			  substituted(false) {
 
 			LOG_TASKS( "Created " << *this );
 		}
@@ -860,7 +843,7 @@ namespace reference {
 			  left(left), right(right), substitute(nullptr),
 			  parallel(parallel),
 			  parent(nullptr), alive_child_counter(0),
-			  substituted(false), scheduled(false), processed(false) {
+			  substituted(false) {
 
 			LOG_TASKS( "Created " << *this );
 			assert(this->left);
@@ -985,15 +968,7 @@ namespace reference {
 
 			// process substituted tasks
 			if (substituted) {
-
-//				// just wait for this task to finish (and thus the substitute)
-//				wait();
-//
-//				// the finish and cleanup is conducted by the callback of the substitute
-//				assert_eq(State::Done, state);
-//				assert_false(substitute);
-
-				// done
+				// there is nothing to do
 				return;
 			}
 
@@ -1044,9 +1019,6 @@ namespace reference {
 
 					// done
 					return;
-//					// finish this task
-//					finish();
-//					return;
 
 				}
 
@@ -1082,13 +1054,7 @@ namespace reference {
 					return;
 				}
 
-//				// wait until this task is completed
-//				wait();
-//
-//				// the finish call is covered by the child-task callback
-//				assert_true(isDone());		// after the wait, it should be done
-//
-//				// processing complete
+				// processing complete
 
 			} else {
 
@@ -1273,9 +1239,6 @@ namespace reference {
 
 			// process a split-child
 			LOG_TASKS( "Child " << child << " of " << *this << " done" );
-
-//			// this one must be a split task
-//			assert_true(left.get() == &child || right.get() == &child) << *this;
 
 			// decrement active child count
 			unsigned old_child_count = alive_child_counter.fetch_sub(1);
@@ -1971,9 +1934,6 @@ namespace reference {
 			// there has to be a task
 			assert_true(task);
 
-//			// this task should be an orphan
-//			assert_true(task->isOrphan());
-
 			// special case for completed tasks
 			if (task->isDone()) {
 				auto res = detail::done_task_to_treeture<T>()(*task);
@@ -1985,16 +1945,11 @@ namespace reference {
 			// the referenced task has not been released yet
 			assert_eq(TaskBase::State::New,task->getState());
 
-//			// create a family for the task
-			Task<T>& taskRef = *task;
-//			auto family = createFamily();
-//			taskRef.adopt(family,TaskPath::root());
-
 			// create the resulting treeture
-			treeture<T> res(taskRef);
+			treeture<T> res(*task);
 
 			// start the task -- the actual release
-			taskRef.start();
+			task->start();
 
 			// reset the task pointer
 			task = nullptr;
@@ -2475,12 +2430,6 @@ namespace reference {
 
 			LOG_SCHEDULE("Starting task " << task);
 
-			assert_decl({
-				bool f = false;
-				auto res = task.processed.compare_exchange_strong(f,true);
-				assert_true(res);
-			});
-
 			// no substituted task may be processed
 			assert_false(task.isSubstituted());
 
@@ -2595,22 +2544,6 @@ namespace reference {
 					}
 				}
 			}
-
-
-
-//			{
-//				static std::mutex lock;
-//				std::lock_guard<std::mutex> g(lock);
-//				std::cout << "Scheduling " << task.getId() << "\n";
-//			}
-
-			// make sure each task only reaches this point once
-			assert_decl({
-				bool f = false;
-				auto first = task.scheduled.compare_exchange_strong(f,true);
-				assert_true(first);
-			});
-
 
 			// add task to queue
 			LOG_SCHEDULE( "Queue size before: " << queue.size() );
@@ -2739,21 +2672,6 @@ namespace reference {
 		// move to next state
 		setState(State::Blocked);
 
-//		// split tasks by default up to a given level
-//		auto& pool = runtime::WorkerPool::getInstance();
-//		auto depth_limit = pool.getInitialSplitDepthLimit();
-//		if (!isOrphan() && isSplitable() && getDepth() < depth_limit) {
-//
-//			// split this task
-//			split();
-//
-////			// remove dummy dependency blocking this task from running
-////			num_active_dependencies--;
-////
-////			// done
-////			return;
-//		}
-
 		// release dummy-dependency to get task started
 		dependencyDone();
 	}
@@ -2806,39 +2724,11 @@ namespace reference {
 		// schedule task
 		runtime::getCurrentWorker().schedule(*this);
 
-//		// actively distribute initial tasks, by assigning them to different workers
-//
-//		// TODO: do the following only for top-level tasks!!
-//		auto& pool = runtime::WorkerPool::getInstance();
-//
-//		// compute the decomposition limit
-//		auto depth_limit = pool.getInitialSplitDepthLimit();
-//
-//		// decide whether an active decomposition shell be conducted
-//		if (!isOrphan() && getDepth() < depth_limit) {
-//
-//			// actively select the worker to issue the task to
-//			int num_workers = pool.getNumWorkers();
-//			auto path = getTaskPath().getPath();
-//			auto depth = getDepth();
-//
-//			auto trgWorker = (depth==0) ? 0 : (path * num_workers) / (1 << depth);
-//
-//			// submit this task to the selected worker
-//			pool.getWorker(trgWorker).schedule(*this);
-//
-//		} else {
-//
-//			// enqueue task to be processed by local worker
-//			runtime::getCurrentWorker().schedule(*this);
-//
-//		}
-
 	}
 
 	inline void TaskBase::wait() {
 		// log this event
-		auto action = monitoring::log(monitoring::EventType::Wait, this);
+		// auto action = monitoring::log(monitoring::EventType::Wait, this);
 
 		LOG_TASKS("Waiting for " << *this );
 
