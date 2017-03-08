@@ -1275,16 +1275,143 @@ namespace data {
 		EXPECT_FALSE(std::is_trivially_copy_constructible<Ptree>::value);
 		EXPECT_FALSE(std::is_trivially_move_constructible<Ptree>::value);
 
-		EXPECT_TRUE(std::is_copy_constructible<Ptree>::value);
+		EXPECT_FALSE(std::is_copy_constructible<Ptree>::value);
 		EXPECT_TRUE(std::is_move_constructible<Ptree>::value);
 
 		EXPECT_FALSE(std::is_trivially_copy_assignable<Ptree>::value);
 		EXPECT_FALSE(std::is_trivially_move_assignable<Ptree>::value);
 
-		EXPECT_TRUE(std::is_copy_assignable<Ptree>::value);
+		EXPECT_FALSE(std::is_copy_assignable<Ptree>::value);
 		EXPECT_TRUE(std::is_move_assignable<Ptree>::value);
 
 
+	}
+
+	template<typename PTree>
+	void checkPtree(const PTree& ptree) {
+
+		using namespace detail;
+
+		SubTreeRef r = SubTreeRef::root();
+
+		// root level
+		EXPECT_EQ("[0,10)",toString(ptree.template getNodeRange<Vertex,0>(r)));
+
+		// 1st level
+		EXPECT_EQ("[0,5)",toString(ptree.template getNodeRange<Vertex,0>(r.getLeftChild())));
+		EXPECT_EQ("[5,10)",toString(ptree.template getNodeRange<Vertex,0>(r.getRightChild())));
+
+		// 2nd level
+		EXPECT_EQ("[0,2)",toString(ptree.template getNodeRange<Vertex,0>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[2,5)",toString(ptree.template getNodeRange<Vertex,0>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[5,7)",toString(ptree.template getNodeRange<Vertex,0>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[7,10)",toString(ptree.template getNodeRange<Vertex,0>(r.getRightChild().getRightChild())));
+
+
+		// root level
+		EXPECT_EQ("[0,5)",toString(ptree.template getNodeRange<Vertex,1>(r)));
+
+		// 1st level
+		EXPECT_EQ("[0,2)",toString(ptree.template getNodeRange<Vertex,1>(r.getLeftChild())));
+		EXPECT_EQ("[2,5)",toString(ptree.template getNodeRange<Vertex,1>(r.getRightChild())));
+
+		// 2nd level
+		EXPECT_EQ("[0,1)",toString(ptree.template getNodeRange<Vertex,1>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[1,2)",toString(ptree.template getNodeRange<Vertex,1>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[2,3)",toString(ptree.template getNodeRange<Vertex,1>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[3,5)",toString(ptree.template getNodeRange<Vertex,1>(r.getRightChild().getRightChild())));
+
+
+
+		// --- check closures ---
+
+		// root level
+		EXPECT_EQ("[r]",toString(ptree.template getForwardClosure<Edge,0>(r)));
+
+		// 1st level
+		EXPECT_EQ("[r]",toString(ptree.template getForwardClosure<Edge,0>(r.getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getForwardClosure<Edge,0>(r.getRightChild())));
+
+		// 2nd level
+		EXPECT_EQ("[r]",toString(ptree.template getForwardClosure<Edge,0>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getForwardClosure<Edge,0>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getForwardClosure<Edge,0>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getForwardClosure<Edge,0>(r.getRightChild().getRightChild())));
+
+
+		// root level
+		EXPECT_EQ("[r]",toString(ptree.template getBackwardClosure<Edge,0>(r)));
+
+		// 1st level
+		EXPECT_EQ("[r]",toString(ptree.template getBackwardClosure<Edge,0>(r.getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getBackwardClosure<Edge,0>(r.getRightChild())));
+
+
+		// 2nd level
+		EXPECT_EQ("[r]",toString(ptree.template getBackwardClosure<Edge,0>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getBackwardClosure<Edge,0>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getBackwardClosure<Edge,0>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getBackwardClosure<Edge,0>(r.getRightChild().getRightChild())));
+
+
+		// --- check hierarchical closures ---
+
+		// root level
+		EXPECT_EQ("[r]",toString(ptree.template getParentClosure<Refine,0>(r)));
+
+		// 1st level
+		EXPECT_EQ("[r]",toString(ptree.template getParentClosure<Refine,0>(r.getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getParentClosure<Refine,0>(r.getRightChild())));
+
+		// 2nd level
+		EXPECT_EQ("[r]",toString(ptree.template getParentClosure<Refine,0>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getParentClosure<Refine,0>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getParentClosure<Refine,0>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getParentClosure<Refine,0>(r.getRightChild().getRightChild())));
+
+
+		// root level
+		EXPECT_EQ("[]",toString(ptree.template getChildClosure<Refine,0>(r)));
+
+		// 1st level
+		EXPECT_EQ("[]",toString(ptree.template getChildClosure<Refine,0>(r.getLeftChild())));
+		EXPECT_EQ("[]",toString(ptree.template getChildClosure<Refine,0>(r.getRightChild())));
+
+		// 2nd level
+		EXPECT_EQ("[]",toString(ptree.template getChildClosure<Refine,0>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[]",toString(ptree.template getChildClosure<Refine,0>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[]",toString(ptree.template getChildClosure<Refine,0>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[]",toString(ptree.template getChildClosure<Refine,0>(r.getRightChild().getRightChild())));
+
+
+		// - level 1 -
+
+		// root level
+		EXPECT_EQ("[]",toString(ptree.template getParentClosure<Refine,1>(r)));
+
+		// 1st level
+		EXPECT_EQ("[]",toString(ptree.template getParentClosure<Refine,1>(r.getLeftChild())));
+		EXPECT_EQ("[]",toString(ptree.template getParentClosure<Refine,1>(r.getRightChild())));
+
+		// 2nd level
+		EXPECT_EQ("[]",toString(ptree.template getParentClosure<Refine,1>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[]",toString(ptree.template getParentClosure<Refine,1>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[]",toString(ptree.template getParentClosure<Refine,1>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[]",toString(ptree.template getParentClosure<Refine,1>(r.getRightChild().getRightChild())));
+
+
+		// root level
+		EXPECT_EQ("[r]",toString(ptree.template getChildClosure<Refine,1>(r)));
+
+		// 1st level
+		EXPECT_EQ("[r]",toString(ptree.template getChildClosure<Refine,1>(r.getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getChildClosure<Refine,1>(r.getRightChild())));
+
+		// 2nd level
+		EXPECT_EQ("[r]",toString(ptree.template getChildClosure<Refine,1>(r.getLeftChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getChildClosure<Refine,1>(r.getLeftChild().getRightChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getChildClosure<Refine,1>(r.getRightChild().getLeftChild())));
+		EXPECT_EQ("[r]",toString(ptree.template getChildClosure<Refine,1>(r.getRightChild().getRightChild())));
 	}
 
 
@@ -1295,127 +1422,54 @@ namespace data {
 		auto bar = createBarMesh<2,2>(5);
 		auto& ptree = bar.getPartitionTree();
 
-		SubTreeRef r = SubTreeRef::root();
+		// this ptree should be closed
+		EXPECT_TRUE(ptree.isClosed());
 
-		// root level
-		EXPECT_EQ("[0,10)",toString(ptree.getNodeRange<Vertex,0>(r)));
+		// check the content of the ptree
+		checkPtree(ptree);
 
-		// 1st level
-		EXPECT_EQ("[0,5)",toString(ptree.getNodeRange<Vertex,0>(r.getLeftChild())));
-		EXPECT_EQ("[5,10)",toString(ptree.getNodeRange<Vertex,0>(r.getRightChild())));
+	}
 
-		// 2nd level
-		EXPECT_EQ("[0,2)",toString(ptree.getNodeRange<Vertex,0>(r.getLeftChild().getLeftChild())));
-		EXPECT_EQ("[2,5)",toString(ptree.getNodeRange<Vertex,0>(r.getLeftChild().getRightChild())));
-		EXPECT_EQ("[5,7)",toString(ptree.getNodeRange<Vertex,0>(r.getRightChild().getLeftChild())));
-		EXPECT_EQ("[7,10)",toString(ptree.getNodeRange<Vertex,0>(r.getRightChild().getRightChild())));
+	TEST(PartitionTree,IO) {
 
+		// fix the type of the partition tree to be tested
+		using PTree = detail::plain_type<decltype(createBarMesh<2,2>(5).getPartitionTree())>;
 
-		// root level
-		EXPECT_EQ("[0,5)",toString(ptree.getNodeRange<Vertex,1>(r)));
+		char* buffer = nullptr;
 
-		// 1st level
-		EXPECT_EQ("[0,2)",toString(ptree.getNodeRange<Vertex,1>(r.getLeftChild())));
-		EXPECT_EQ("[2,5)",toString(ptree.getNodeRange<Vertex,1>(r.getRightChild())));
+		{ // -- creation --
 
-		// 2nd level
-		EXPECT_EQ("[0,1)",toString(ptree.getNodeRange<Vertex,1>(r.getLeftChild().getLeftChild())));
-		EXPECT_EQ("[1,2)",toString(ptree.getNodeRange<Vertex,1>(r.getLeftChild().getRightChild())));
-		EXPECT_EQ("[2,3)",toString(ptree.getNodeRange<Vertex,1>(r.getRightChild().getLeftChild())));
-		EXPECT_EQ("[3,5)",toString(ptree.getNodeRange<Vertex,1>(r.getRightChild().getRightChild())));
+			// create a ptree
+			auto bar = createBarMesh<2,2>(5);
+			auto& ptree = bar.getPartitionTree();
 
+			// this ptree should be closed
+			EXPECT_TRUE(ptree.isClosed());
 
+			// check the content of the ptree
+			checkPtree(ptree);
 
-		// --- check closures ---
+			// convert to buffer
+			buffer = new char[ptree.getRequiredSize()];
+			ptree.writeCopyTo(buffer);
 
-		// root level
-		EXPECT_EQ("[r]",toString(ptree.getForwardClosure<Edge,0>(r)));
+			// let ptree be destroyed
+		}
 
-		// 1st level
-		EXPECT_EQ("[r]",toString(ptree.getForwardClosure<Edge,0>(r.getLeftChild())));
-		EXPECT_EQ("[r]",toString(ptree.getForwardClosure<Edge,0>(r.getRightChild())));
+		{ // -- reload ptree --
 
-		// 2nd level
-		EXPECT_EQ("[r]",toString(ptree.getForwardClosure<Edge,0>(r.getLeftChild().getLeftChild())));
-		EXPECT_EQ("[r]",toString(ptree.getForwardClosure<Edge,0>(r.getLeftChild().getRightChild())));
-		EXPECT_EQ("[r]",toString(ptree.getForwardClosure<Edge,0>(r.getRightChild().getLeftChild())));
-		EXPECT_EQ("[r]",toString(ptree.getForwardClosure<Edge,0>(r.getRightChild().getRightChild())));
+			auto ptree = PTree::interpret(buffer);
 
+			// this ptree should be closed
+			EXPECT_TRUE(ptree.isClosed());
 
-		// root level
-		EXPECT_EQ("[r]",toString(ptree.getBackwardClosure<Edge,0>(r)));
+			// check the content of the ptree
+			checkPtree(ptree);
 
-		// 1st level
-		EXPECT_EQ("[r]",toString(ptree.getBackwardClosure<Edge,0>(r.getLeftChild())));
-		EXPECT_EQ("[r]",toString(ptree.getBackwardClosure<Edge,0>(r.getRightChild())));
+		}
 
-
-		// 2nd level
-		EXPECT_EQ("[r]",toString(ptree.getBackwardClosure<Edge,0>(r.getLeftChild().getLeftChild())));
-		EXPECT_EQ("[r]",toString(ptree.getBackwardClosure<Edge,0>(r.getLeftChild().getRightChild())));
-		EXPECT_EQ("[r]",toString(ptree.getBackwardClosure<Edge,0>(r.getRightChild().getLeftChild())));
-		EXPECT_EQ("[r]",toString(ptree.getBackwardClosure<Edge,0>(r.getRightChild().getRightChild())));
-
-
-		// --- check hierarchical closures ---
-
-		// root level
-		EXPECT_EQ("[r]",toString(ptree.getParentClosure<Refine,0>(r)));
-
-		// 1st level
-		EXPECT_EQ("[r]",toString(ptree.getParentClosure<Refine,0>(r.getLeftChild())));
-		EXPECT_EQ("[r]",toString(ptree.getParentClosure<Refine,0>(r.getRightChild())));
-
-		// 2nd level
-		EXPECT_EQ("[r]",toString(ptree.getParentClosure<Refine,0>(r.getLeftChild().getLeftChild())));
-		EXPECT_EQ("[r]",toString(ptree.getParentClosure<Refine,0>(r.getLeftChild().getRightChild())));
-		EXPECT_EQ("[r]",toString(ptree.getParentClosure<Refine,0>(r.getRightChild().getLeftChild())));
-		EXPECT_EQ("[r]",toString(ptree.getParentClosure<Refine,0>(r.getRightChild().getRightChild())));
-
-
-		// root level
-		EXPECT_EQ("[]",toString(ptree.getChildClosure<Refine,0>(r)));
-
-		// 1st level
-		EXPECT_EQ("[]",toString(ptree.getChildClosure<Refine,0>(r.getLeftChild())));
-		EXPECT_EQ("[]",toString(ptree.getChildClosure<Refine,0>(r.getRightChild())));
-
-		// 2nd level
-		EXPECT_EQ("[]",toString(ptree.getChildClosure<Refine,0>(r.getLeftChild().getLeftChild())));
-		EXPECT_EQ("[]",toString(ptree.getChildClosure<Refine,0>(r.getLeftChild().getRightChild())));
-		EXPECT_EQ("[]",toString(ptree.getChildClosure<Refine,0>(r.getRightChild().getLeftChild())));
-		EXPECT_EQ("[]",toString(ptree.getChildClosure<Refine,0>(r.getRightChild().getRightChild())));
-
-
-		// - level 1 -
-
-		// root level
-		EXPECT_EQ("[]",toString(ptree.getParentClosure<Refine,1>(r)));
-
-		// 1st level
-		EXPECT_EQ("[]",toString(ptree.getParentClosure<Refine,1>(r.getLeftChild())));
-		EXPECT_EQ("[]",toString(ptree.getParentClosure<Refine,1>(r.getRightChild())));
-
-		// 2nd level
-		EXPECT_EQ("[]",toString(ptree.getParentClosure<Refine,1>(r.getLeftChild().getLeftChild())));
-		EXPECT_EQ("[]",toString(ptree.getParentClosure<Refine,1>(r.getLeftChild().getRightChild())));
-		EXPECT_EQ("[]",toString(ptree.getParentClosure<Refine,1>(r.getRightChild().getLeftChild())));
-		EXPECT_EQ("[]",toString(ptree.getParentClosure<Refine,1>(r.getRightChild().getRightChild())));
-
-
-		// root level
-		EXPECT_EQ("[r]",toString(ptree.getChildClosure<Refine,1>(r)));
-
-		// 1st level
-		EXPECT_EQ("[r]",toString(ptree.getChildClosure<Refine,1>(r.getLeftChild())));
-		EXPECT_EQ("[r]",toString(ptree.getChildClosure<Refine,1>(r.getRightChild())));
-
-		// 2nd level
-		EXPECT_EQ("[r]",toString(ptree.getChildClosure<Refine,1>(r.getLeftChild().getLeftChild())));
-		EXPECT_EQ("[r]",toString(ptree.getChildClosure<Refine,1>(r.getLeftChild().getRightChild())));
-		EXPECT_EQ("[r]",toString(ptree.getChildClosure<Refine,1>(r.getRightChild().getLeftChild())));
-		EXPECT_EQ("[r]",toString(ptree.getChildClosure<Refine,1>(r.getRightChild().getRightChild())));
-
+		// delete the buffer
+		delete [] buffer;
 	}
 
 	// --- combinations ---

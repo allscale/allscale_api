@@ -5,6 +5,7 @@
 #include <ostream>
 
 #include <bitset>
+#include <cstring>
 
 #include "allscale/utils/assert.h"
 #include "allscale/utils/range.h"
@@ -1807,7 +1808,19 @@ namespace data {
 		 */
 		class MeshRegion {
 
+			template<
+				typename Nodes,
+				typename Edges,
+				typename Hierarchies,
+				unsigned Levels,
+				unsigned PartitionDepth
+			>
+			friend class PartitionTree;
+
 			std::vector<SubMeshRef> refs;
+
+			MeshRegion(const SubMeshRef* begin, const SubMeshRef* end)
+				: refs(begin,end) {}
 
 		public:
 
@@ -2084,17 +2097,55 @@ namespace data {
 
 		private:
 
+			// an internal construct to store node ranges
+			struct RangeStore {
+				NodeID begin;
+				NodeID end;
+			};
+
+			// an internal construct to store regions in open and
+			// closed structure
+			//		- open:   the region pointer is referencing the stored region
+			//		- closed: the begin and end indices reference and interval of an externally maintained
+			//					list of regions
+			struct RegionStore {
+
+				// -- open --
+				MeshRegion* region;			// the ownership is managed by the enclosing tree
+
+				// -- closed --
+				std::size_t offset;
+				std::size_t length;
+
+				RegionStore()
+					: region(nullptr), offset(0), length(0) {}
+
+				MeshRegion toRegion(const SubMeshRef* references) const {
+					if (region) return *region;
+					auto start = references + offset;
+					auto end = start + length;
+					return MeshRegion(start,end);
+				}
+
+				RegionStore& operator=(const MeshRegion& value) {
+					if (!region) region = new MeshRegion();
+					*region = value;
+					return *this;
+				}
+			};
+
+
 			static_assert(Levels > 0, "There must be at least one level!");
 
 			struct LevelInfo {
 
-				utils::StaticMap<utils::keys<Nodes...>,std::pair<NodeID,NodeID>> nodeRanges;
+				utils::StaticMap<utils::keys<Nodes...>,RangeStore> nodeRanges;
 
-				utils::StaticMap<utils::keys<Edges...>,MeshRegion> forwardClosure;
-				utils::StaticMap<utils::keys<Edges...>,MeshRegion> backwardClosure;
+				utils::StaticMap<utils::keys<Edges...>,RegionStore> forwardClosure;
+				utils::StaticMap<utils::keys<Edges...>,RegionStore> backwardClosure;
 
-				utils::StaticMap<utils::keys<Hierarchies...>,MeshRegion> parentClosure;
-				utils::StaticMap<utils::keys<Hierarchies...>,MeshRegion> childClosure;
+				utils::StaticMap<utils::keys<Hierarchies...>,RegionStore> parentClosure;
+				utils::StaticMap<utils::keys<Hierarchies...>,RegionStore> childClosure;
 
 			};
 
@@ -2104,34 +2155,152 @@ namespace data {
 
 			};
 
+			// some preconditions required for the implementation of this class to work
+			static_assert(std::is_trivially_copyable<RangeStore>::value,  "RangeStore should be trivially copyable!");
+			static_assert(std::is_trivially_copyable<RegionStore>::value, "RegionStore should be trivially copyable!");
+			static_assert(std::is_trivially_copyable<LevelInfo>::value,   "LevelInfo should be trivially copyable!"  );
+			static_assert(std::is_trivially_copyable<Node>::value,        "Nodes should be trivially copyable!"      );
+			static_assert(std::is_trivially_copyable<SubMeshRef>::value,  "SubMeshRefs should be trivially copyable!");
+
 			enum { num_elements = 1ul << (depth + 1) };
 
-			std::array<Node,num_elements> data;
+			bool owned;
+
+			Node* data;
+
+			std::size_t numReferences;
+
+			SubMeshRef* references;
+
+			PartitionTree(Node* data, std::size_t numReferences, SubMeshRef* references)
+				: owned(false), data(data), numReferences(numReferences), references(references) {
+				assert_true(data);
+				assert_true(references);
+			}
 
 		public:
 
-			PartitionTree() {}
+			PartitionTree() : owned(true), data(new Node[num_elements]), numReferences(0), references(nullptr) {}
+
+			~PartitionTree() {
+				if (owned) {
+					delete [] data;
+					free(references);
+				}
+			}
+
+			PartitionTree(const PartitionTree&) = delete;
+
+			PartitionTree(PartitionTree&& other)
+				: owned(other.owned),
+				  data(other.data),
+				  numReferences(other.numReferences),
+				  references(other.references) {
+
+				// free other from ownership
+				other.owned = false;
+				other.data = nullptr;
+				other.references = nullptr;
+			}
+
+			PartitionTree& operator=(const PartitionTree&) = delete;
+
+			PartitionTree& operator=(PartitionTree&& other) {
+				assert_ne(this,&other);
+
+				// swap content and ownership
+				std::swap(owned,other.owned);
+				numReferences = other.numReferences;
+				std::swap(data,other.data);
+				std::swap(references,other.references);
+
+				// done
+				return *this;
+			}
+
+			bool isClosed() const {
+				return references != nullptr;
+			}
+
+			void close() {
+				// must not be closed for now
+				assert_false(isClosed());
+
+				// a utility to apply an operation on each mesh region
+				auto forEachMeshRegion = [&](const auto& op) {
+					for(std::size_t i=0; i<num_elements; ++i) {
+						Node& cur = data[i];
+						for(std::size_t l=0; l<Levels; ++l) {
+							cur.data[l].forwardClosure .forEach(op);
+							cur.data[l].backwardClosure.forEach(op);
+							cur.data[l].parentClosure  .forEach(op);
+							cur.data[l].childClosure   .forEach(op);
+						}
+					}
+				};
+
+				// count number of references required for all ranges
+				numReferences = 0;
+				forEachMeshRegion([&](const RegionStore& cur) {
+					if (!cur.region) return;
+					numReferences += cur.region->getSubMeshReferences().size();
+				});
+
+				// create reference buffer
+				references = static_cast<SubMeshRef*>(malloc(sizeof(SubMeshRef) * numReferences));
+				if (!references) {
+					throw "Unable to allocate memory for managing references!";
+				}
+
+				// transfer ownership of SubMeshRefs to reference buffer
+				std::size_t offset = 0;
+				forEachMeshRegion([&](RegionStore& cur){
+
+					// check whether there is a region
+					if (!cur.region) {
+						cur.offset = 0;
+						cur.length = 0;
+						return;
+					}
+
+					// close the region
+					const auto& refs = cur.region->getSubMeshReferences();
+					cur.offset = offset;
+					cur.length = refs.size();
+					for(auto& cur : refs) {
+						// placement new for this reference
+						new (&references[offset++]) SubMeshRef(cur);
+					}
+
+					// delete old region
+					delete cur.region;
+					cur.region = nullptr;
+				});
+
+				// make sure counting and transferring covered the same number of references
+				assert_eq(numReferences, offset);
+			}
 
 			template<typename Kind, unsigned Level = 0>
 			NodeRange<Kind,Level> getNodeRange(const SubTreeRef& ref) const {
 				assert_lt(ref.getIndex(),num_elements);
-				auto pair = data[ref.getIndex()].data[Level].nodeRanges.template get<Kind>();
+				auto range = data[ref.getIndex()].data[Level].nodeRanges.template get<Kind>();
 				return {
-					NodeRef<Kind,Level>{ pair.first },
-					NodeRef<Kind,Level>{ pair.second }
+					NodeRef<Kind,Level>{ range.begin },
+					NodeRef<Kind,Level>{ range.end }
 				};
 			}
 
 			template<typename Kind, unsigned Level = 0>
 			void setNodeRange(const SubTreeRef& ref, const NodeRange<Kind,Level>& range) {
-				auto& pair = getNode(ref).data[Level].nodeRanges.template get<Kind>();
-				pair.first = range.getBegin().id;
-				pair.second = range.getEnd().id;
+				auto& locRange = getNode(ref).data[Level].nodeRanges.template get<Kind>();
+				locRange.begin = range.getBegin().id;
+				locRange.end = range.getEnd().id;
 			}
 
 			template<typename EdgeKind, unsigned Level = 0>
-			const MeshRegion& getForwardClosure(const SubTreeRef& ref) const {
-				return getNode(ref).data[Level].forwardClosure.template get<EdgeKind>();
+			MeshRegion getForwardClosure(const SubTreeRef& ref) const {
+				return getNode(ref).data[Level].forwardClosure.template get<EdgeKind>().toRegion(references);
 			}
 
 			template<typename EdgeKind, unsigned Level = 0>
@@ -2140,8 +2309,8 @@ namespace data {
 			}
 
 			template<typename EdgeKind, unsigned Level = 0>
-			const MeshRegion& getBackwardClosure(const SubTreeRef& ref) const {
-				return getNode(ref).data[Level].backwardClosure.template get<EdgeKind>();
+			MeshRegion getBackwardClosure(const SubTreeRef& ref) const {
+				return getNode(ref).data[Level].backwardClosure.template get<EdgeKind>().toRegion(references);
 			}
 
 			template<typename EdgeKind, unsigned Level = 0>
@@ -2150,8 +2319,8 @@ namespace data {
 			}
 
 			template<typename HierarchyKind, unsigned Level = 0>
-			const MeshRegion& getParentClosure(const SubTreeRef& ref) const {
-				return getNode(ref).data[Level].parentClosure.template get<HierarchyKind>();
+			MeshRegion getParentClosure(const SubTreeRef& ref) const {
+				return getNode(ref).data[Level].parentClosure.template get<HierarchyKind>().toRegion(references);
 			}
 
 			template<typename HierarchyKind, unsigned Level = 0>
@@ -2161,8 +2330,8 @@ namespace data {
 
 
 			template<typename HierarchyKind, unsigned Level = 1>
-			const MeshRegion& getChildClosure(const SubTreeRef& ref) const {
-				return getNode(ref).data[Level].childClosure.template get<HierarchyKind>();
+			MeshRegion getChildClosure(const SubTreeRef& ref) const {
+				return getNode(ref).data[Level].childClosure.template get<HierarchyKind>().toRegion(references);
 			}
 
 			template<typename HierarchyKind, unsigned Level = 1>
@@ -2181,6 +2350,8 @@ namespace data {
 				SubTreeRef::root().enumerate<depth,false>(body);
 			}
 
+			// -- serialization support for network transferes --
+
 			void save(utils::Archive&) const {
 				assert_not_implemented();
 			}
@@ -2188,6 +2359,45 @@ namespace data {
 			static PartitionTree load(utils::Archive&) {
 				assert_not_implemented();
 				return PartitionTree();
+			}
+
+			// -- load / store for files --
+
+			std::size_t getRequiredSize() const {
+				return sizeof(numReferences) + sizeof(Node) * num_elements + sizeof(SubMeshRef) * numReferences;
+			}
+
+			void writeCopyTo(char* buffer) const {
+
+				// write number of references first
+				auto numReferencesTrg = reinterpret_cast<std::size_t*>(buffer);
+				*numReferencesTrg = numReferences;
+
+				// followed by node data
+				auto nodeTrg = reinterpret_cast<Node*>(numReferencesTrg+1);
+				std::memcpy(nodeTrg, data, sizeof(Node)*num_elements);
+
+				// and finally the reference data
+				auto refTrg = reinterpret_cast<SubMeshRef*>(nodeTrg + num_elements);
+				std::memcpy(refTrg, references, sizeof(SubMeshRef)*numReferences);
+			}
+
+			static PartitionTree interpret(char* buffer) {
+				// make sure a char is a single byte
+				static_assert(sizeof(char) == 1, "Needed for the pointer arithmetic in this function!");
+
+				// get size
+				auto numReferencesTrg = reinterpret_cast<std::size_t*>(buffer);
+				std::size_t numReferences = *numReferencesTrg;
+
+				// get nodes
+				Node* nodes = reinterpret_cast<Node*>(numReferencesTrg+1);
+
+				// get references
+				SubMeshRef* references = reinterpret_cast<SubMeshRef*>(nodes + num_elements);
+
+				// wrap up results
+				return PartitionTree(nodes,numReferences,references);
 			}
 
 
@@ -2315,6 +2525,9 @@ namespace data {
 					});
 
 				});
+
+				// close the data representation
+				res.close();
 
 				// done
 				return res;
@@ -2465,6 +2678,7 @@ namespace data {
 		std::size_t size() const {
 			return (*data).size();
 		}
+
 	};
 
 
@@ -2683,6 +2897,16 @@ namespace data {
 		MeshData<NodeKind,T,Level,partition_tree_type> createNodeData() const {
 			return MeshData<NodeKind,T,Level,partition_tree_type>(partitionTree,detail::SubMeshRef::root());
 		}
+
+//
+//		void store(std::ostream&) const {
+//
+//		}
+//
+//		// TODO: switch to M-File
+//		static Mesh load(std::istream&) {
+//			return {};
+//		}
 
 	};
 

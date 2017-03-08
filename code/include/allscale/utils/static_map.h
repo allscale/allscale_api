@@ -78,6 +78,17 @@ namespace utils {
 			return nested.template get<Key>();
 		}
 
+		template<typename Body>
+		void forEach(const Body& body) const {
+			body(value);
+			nested.forEach(body);
+		}
+
+		template<typename Body>
+		void forEach(const Body& body) {
+			body(value);
+			nested.forEach(body);
+		}
 	};
 
 	template<typename Key, typename Value>
@@ -107,6 +118,16 @@ namespace utils {
 			static_assert(key_utils::invalid_key<CurKey>::value,"Invalid key!");
 		}
 
+		template<typename Body>
+		void forEach(const Body& body) const {
+			body(value);
+		}
+
+		template<typename Body>
+		void forEach(const Body& body) {
+			body(value);
+		}
+
 	};
 
 	template<typename Value>
@@ -127,7 +148,15 @@ namespace utils {
 			static_assert(key_utils::invalid_key<Key>::value,"Invalid key!");
 		}
 
+		template<typename Body>
+		void forEach(const Body&) const {
+			// nothing to do
+		}
 
+		template<typename Body>
+		void forEach(const Body&) {
+			// nothing to do
+		}
 	};
 
 } // end namespace utils
