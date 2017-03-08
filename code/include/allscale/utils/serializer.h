@@ -44,7 +44,7 @@ namespace utils {
 			return T::load(a);
 		}
 		static void store(Archive& a, const T& value) {
-			value.save(a);
+			value.store(a);
 		}
 	};
 
