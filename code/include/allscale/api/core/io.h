@@ -39,17 +39,36 @@ namespace core {
 	 */
 	class OutputStream;
 
+	/**
+	 * A utility for reading the content of a storage entity (e.g. a file) through
+	 * memory mapped IO.
+	 */
+	class MemoryMappedInput;
 
-	// TODO:
-	class MemoryMappedFile;
+	/**
+	 * A utility for reading and writing the content of a storage entity (e.g. a file) through
+	 * memory mapped IO.
+	 */
+	class MemoryMappedOutput;
 
+	/**
+	 * An IO manager for in-memory data buffer manipulations.
+	 */
+	class BufferIOManager;
 
+	/**
+	 * An IO manager providing access to the file system.
+	 */
+	class FileIOManager;
 
 
 
 	// ----------------------------------------------------------------------
 	//							   Definitions
 	// ----------------------------------------------------------------------
+
+
+	// -- Stream Based IO ---------------------------------------------------
 
 	/**
 	 * A converter between this interface and the reference implementation
@@ -68,6 +87,10 @@ namespace core {
 		friend InputStream;
 
 		friend OutputStream;
+
+		friend MemoryMappedInput;
+
+		friend MemoryMappedOutput;
 
 		template<typename StorageManager>
 		friend class IOManager;
@@ -148,7 +171,7 @@ namespace core {
 			return istream;
 		}
 
-		// -- make InputStreams serializable --
+		// -- make it serializable --
 
 		static InputStream load(utils::Archive& a) {
 			return { RefInStream::load(a) };
@@ -226,7 +249,7 @@ namespace core {
 			return ostream;
 		}
 
-		// -- make InputStreams serializable --
+		// -- make it serializable --
 
 		static OutputStream load(utils::Archive& a) {
 			return { RefOutStream::load(a) };
@@ -237,6 +260,122 @@ namespace core {
 		}
 	};
 
+
+
+
+
+	// -- Memory Mapped IO --------------------------------------------------
+
+
+	/**
+	 * A utility for reading the content of a storage entity (e.g. a file) through
+	 * memory mapped IO.
+	 */
+	class MemoryMappedInput {
+
+		template<typename StorageManager>
+		friend class IOManager;
+
+		using Impl = impl::reference::MemoryMappedInput;
+
+		Impl impl;
+
+		MemoryMappedInput(Impl&& impl) : impl(impl) {}
+
+	public:
+
+		/**
+		 * The identifier for the underlying storage entity.
+		 */
+		Entry getEntry() const {
+			return impl.getEntry();
+		}
+
+		/**
+		 * Provides access to the underlying data by interpreting it
+		 * as an instance of type T.
+		 */
+		template<typename T>
+		const T& access() const {
+			return impl.access<T>();
+		}
+
+		/**
+		 * Provides access to the underlying data by interpreting it
+		 * as an array of instances of type T.
+		 */
+		template<typename T>
+		const T* accessArray() const {
+			return &access<T>();
+		}
+
+		// -- make it serializable --
+
+		static MemoryMappedInput load(utils::Archive& a) {
+			return { Impl::load(a) };
+		}
+
+		void store(utils::Archive& a) const {
+			impl.store(a);
+		}
+	};
+
+	/**
+	 * A utility for reading and writing the content of a storage entity (e.g. a file) through
+	 * memory mapped IO.
+	 */
+	class MemoryMappedOutput {
+
+		template<typename StorageManager>
+		friend class IOManager;
+
+		using Impl = impl::reference::MemoryMappedOutput;
+
+		Impl impl;
+
+		MemoryMappedOutput(Impl&& impl) : impl(impl) {}
+
+	public:
+
+		/**
+		 * The identifier for the underlying storage entity.
+		 */
+		Entry getEntry() const {
+			return impl.getEntry();
+		}
+
+		/**
+		 * Provides access to the underlying data by interpreting it
+		 * as an instance of type T.
+		 */
+		template<typename T>
+		T& access() const {
+			return impl.access<T>();
+		}
+
+		/**
+		 * Provides access to the underlying data by interpreting it
+		 * as an array of instances of type T.
+		 */
+		template<typename T>
+		T* accessArray() const {
+			return &access<T>();
+		}
+
+		// -- make it serializable --
+
+		static MemoryMappedOutput load(utils::Archive& a) {
+			return { Impl::load(a) };
+		}
+
+		void store(utils::Archive& a) const {
+			impl.store(a);
+		}
+	};
+
+
+
+	// -- IO Manager --------------------------------------------------------
 
 	/**
 	 * An IO manager, as the central dispatcher for IO operations.
@@ -286,6 +425,30 @@ namespace core {
 		}
 
 		/**
+		 * Register a new memory mapped input with the given name within the system.
+		 * The call will load the underlying storage and prepare input operations.
+		 *
+		 *  NOTE: this method is not thread save!
+		 *
+		 * @param entry the storage entry to be opened -- nothing happens if already opened
+		 */
+		MemoryMappedInput openMemoryMappedInput(Entry entry) {
+			return MemoryMappedInput(impl.openMemoryMappedInput(entry.entry));
+		}
+
+		/**
+		 * Register a new memory mapped output with the given name within the system.
+		 * The call will create the underlying storage and prepare output operations.
+		 *
+		 *  NOTE: this method is not thread save!
+		 *
+		 * @param entry the storage entry to be opened -- nothing happens if already opened
+		 */
+		MemoryMappedOutput openMemoryMappedOutput(Entry entry, std::size_t size) {
+			return MemoryMappedOutput(impl.openMemoryMappedOutput(entry.entry,size));
+		}
+
+		/**
 		 * Obtains an input stream to read data from a storage entry.
 		 * The storage entry is maintained by the manager and the provided output stream
 		 * is only valid within the current thread.
@@ -298,8 +461,8 @@ namespace core {
 		}
 
 		/**
-		 * Obtains an input stream to read data from a storage entry.
-		 * The storage entry is maintained by the manager and the provided input stream
+		 * Obtains an output stream to write data to a storage entry.
+		 * The storage entry is maintained by the manager and the provided output stream
 		 * is only valid within the current thread.
 		 *
 		 * @param the name of the storage entry to be targeted -- must be open
@@ -310,31 +473,55 @@ namespace core {
 		}
 
 		/**
-		 * Closes the stream with the given name.
+		 * Obtains a memory mapped input to read data from a storage entry.
+		 * The storage entry is maintained by the manager and the provided memory mapped
+		 * input is only valid within the current thread.
+		 *
+		 * @param the name of the storage entry to be targeted -- must be open
+		 * @return a requested memory mapped input
 		 */
-		void closeInputStream(Entry entry) {
-			impl.closeInputStream(entry.entry);
+		MemoryMappedInput getMemoryMappedInput(Entry entry) {
+			return MemoryMappedInput(impl.getMemoryMappedInput(entry));
 		}
 
 		/**
-		 * Closes the stream with the given name.
+		 * Obtains a memory mapped output to write data to a storage entry.
+		 * The storage entry is maintained by the manager and the provided memory mapped
+		 * output is only valid within the current thread.
+		 *
+		 * @param the name of the storage entry to be targeted -- must be open
+		 * @return a requested memory mapped output
 		 */
-		void closeOutputStream(Entry entry) {
-			impl.closeOutputStream(entry.entry);
+		MemoryMappedOutput getMemoryMappedOutput(Entry entry, std::size_t size) {
+			return MemoryMappedOutput(impl.getMemoryMappedOutput(entry,size));
 		}
 
 		/**
 		 * Closes the given stream.
 		 */
 		void close(const InputStream& in) {
-			closeInputStream(in.getEntry());
+			impl.close(in.istream);
 		}
 
 		/**
 		 * Closes the given stream.
 		 */
 		void close(const OutputStream& out) {
-			closeOutputStream(out.getEntry());
+			impl.close(out.ostream);
+		}
+
+		/**
+		 * Closes the given memory mapped entry.
+		 */
+		void close(const MemoryMappedInput& in) {
+			impl.close(in.impl);
+		}
+
+		/**
+		 * Closes the given memory mapped entry.
+		 */
+		void close(const MemoryMappedOutput& out) {
+			impl.close(out.impl);
 		}
 
 		/**
@@ -353,17 +540,13 @@ namespace core {
 
 	};
 
-	/**
-	 * An IO manager for in-memory stream-based data buffer manipulations.
-	 */
-	class BufferIOManager : public IOManager<core::impl::reference::BufferStreamFactory> {
+	// Definition of the BufferIOManager
+	class BufferIOManager : public IOManager<core::impl::reference::BufferStorageFactory> {
 
 	};
 
-	/**
-	 * An IO manager providing stream-based access to the file system.
-	 */
-	class FileIOManager : public IOManager<core::impl::reference::FileStreamFactory> {
+	// Definition of the FileIOManager
+	class FileIOManager : public IOManager<core::impl::reference::FileStorageFactory> {
 
 		/**
 		 * Make constructor private to avoid instances.

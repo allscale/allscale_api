@@ -40,6 +40,38 @@ namespace core {
 
 	}
 
+	TEST(MemoryMappedInput, TypeTraits) {
+
+		EXPECT_FALSE(std::is_default_constructible<MemoryMappedInput>::value);
+		EXPECT_FALSE(std::is_trivially_default_constructible<MemoryMappedInput>::value);
+
+		EXPECT_TRUE(std::is_copy_constructible<MemoryMappedInput>::value);
+		EXPECT_TRUE(std::is_move_constructible<MemoryMappedInput>::value);
+
+		EXPECT_TRUE(std::is_copy_assignable<MemoryMappedInput>::value);
+		EXPECT_TRUE(std::is_move_assignable<MemoryMappedInput>::value);
+
+		EXPECT_TRUE(allscale::utils::is_serializable<MemoryMappedInput>::value);
+
+	}
+
+	TEST(MemoryMappedOutput, TypeTraits) {
+
+		EXPECT_FALSE(std::is_default_constructible<MemoryMappedOutput>::value);
+		EXPECT_FALSE(std::is_trivially_default_constructible<MemoryMappedOutput>::value);
+
+		EXPECT_TRUE(std::is_copy_constructible<MemoryMappedOutput>::value);
+		EXPECT_TRUE(std::is_move_constructible<MemoryMappedOutput>::value);
+
+		EXPECT_TRUE(std::is_copy_assignable<MemoryMappedOutput>::value);
+		EXPECT_TRUE(std::is_move_assignable<MemoryMappedOutput>::value);
+
+		EXPECT_TRUE(allscale::utils::is_serializable<MemoryMappedOutput>::value);
+
+	}
+
+
+
 	bool exists(const std::string& name) {
 		FileIOManager& mgr = FileIOManager::getInstance();
 		return mgr.exists(mgr.createEntry(name));
@@ -186,6 +218,110 @@ namespace core {
 		EXPECT_PRED1(notExists, "binary");
 
 	}
+
+	TEST(IO, MemoryMappedBuffers) {
+
+		using data = std::array<int,1000>;
+
+		BufferIOManager mgr;
+
+		auto entry = mgr.createEntry("element");
+
+
+		// -- open a memory mapped buffer for writing --
+		auto out = mgr.openMemoryMappedOutput(entry,sizeof(data));
+
+		auto& dataOut = out.access<data>();
+		for(std::size_t i=0; i<dataOut.size(); ++i) {
+			dataOut[i] = i;
+		}
+
+		mgr.close(out);
+
+
+		// -- open it for reading --
+
+		auto in = mgr.openMemoryMappedInput(entry);
+		auto& dataIn = in.access<data>();
+
+		EXPECT_EQ(dataOut,dataIn);
+
+		mgr.close(in);
+
+	}
+
+	TEST(IO, MemoryMappedFiles) {
+
+		using data = std::array<int,1000>;
+
+		FileIOManager& mgr = FileIOManager::getInstance();
+
+		auto entry = mgr.createEntry("element");
+
+
+		// -- open a memory mapped buffer for writing --
+		auto out = mgr.openMemoryMappedOutput(entry,sizeof(data));
+
+		auto& dataOut = out.access<data>();
+		for(std::size_t i=0; i<dataOut.size(); ++i) {
+			dataOut[i] = i;
+		}
+
+		mgr.close(out);
+
+
+		// -- open it for reading --
+
+		auto in = mgr.openMemoryMappedInput(entry);
+		auto& dataIn = in.access<data>();
+
+		EXPECT_EQ(dataOut,dataIn);
+
+		mgr.close(in);
+
+
+		// delete file
+		mgr.remove(entry);
+	}
+
+
+	TEST(DISABLED_IO, LargeFile) {
+
+		// file size: 1GB
+		const int size = 1024*1024*1024;
+		const int N = size / sizeof(int);
+
+		using data = std::array<int,N>;
+
+		FileIOManager& mgr = FileIOManager::getInstance();
+
+		auto entry = mgr.createEntry("element");
+
+
+		// -- open a memory mapped buffer for writing --
+		auto out = mgr.openMemoryMappedOutput(entry,sizeof(data));
+
+		auto& dataOut = out.access<data>();
+		for(std::size_t i=0; i<dataOut.size(); ++i) {
+			dataOut[i] = i;
+		}
+
+		mgr.close(out);
+
+
+		// -- open it for reading --
+
+		auto in = mgr.openMemoryMappedInput(entry);
+		auto& dataIn = in.access<data>();
+
+		EXPECT_EQ(dataOut,dataIn);
+
+		mgr.close(in);
+
+		// delete file
+		mgr.remove(entry);
+	}
+
 
 } // end namespace core
 } // end namespace api
