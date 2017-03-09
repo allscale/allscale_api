@@ -1595,6 +1595,31 @@ namespace data {
 
 	}
 
+	TEST(Mesh,Scan) {
+
+		auto bar = createBarMesh<2,2>(5);
+
+		// check the first level
+		std::atomic<int> counter(0);
+		std::atomic<uint32_t> mask(0);
+		bar.pforAll<Vertex>([&](auto& cur){
+			counter++;
+			mask.fetch_or(1<<cur.id);
+		});
+		EXPECT_EQ(10,counter);
+		EXPECT_EQ(1023,mask);
+
+		// check the second level
+		counter.store(0);
+		mask.store(0);
+		bar.pforAll<Vertex,1>([&](auto& cur){
+			counter++;
+			mask.fetch_or(1<<cur.id);
+		});
+		EXPECT_EQ(5,counter);
+		EXPECT_EQ(31,mask);
+	}
+
 	// --- combinations ---
 
 	TEST(Mesh, BuildSingleLevel) {

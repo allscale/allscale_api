@@ -16,6 +16,8 @@
 
 #include "allscale/utils/printer/vectors.h"
 
+#include "allscale/api/core/prec.h"
+
 namespace allscale {
 namespace api {
 namespace user {
@@ -2747,6 +2749,31 @@ namespace data {
 			}
 		};
 
+
+		/**
+		 * An entity to reference the full range of a scan. This token
+		 * can not be copied and will wait for the completion of the scan upon destruction.
+		 */
+		class scan_reference {
+
+			core::treeture<void> handle;
+
+		public:
+
+			scan_reference(core::treeture<void>&& handle)
+				: handle(std::move(handle)) {}
+
+			scan_reference() {};
+			scan_reference(const scan_reference&) = delete;
+			scan_reference(scan_reference&&) = default;
+
+			scan_reference& operator=(const scan_reference&) = delete;
+			scan_reference& operator=(scan_reference&&) = default;
+
+			~scan_reference() { handle.wait(); }
+
+		};
+
 	} // end namespace detail
 
 	template<
@@ -2949,63 +2976,44 @@ namespace data {
 			return data.template getHierarchies<Level+1>().template get<Hierarchy>().getParent(a);
 		}
 
-/*
 		template<typename Kind, unsigned Level = 0, typename Body>
-		void forAll(const Body& body) const {
-			// run a loop over all nodes of the requested kind sequentially
-			for(const auto& cur : node_set_kind<Kind,Level>::range(NodeRef<Kind,Level>{0},NodeRef<Kind,Level>{getNumNodes<Kind,Level>()})) {
-				body(cur);
-			}
+		detail::scan_reference pforAll(const Body& body) const {
+
+			using range = detail::SubTreeRef;
+
+			return core::prec(
+				// -- base case test --
+				[](const range& a){
+					// when we reached a leaf, we are at the bottom
+					return a.getDepth() == PartitionDepth;
+				},
+				// -- base case --
+				[&](const range& a){
+					// apply the body to the elements of the current range
+					for(const auto& cur : partitionTree.template getNodeRange<Kind,Level>(a)) {
+						body(cur);
+					}
+				},
+				// -- step case --
+				core::pick(
+					// -- split --
+					[](const range& a, const auto& rec){
+						return core::parallel(
+							rec(a.getLeftChild()),
+							rec(a.getRightChild())
+						);
+					},
+					// -- serialized step case (optimization) --
+					[&](const range& a, const auto&){
+						// apply the body to the elements of the current range
+						for(const auto& cur : partitionTree.template getNodeRange<Kind,Level>(a)) {
+							body(cur);
+						}
+					}
+				)
+			)(detail::SubTreeRef::root());
 		}
 
-		template<typename Kind, unsigned Level = 0, typename Body>
-		void pforAll(const Body& body) const {
-			// run a loop over all nodes of the requested kind in parallel
-			parec::pfor(node_set_type<Kind,Level>::range(NodeRef<Kind,Level>{0},NodeRef<Kind,Level>{getNumNodes<Kind,Level>()}), body);
-		}
-
-		template<typename Body>
-		void forAllNodes(const Body& body) const {
-			data.forAllNodes(body);
-		}
-
-		template<typename Body>
-		void forAllNodeKinds(const Body& body) const {
-			data.forAllNodeKinds(body);
-		}
-
-		template<typename Body>
-		void forAllEdges(const Body& body) const {
-			data.forAllEdges(body);
-		}
-
-		template<typename Body>
-		void forAllEdgeKinds(const Body& body) const {
-			data.forAllEdgeKinds(body);
-		}
-
-		template<typename Body>
-		void forAllHierarchies(const Body& body) const {
-			data.forAllHierarchies(body);
-		}
-
-		template<typename Body>
-		void forAllHierarchyKinds(const Body& body) const {
-			data.forAllHierarchyKinds(body);
-		}
-
-		template<typename Body>
-		void forAllLinks(const Body& body) const {
-			forAllEdges(body);
-			forAllHierarchies(body);
-		}
-
-		template<typename Body>
-		void forAllLinkedTypes(const Body& body) const {
-			forAllEdgeKinds(body);
-			forAllHierarchyKinds(body);
-		}
-*/
 		// -- graph data --
 
 		template<typename NodeKind, typename T, unsigned Level = 0>
@@ -3134,7 +3142,6 @@ namespace data {
 			static_assert(std::is_same<NodeKindA,typename EdgeKind::src_node_kind>::value, "Invalid source node type");
 			static_assert(std::is_same<NodeKindB,typename EdgeKind::trg_node_kind>::value, "Invalid target node type");
 			return data.template getEdges<Level>().template get<EdgeKind>().addEdge(a,b);
-//			return impl.template link<EdgeKind>(a, b);
 		}
 
 		template<typename HierarchyKind, typename NodeKindA, typename NodeKindB, unsigned LevelA, unsigned LevelB>
