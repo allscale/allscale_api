@@ -2363,31 +2363,42 @@ namespace data {
 
 			// -- load / store for files --
 
-			std::size_t getRequiredSize() const {
-				return sizeof(numReferences) + sizeof(Node) * num_elements + sizeof(SubMeshRef) * numReferences;
+			void store(std::ostream& out) const {
+
+				// start by writing out number of references
+				out.write(reinterpret_cast<const char*>(&numReferences),sizeof(numReferences));
+
+				// continue with node information
+				out.write(reinterpret_cast<const char*>(data),sizeof(Node)*num_elements);
+
+				// and end with references
+				out.write(reinterpret_cast<const char*>(references),sizeof(SubMeshRef)*numReferences);
+
 			}
 
-			void writeCopyTo(char* buffer) const {
+			static PartitionTree load(std::istream& in) {
 
-				// write number of references first
-				auto numReferencesTrg = reinterpret_cast<std::size_t*>(buffer);
-				*numReferencesTrg = numReferences;
+				// create the resulting tree (owning all its data)
+				PartitionTree res;
 
-				// followed by node data
-				auto nodeTrg = reinterpret_cast<Node*>(numReferencesTrg+1);
-				std::memcpy(nodeTrg, data, sizeof(Node)*num_elements);
+				// read in number of references
+				in.read(reinterpret_cast<char*>(&res.numReferences),sizeof(res.numReferences));
 
-				// and finally the reference data
-				auto refTrg = reinterpret_cast<SubMeshRef*>(nodeTrg + num_elements);
-				std::memcpy(refTrg, references, sizeof(SubMeshRef)*numReferences);
+				// load nodes
+				in.read(reinterpret_cast<char*>(res.data),sizeof(Node)*num_elements);
+
+				// load references
+				res.references = reinterpret_cast<SubMeshRef*>(malloc(sizeof(SubMeshRef)*res.numReferences));
+				in.read(reinterpret_cast<char*>(res.references),sizeof(SubMeshRef)*res.numReferences);
+
+				// done
+				return res;
 			}
 
-			static PartitionTree interpret(char* buffer) {
-				// make sure a char is a single byte
-				static_assert(sizeof(char) == 1, "Needed for the pointer arithmetic in this function!");
+			static PartitionTree interpret(char* raw) {
 
 				// get size
-				auto numReferencesTrg = reinterpret_cast<std::size_t*>(buffer);
+				auto numReferencesTrg = reinterpret_cast<std::size_t*>(raw);
 				std::size_t numReferences = *numReferencesTrg;
 
 				// get nodes

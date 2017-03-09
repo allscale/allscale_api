@@ -1435,7 +1435,7 @@ namespace data {
 		// fix the type of the partition tree to be tested
 		using PTree = detail::plain_type<decltype(createBarMesh<2,2>(5).getPartitionTree())>;
 
-		char* buffer = nullptr;
+		std::stringstream buffer(std::ios_base::in | std::ios_base::out | std::ios_base::binary);
 
 		{ // -- creation --
 
@@ -1450,15 +1450,15 @@ namespace data {
 			checkPtree(ptree);
 
 			// convert to buffer
-			buffer = new char[ptree.getRequiredSize()];
-			ptree.writeCopyTo(buffer);
+			ptree.store(buffer);
 
 			// let ptree be destroyed
 		}
 
-		{ // -- reload ptree --
+		{ // -- reload mesh from a stream --
 
-			auto ptree = PTree::interpret(buffer);
+			// load from stream
+			auto ptree = PTree::load(buffer);
 
 			// this ptree should be closed
 			EXPECT_TRUE(ptree.isClosed());
@@ -1468,8 +1468,22 @@ namespace data {
 
 		}
 
-		// delete the buffer
-		delete [] buffer;
+		{ // -- reload ptree using reinterpretation of in-memory buffer --
+
+			// extract data buffer
+			auto str = buffer.str();
+
+			// interpret content
+			auto ptree = PTree::interpret(const_cast<char*>(str.c_str()));
+
+			// this ptree should be closed
+			EXPECT_TRUE(ptree.isClosed());
+
+			// check the content of the ptree
+			checkPtree(ptree);
+
+		}
+
 	}
 
 	// --- combinations ---
