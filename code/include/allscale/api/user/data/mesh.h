@@ -153,7 +153,7 @@ namespace data {
 
 		NodeRef() = default;
 
-		constexpr NodeRef(std::size_t id) : id(id) {}
+		constexpr explicit NodeRef(std::size_t id) : id(id) {}
 
 		NodeID getOrdinal() const {
 			return id;
@@ -420,7 +420,7 @@ namespace data {
 			}
 
 			NodeRef<First,Level> create() {
-				return { node_counter++ };
+				return NodeRef<First,Level>(node_counter++);
 			}
 
 			NodeRange<First,Level> create(unsigned num) {
@@ -2578,7 +2578,7 @@ namespace data {
 							auto end = range.getEnd();
 
 							// compute mid
-							auto mid = begin.id + (end.id - begin.id) / 2;
+							auto mid = NodeRef<NodeKind,lvl>(begin.id + (end.id - begin.id) / 2);
 
 							// get range for this node
 							if (ref.isLeftChild()) {
@@ -2808,11 +2808,11 @@ namespace data {
 	public:
 
 		const ElementType& operator[](const NodeRef<NodeKind,Level>& id) const {
-			return (*data)[id.getOrdinal()];
+			return (*data)[id];
 		}
 
 		ElementType& operator[](const NodeRef<NodeKind,Level>& id) {
-			return (*data)[id.getOrdinal()];
+			return (*data)[id];
 		}
 
 		std::size_t size() const {

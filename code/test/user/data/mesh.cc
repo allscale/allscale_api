@@ -1620,6 +1620,36 @@ namespace data {
 		EXPECT_EQ(31,mask);
 	}
 
+
+
+	TEST(Mesh,MeshDataDemo) {
+
+		auto bar = createBarMesh<2,2>(50);
+
+		auto visitCounters = bar.createNodeData<Vertex,int,0>();
+
+		// initialize counters
+		bar.pforAll<Vertex>([&](const auto& node){
+			visitCounters[node] = 0;
+		});
+
+		// check that all elements are now 0
+		for(std::size_t i=0; i<bar.getNumNodes<Vertex>(); ++i) {
+			EXPECT_EQ(0,visitCounters[NodeRef<Vertex>(i)]);
+		}
+
+		// increment all of those
+		bar.pforAll<Vertex>([&](const auto& node){
+			visitCounters[node]++;
+		});
+
+		for(std::size_t i=0; i<bar.getNumNodes<Vertex>(); ++i) {
+			EXPECT_EQ(1,visitCounters[NodeRef<Vertex>(i)]);
+		}
+
+	}
+
+
 	// --- combinations ---
 
 	TEST(Mesh, BuildSingleLevel) {
