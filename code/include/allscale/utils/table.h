@@ -3,6 +3,8 @@
 #include <cstring>
 
 #include "allscale/utils/assert.h"
+#include "allscale/utils/io_utils.h"
+#include "allscale/utils/raw_buffer.h"
 #include "allscale/utils/printer/join.h"
 
 namespace allscale {
@@ -62,7 +64,7 @@ namespace utils {
 			  owned(true) {
 
 			// see whether there is something to do
-			if (std::is_trivially_copy_constructible<T>::value) {
+			if (length > 0 && std::is_trivially_copy_constructible<T>::value) {
 				std::memcpy(data,other.data,sizeof(T)*length);
 				return;
 			}
@@ -174,10 +176,65 @@ namespace utils {
 			return out << "[" << join(",",table) << "]";
 		}
 
+		void store(std::ostream& out) const {
+			// write length and data
+			write(out,length);
+			write(out,data,data+length);
+
+			// write padding bytes
+			forEachPaddingByte([&]{
+				write(out,(char)0);
+			});
+
+		}
+
+		static Table load(std::istream& in) {
+
+			Table res;
+
+			res.owned = true;
+			res.length = read<std::size_t>(in);
+			res.data = allocate(res.length);
+			read(in,res.begin(),res.end());
+
+			// consume padding bytes
+			res.forEachPaddingByte([&]{
+				read<char>(in);
+			});
+
+			return res;
+		}
+
+		static Table interpret(utils::RawBuffer& buffer) {
+
+			Table res;
+			res.owned = false;
+			res.length = buffer.consume<std::size_t>();
+			res.data = buffer.consumeArray<T>(res.length);
+
+			// consume padding bytes
+			res.forEachPaddingByte([&]{
+				buffer.consume<char>();
+			});
+
+			return res;
+
+		}
+
 	private:
 
 		static T* allocate(std::size_t size) {
+			if (size == 0) return nullptr;
 			return reinterpret_cast<T*>(malloc(sizeof(T)*size));
+		}
+
+		template<typename Body>
+		void forEachPaddingByte(const Body& body) const {
+			auto c = (sizeof(T)*length) % 8;
+			while(c%8 != 0) {
+				body();
+				c++;
+			}
 		}
 
 	};

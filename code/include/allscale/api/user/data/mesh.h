@@ -8,8 +8,11 @@
 #include <cstring>
 
 #include "allscale/utils/assert.h"
+#include "allscale/utils/io_utils.h"
 #include "allscale/utils/range.h"
+#include "allscale/utils/raw_buffer.h"
 #include "allscale/utils/static_map.h"
+#include "allscale/utils/table.h"
 
 #include "allscale/utils/printer/vectors.h"
 
@@ -367,7 +370,7 @@ namespace data {
 
 
 		template<typename Element>
-		void sumPrefixes(std::vector<Element>& list) {
+		void sumPrefixes(utils::Table<Element>& list) {
 			Element counter = 0;
 			for(auto& cur : list) {
 				auto tmp = cur;
@@ -375,8 +378,6 @@ namespace data {
 				counter += tmp;
 			}
 		}
-
-
 
 
 		template<unsigned Level, typename ... NodeTypes>
@@ -427,7 +428,7 @@ namespace data {
 				return { begin, end };
 			}
 
-			std::size_t numNodes() const {
+			std::size_t getNumNodes() const {
 				return node_counter;
 			}
 
@@ -452,10 +453,12 @@ namespace data {
 				// and the nested types
 				nested.forAllKinds(body);
 			}
-/*
+
+			// -- IO support --
+
 			void store(std::ostream& out) const {
 				// store the number of nodes
-				write<std::size_t>(out, node_counter);
+				utils::write<std::size_t>(out, node_counter);
 
 				// store the nested hierarchy
 				nested.store(out);
@@ -463,16 +466,33 @@ namespace data {
 
 			static NodeSet load(std::istream& in) {
 
+				// produce result
+				NodeSet res;
+
 				// restore the number of nodes
-				std::size_t node_counter = read<std::size_t>(in);
+				res.node_counter = utils::read<std::size_t>(in);
 
 				// load nested
-				auto nested = NodeSet<Level,Rest...>::load(in);
+				res.nested = NodeSet<Level,Rest...>::load(in);
 
 				// done
-				return NodeSet(node_counter,std::move(nested));
+				return res;
 			}
-*/
+
+			static NodeSet interpret(utils::RawBuffer& buffer) {
+
+				// produce result
+				NodeSet res;
+
+				// restore the number of nodes
+				res.node_counter = buffer.consume<std::size_t>();
+
+				// load nested
+				res.nested = NodeSet<Level,Rest...>::interpret(buffer);
+
+				// done
+				return res;
+			}
 		};
 
 		template<unsigned Level>
@@ -509,15 +529,21 @@ namespace data {
 			void forAllKinds(const Body&) const {
 				// nothing to do
 			}
-/*
-			void store(std::ostream& out) const {
+
+			// -- IO support --
+
+			void store(std::ostream&) const {
 				// nothing
 			}
 
-			static NodeSet load(std::istream& in) {
+			static NodeSet load(std::istream&) {
 				return NodeSet();
 			}
-*/
+
+			static NodeSet interpret(utils::RawBuffer&) {
+				return NodeSet();
+			}
+
 		};
 
 
@@ -530,11 +556,11 @@ namespace data {
 			using Src = typename First::src_node_kind;
 			using Trg = typename First::trg_node_kind;
 
-			std::vector<uint32_t> forward_offsets;
-			std::vector<NodeRef<Trg,Level>> forward_targets;
+			utils::Table<uint32_t> forward_offsets;
+			utils::Table<NodeRef<Trg,Level>> forward_targets;
 
-			std::vector<uint32_t> backward_offsets;
-			std::vector<NodeRef<Src,Level>> backward_targets;
+			utils::Table<uint32_t> backward_offsets;
+			utils::Table<NodeRef<Src,Level>> backward_targets;
 
 			std::vector<std::pair<NodeRef<Src,Level>,NodeRef<Trg,Level>>> edges;
 
@@ -584,8 +610,8 @@ namespace data {
 			void close(const MeshData& data) {
 
 				// init forward / backward vectors
-				forward_offsets.resize(data.template numNodes<Src,Level>() + 1, 0);
-				forward_targets.resize(edges.size());
+				forward_offsets = utils::Table<uint32_t>(data.template getNumNodes<Src,Level>() + 1, 0);
+				forward_targets = utils::Table<NodeRef<Trg,Level>>(edges.size());
 
 				// count number of sources / sinks
 				for(const auto& cur : edges) {
@@ -600,13 +626,12 @@ namespace data {
 				for(const auto& cur : edges) {
 					forward_targets[forward_pos[cur.first.id]++] = cur.second;
 				}
-				forward_pos.clear();
 
 				// clear edges
 				edges.clear();
 
 				// also fill in backward edges
-				restoreBackward(data.template numNodes<Trg,Level>() + 1);
+				restoreBackward(data.template getNumNodes<Trg,Level>() + 1);
 
 				// close nested edges
 				nested.close(data);
@@ -671,16 +696,21 @@ namespace data {
 				// visit links of remaining hierarchies
 				nested.forAllKinds(body);
 			}
-/*
-			void store(std::ostream& out) const {
-				// store this edge data (forward only)
-				write<std::size_t>(out, forward_offsets.size());
-				write(out,forward_offsets.begin(), forward_offsets.end());
-				write<std::size_t>(out, forward_targets.size());
-				write(out,forward_targets.begin(), forward_targets.end());
 
-				// also store sizes of backward edges (simplicity)
-				write<std::size_t>(out, backward_offsets.size());
+
+			// -- IO support --
+
+			void store(std::ostream& out) const {
+				// only allow closed sets to be stored
+				assert_true(isClosed());
+
+				// write forward edge data
+				forward_offsets.store(out);
+				forward_targets.store(out);
+
+				// write backward edge data
+				backward_offsets.store(out);
+				backward_targets.store(out);
 
 				// store the nested hierarchy
 				nested.store(out);
@@ -688,36 +718,47 @@ namespace data {
 
 			static EdgeSet load(std::istream& in) {
 
-				// restore this edge set
 				EdgeSet res;
 
-				// load forward edges data
-				std::size_t offsets = read<std::size_t>(in);
-				res.forward_offsets.resize(offsets);
-				read(in,res.forward_offsets.begin(), res.forward_offsets.end());
+				// restore edge data
+				res.forward_offsets = utils::Table<uint32_t>::load(in);
+				res.forward_targets = utils::Table<NodeRef<Trg,Level>>::load(in);
 
-				std::size_t targets = read<std::size_t>(in);
-				res.forward_targets.resize(targets);
-				read(in,res.forward_targets.begin(), res.forward_targets.end());
+				res.backward_offsets = utils::Table<uint32_t>::load(in);
+				res.backward_targets = utils::Table<NodeRef<Src,Level>>::load(in);
 
-				// load backward edges data
-				offsets = read<std::size_t>(in);
-				res.restoreBackward(offsets);
-
-				// load nested
-				res.nested = EdgeSet<Level,Rest...>::load(in);
+				// restore nested
+				res.nested.load(in);
 
 				// done
 				return res;
 			}
-*/
+
+			static EdgeSet interpret(utils::RawBuffer& buffer) {
+
+				EdgeSet res;
+
+				// restore edge data
+				res.forward_offsets = utils::Table<uint32_t>::interpret(buffer);
+				res.forward_targets = utils::Table<NodeRef<Trg,Level>>::interpret(buffer);
+
+				res.backward_offsets = utils::Table<uint32_t>::interpret(buffer);
+				res.backward_targets = utils::Table<NodeRef<Src,Level>>::interpret(buffer);
+
+				// restore nested
+				res.nested.interpret(buffer);
+
+				// done
+				return res;
+			}
+
 		private:
 
 			void restoreBackward(std::size_t numTargetNodes) {
 
 				// fix sizes of backward vectors
-				backward_offsets.resize(numTargetNodes, 0);
-				backward_targets.resize(forward_targets.size());		// the same length as forward
+				backward_offsets = utils::Table<uint32_t>(numTargetNodes,0);
+				backward_targets = utils::Table<NodeRef<Src,Level>>(forward_targets.size()); // the same length as forward
 
 				// count number of sources
 				forAllEdges([&](const auto&, const auto&, const auto& trg){
@@ -780,13 +821,20 @@ namespace data {
 				return true;
 			}
 
-			void store(std::ostream& out) const {
-				// nothing
+			// -- IO support --
+
+			void store(std::ostream&) const {
+				// nothing to do her
 			}
 
-			static EdgeSet load(std::istream& in) {
+			static EdgeSet load(std::istream&) {
 				return EdgeSet();
 			}
+
+			static EdgeSet interpret(utils::RawBuffer&) {
+				return EdgeSet();
+			}
+
 		};
 
 		template<unsigned Level, typename ... HierachyTypes>
@@ -802,12 +850,14 @@ namespace data {
 
 			std::vector<std::vector<NodeRef<Trg,Level-1>>> children;
 
-			// -- efficient simulation structures --
-
 			std::vector<NodeRef<Src,Level>> parents;
 
-			std::vector<uint32_t> children_offsets;
-			std::vector<NodeRef<Trg,Level-1>> children_targets;
+			// -- efficient simulation structures --
+
+			utils::Table<NodeRef<Src,Level>> parent_targets;
+
+			utils::Table<uint32_t> children_offsets;
+			utils::Table<NodeRef<Trg,Level-1>> children_targets;
 
 			// -- other hierarchies --
 
@@ -878,9 +928,9 @@ namespace data {
 				}
 
 				// init forward / backward vectors
-				auto numParents = data.template numNodes<Src,Level>();
-				children_offsets.resize(numParents + 1, 0);
-				children_targets.resize(numParentChildLinks);
+				auto numParents = data.template getNumNodes<Src,Level>();
+				children_offsets = utils::Table<uint32_t>(numParents + 1, 0);
+				children_targets = utils::Table<NodeRef<Trg,Level-1>>(numParentChildLinks);
 
 				// init child offsets
 				std::size_t idx = 0;
@@ -904,8 +954,14 @@ namespace data {
 				// clear edges
 				children.clear();
 
-				// cut parents list down to actual length
-				parents.resize(data.template numNodes<Trg,Level-1>(), unknownParent);
+				// init parent target table
+				parent_targets = utils::Table<NodeRef<Src,Level>>(data.template getNumNodes<Trg,Level-1>());
+				for(std::size_t i=0; i<parent_targets.size(); ++i) {
+					parent_targets[i] = (i < parents.size()) ? parents[i] : unknownParent;
+				}
+
+				// clear parents list
+				parents.clear();
 
 				// close nested edges
 				nested.close(data);
@@ -923,8 +979,8 @@ namespace data {
 
 			const NodeRef<Src,Level>& getParent(const NodeRef<Trg,Level-1>& child) const {
 				assert_true(isClosed());
-				assert_lt(child.id,parents.size());
-				return parents[child.id];
+				assert_lt(child.id,parent_targets.size());
+				return parent_targets[child.id];
 			}
 
 			bool operator==(const HierarchySet& other) const {
@@ -952,43 +1008,59 @@ namespace data {
 				// visit links of remaining hierarchies
 				nested.forAllKinds(body);
 			}
-/*
+
+
+			// -- IO support --
+
 			void store(std::ostream& out) const {
-				// store this hierarchy data
-				write<std::size_t>(out, children.size());
-				for(const auto& cur : children) {
-					write<std::size_t>(out, cur.size());
-					for(const auto& n : cur) {
-						write<std::size_t>(out, n.id);
-					}
-				}
+				// only allow closed sets to be stored
+				assert_true(isClosed());
+
+				// write parents table
+				parent_targets.store(out);
+
+				// write child lists
+				children_offsets.store(out);
+				children_targets.store(out);
 
 				// store the nested hierarchy
 				nested.store(out);
 			}
 
 			static HierarchySet load(std::istream& in) {
-				// restore this hierarchy
+
 				HierarchySet res;
 
-				// load hierarchy data
-				std::size_t size = read<std::size_t>(in);
-				for(std::size_t i=0; i<size; i++) {
-					NodeRef<Src,Level> parent{i};
-					std::size_t cur_size = read<std::size_t>(in);
-					for(std::size_t j=0; j<cur_size; j++) {
-						NodeRef<Trg,Level-1> child{ read<std::size_t>(in) };
-						res.addChild(parent,child);
-					}
-				}
+				// restore parents
+				res.parent_targets = utils::Table<NodeRef<Src,Level>>::load(in);
 
-				// load nested
-				res.nested = HierarchySet<Level,Rest...>::load(in);
+				res.children_offsets = utils::Table<uint32_t>::load(in);
+				res.children_targets = utils::Table<NodeRef<Trg,Level-1>>::load(in);
+
+				// restore nested
+				res.nested.load(in);
 
 				// done
 				return res;
 			}
-*/
+
+			static HierarchySet interpret(utils::RawBuffer& buffer) {
+
+				HierarchySet res;
+
+				// restore parents
+				res.parent_targets = utils::Table<NodeRef<Src,Level>>::interpret(buffer);
+
+				res.children_offsets = utils::Table<uint32_t>::interpret(buffer);
+				res.children_targets = utils::Table<NodeRef<Trg,Level-1>>::interpret(buffer);
+
+				// restore nested
+				res.nested.interpret(buffer);
+
+				// done
+				return res;
+			}
+
 		};
 
 		template<unsigned Level>
@@ -1034,15 +1106,21 @@ namespace data {
 			void forAllKinds(const Body&) const {
 				// nothing to do
 			}
-/*
-			void store(std::ostream& out) const {
-				// nothing
+
+			// -- IO support --
+
+			void store(std::ostream&) const {
+				// nothing to do
 			}
 
-			static HierarchySet load(std::istream& in) {
+			static HierarchySet load(std::istream&) {
 				return HierarchySet();
 			}
-*/
+
+			static HierarchySet interpret(utils::RawBuffer&) {
+				return HierarchySet();
+			}
+
 		};
 
 		template<
@@ -1174,7 +1252,8 @@ namespace data {
 				return nested.isClosed() && edges.isClosed() && hierarchies.isClosed();
 			}
 
-/*
+			// -- IO support --
+
 			void store(std::ostream& out) const {
 				nested.store(out);
 				nodes.store(out);
@@ -1183,13 +1262,23 @@ namespace data {
 			}
 
 			static Levels load(std::istream& in) {
-				auto nested = LevelData<Level-1>::load(in);
-				auto nodes = NodeSet<Level,Nodes...>::load(in);
-				auto edges = EdgeSet<Level,Edges...>::load(in);
-				auto hierarchies = HierarchySet<Level,Hierarchies...>::load(in);
-				return Levels ( std::move(nested), std::move(nodes), std::move(edges), std::move(hierarchies) );
+				Levels res;
+				res.nested      = LevelData<Level-1>::load(in);
+				res.nodes       = NodeSet<Level,Nodes...>::load(in);
+				res.edges       = EdgeSet<Level,Edges...>::load(in);
+				res.hierarchies = HierarchySet<Level,Hierarchies...>::load(in);
+				return res;
 			}
-*/
+
+			static Levels interpret(utils::RawBuffer& buffer) {
+				Levels res;
+				res.nested      = LevelData<Level-1>::interpret(buffer);
+				res.nodes       = NodeSet<Level,Nodes...>::interpret(buffer);
+				res.edges       = EdgeSet<Level,Edges...>::interpret(buffer);
+				res.hierarchies = HierarchySet<Level,Hierarchies...>::interpret(buffer);
+				return res;
+			}
+
 		};
 
 		template<
@@ -1272,7 +1361,8 @@ namespace data {
 				return edges.isClosed();
 			}
 
-/*
+			// -- IO support --
+
 			void store(std::ostream& out) const {
 				nodes.store(out);
 				edges.store(out);
@@ -1284,7 +1374,14 @@ namespace data {
 				res.edges = EdgeSet<0,Edges...>::load(in);
 				return res;
 			}
-*/
+
+			static Levels interpret(utils::RawBuffer& buffer) {
+				Levels res;
+				res.nodes = NodeSet<0,Nodes...>::interpret(buffer);
+				res.edges = EdgeSet<0,Edges...>::interpret(buffer);
+				return res;
+			}
+
 		};
 
 
@@ -1377,8 +1474,8 @@ namespace data {
 			}
 
 			template<typename Kind,unsigned Level = 0>
-			std::size_t numNodes() const {
-				return getNodes<Level>().template get<Kind>().numNodes();
+			std::size_t getNumNodes() const {
+				return getNodes<Level>().template get<Kind>().getNumNodes();
 			}
 
 			bool operator==(const MeshTopologyData& other) const {
@@ -1392,16 +1489,22 @@ namespace data {
 			bool isClosed() const {
 				return data.isClosed();
 			}
-/*
+
+			// -- IO support --
+
 			void store(std::ostream& out) const {
-				// store nested data
+				assert_true(isClosed());
 				data.store(out);
 			}
 
 			static MeshTopologyData load(std::istream& in) {
-				return MeshTopologyData { data_store::load(in) };
+				return MeshTopologyData(data_store::load(in));
 			}
-*/
+
+			static MeshTopologyData interpret(utils::RawBuffer& buffer) {
+				return MeshTopologyData(data_store::interpret(buffer));
+			}
+
 		};
 
 		/**
@@ -2395,17 +2498,16 @@ namespace data {
 				return res;
 			}
 
-			static PartitionTree interpret(char* raw) {
+			static PartitionTree interpret(utils::RawBuffer& raw) {
 
 				// get size
-				auto numReferencesTrg = reinterpret_cast<std::size_t*>(raw);
-				std::size_t numReferences = *numReferencesTrg;
+				std::size_t numReferences = raw.consume<std::size_t>();
 
 				// get nodes
-				Node* nodes = reinterpret_cast<Node*>(numReferencesTrg+1);
+				Node* nodes = raw.consumeArray<Node>(num_elements);
 
 				// get references
-				SubMeshRef* references = reinterpret_cast<SubMeshRef*>(nodes + num_elements);
+				SubMeshRef* references = raw.consumeArray<SubMeshRef>(numReferences);
 
 				// wrap up results
 				return PartitionTree(nodes,numReferences,references);
@@ -2452,7 +2554,7 @@ namespace data {
 
 
 						// set root node to cover the full range
-						auto num_nodes = data.template numNodes<NodeKind,lvl>();
+						auto num_nodes = data.template getNumNodes<NodeKind,lvl>();
 						res.template setNodeRange<NodeKind,lvl>(
 								SubTreeRef::root(),
 								NodeRange<NodeKind,lvl>(
@@ -2746,12 +2848,14 @@ namespace data {
 
 	private:
 
-		topology_type data;
+//		static_assert(std::is_trivially_move_assignable<topology_type>::value, "Topology should be trivially copyable!");
 
 		partition_tree_type partitionTree;
 
+		topology_type data;
+
 		Mesh(topology_type&& data, partition_tree_type&& partitionTree)
-			: data(std::move(data)), partitionTree(std::move(partitionTree)) {
+			: partitionTree(std::move(partitionTree)), data(std::move(data)) {
 			assert_true(data.isClosed());
 		}
 
@@ -2779,8 +2883,8 @@ namespace data {
 		// -- mesh querying --
 
 		template<typename Kind,unsigned Level = 0>
-		std::size_t numNodes() const {
-			return data.template numNodes<Kind,Level>();
+		std::size_t getNumNodes() const {
+			return data.template getNumNodes<Kind,Level>();
 		}
 
 		// -- mesh interactions --
@@ -2849,7 +2953,7 @@ namespace data {
 		template<typename Kind, unsigned Level = 0, typename Body>
 		void forAll(const Body& body) const {
 			// run a loop over all nodes of the requested kind sequentially
-			for(const auto& cur : node_set_kind<Kind,Level>::range(NodeRef<Kind,Level>{0},NodeRef<Kind,Level>{numNodes<Kind,Level>()})) {
+			for(const auto& cur : node_set_kind<Kind,Level>::range(NodeRef<Kind,Level>{0},NodeRef<Kind,Level>{getNumNodes<Kind,Level>()})) {
 				body(cur);
 			}
 		}
@@ -2857,7 +2961,7 @@ namespace data {
 		template<typename Kind, unsigned Level = 0, typename Body>
 		void pforAll(const Body& body) const {
 			// run a loop over all nodes of the requested kind in parallel
-			parec::pfor(node_set_type<Kind,Level>::range(NodeRef<Kind,Level>{0},NodeRef<Kind,Level>{numNodes<Kind,Level>()}), body);
+			parec::pfor(node_set_type<Kind,Level>::range(NodeRef<Kind,Level>{0},NodeRef<Kind,Level>{getNumNodes<Kind,Level>()}), body);
 		}
 
 		template<typename Body>
@@ -2909,15 +3013,50 @@ namespace data {
 			return MeshData<NodeKind,T,Level,partition_tree_type>(partitionTree,detail::SubMeshRef::root());
 		}
 
-//
-//		void store(std::ostream&) const {
-//
-//		}
-//
-//		// TODO: switch to M-File
-//		static Mesh load(std::istream&) {
-//			return {};
-//		}
+
+		// -- load / store for files --
+
+		void store(std::ostream& out) const {
+
+			// write partition tree
+			partitionTree.store(out);
+
+			// write topological data
+			data.store(out);
+
+		}
+
+		static Mesh load(std::istream& in) {
+
+			// interpret the partition tree
+			auto partitionTree = partition_tree_type::load(in);
+
+			// load topological data
+			auto topologyData = topology_type::load(in);
+
+			// create result
+			return Mesh(
+				std::move(topologyData),
+				std::move(partitionTree)
+			);
+
+		}
+
+		static Mesh interpret(utils::RawBuffer& raw) {
+
+			// interpret the partition tree
+			auto partitionTree = partition_tree_type::interpret(raw);
+
+			// load topological data
+			auto topologyData = topology_type::interpret(raw);
+
+			// create result
+			return Mesh(
+				std::move(topologyData),
+				std::move(partitionTree)
+			);
+
+		}
 
 	};
 

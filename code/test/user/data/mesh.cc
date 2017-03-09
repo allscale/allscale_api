@@ -34,6 +34,10 @@ namespace data {
 			assert_eq(numVertices,vertices.size());
 
 			// connect vertices through edges
+			for(unsigned i = 1; i < numVertices; ++i) {
+				builder.template link<Edge>(vertices[i],vertices[i-1]);
+			}
+
 			for(unsigned i = 0; i < numVertices - 1; ++i) {
 				builder.template link<Edge>(vertices[i],vertices[i+1]);
 			}
@@ -1474,13 +1478,118 @@ namespace data {
 			auto str = buffer.str();
 
 			// interpret content
-			auto ptree = PTree::interpret(const_cast<char*>(str.c_str()));
+			utils::RawBuffer raw(const_cast<char*>(str.c_str()));
+			auto ptree = PTree::interpret(raw);
 
 			// this ptree should be closed
 			EXPECT_TRUE(ptree.isClosed());
 
 			// check the content of the ptree
 			checkPtree(ptree);
+
+		}
+
+	}
+
+	template<typename Mesh>
+	void checkMesh(const Mesh& mesh) {
+
+		using namespace detail;
+
+		checkPtree(mesh.getPartitionTree());
+
+		EXPECT_EQ(10,(mesh.template getNumNodes<Vertex,0>()));
+		EXPECT_EQ( 5,(mesh.template getNumNodes<Vertex,1>()));
+
+		for(std::size_t i = 1; i < 9 ; i++) {
+			NodeRef<Vertex,0> cur(i);
+			NodeRef<Vertex,0> left(i-1);
+			NodeRef<Vertex,0> right(i+1);
+
+			const auto& neighbors = mesh.template getNeighbors<Edge>(cur);
+
+			EXPECT_EQ(2,neighbors.size());
+			EXPECT_EQ(left,neighbors.front()) << "i=" << cur;
+			EXPECT_EQ(right,neighbors.back()) << "i=" << cur;
+		}
+
+		for(std::size_t i = 1; i < 4 ; i++) {
+			NodeRef<Vertex,1> cur(i);
+			NodeRef<Vertex,1> left(i-1);
+			NodeRef<Vertex,1> right(i+1);
+
+			const auto& neighbors = mesh.template getNeighbors<Edge>(cur);
+
+			EXPECT_EQ(2,neighbors.size());
+			EXPECT_EQ(left,neighbors.front()) << "i=" << cur;
+			EXPECT_EQ(right,neighbors.back()) << "i=" << cur;
+		}
+
+		for(std::size_t i = 0; i < 10 ; i++) {
+			NodeRef<Vertex,0> cur(i);
+			NodeRef<Vertex,1> parent(i/2);
+
+			EXPECT_EQ(parent,mesh.template getParent<Refine>(cur)) << "i=" << cur;
+		}
+
+		for(std::size_t i = 0; i < 5 ; i++) {
+			NodeRef<Vertex,1> cur(i);
+			NodeRef<Vertex,0> left(2*i);
+			NodeRef<Vertex,0> right(2*i+1);
+
+			const auto& children = mesh.template getChildren<Refine>(cur);
+
+			EXPECT_EQ(2,children.size());
+			EXPECT_EQ(left,children.front()) << "i=" << cur;
+			EXPECT_EQ(right,children.back()) << "i=" << cur;
+		}
+
+
+	}
+
+
+	TEST(Mesh,IO) {
+
+		// fix the type of the partition tree to be tested
+		using Mesh = detail::plain_type<decltype(createBarMesh<2,2>(5))>;
+
+		std::stringstream buffer(std::ios_base::in | std::ios_base::out | std::ios_base::binary);
+
+		{ // -- creation --
+
+			// create a mesh
+			auto bar = createBarMesh<2,2>(5);
+
+			// check the content of the mesh
+			checkMesh(bar);
+
+			// convert to buffer
+			bar.store(buffer);
+
+			// let mesh be destroyed
+		}
+
+		{ // -- reload mesh from a stream --
+
+			// load from stream
+			auto bar = Mesh::load(buffer);
+
+			// check the content of the mesh
+			checkMesh(bar);
+
+		}
+
+		{ // -- reload mesh using reinterpretation of in-memory buffer --
+
+			// extract data buffer
+			auto str = buffer.str();
+
+			// interpret content
+			utils::RawBuffer raw(const_cast<char*>(str.c_str()));
+			auto bar = Mesh::interpret(raw);
+
+			// check the content of the mesh
+			checkMesh(bar);
 
 		}
 
@@ -1531,9 +1640,9 @@ namespace data {
 		EXPECT_EQ(a, m.getNeighbor<BoundaryFace2Cell>(bl));
 
 		// check node sets
-		EXPECT_EQ(2,m.numNodes<Cell>());
-		EXPECT_EQ(1,m.numNodes<Face>());
-		EXPECT_EQ(2,m.numNodes<BoundaryFace>());
+		EXPECT_EQ(2,m.getNumNodes<Cell>());
+		EXPECT_EQ(1,m.getNumNodes<Face>());
+		EXPECT_EQ(2,m.getNumNodes<BoundaryFace>());
 
 		EXPECT_EQ(2, (m.createNodeData<Cell,double>().size()));
 		EXPECT_EQ(1, (m.createNodeData<Face,double>().size()));
