@@ -2875,8 +2875,6 @@ namespace data {
 
 	private:
 
-//		static_assert(std::is_trivially_move_assignable<topology_type>::value, "Topology should be trivially copyable!");
-
 		partition_tree_type partitionTree;
 
 		topology_type data;
@@ -2976,6 +2974,20 @@ namespace data {
 			return data.template getHierarchies<Level+1>().template get<Hierarchy>().getParent(a);
 		}
 
+		/**
+		 * A parallel operation calling the given body for each node of the given kind
+		 * on the given level in parallel.
+		 *
+		 * This is the main operator for iterating over nodes within a mesh. All visits
+		 * will always be conducted in parallel.
+		 *
+		 * @tparam Kind the kind of node to be visited
+		 * @tparam Level the level of the mesh to be addressed
+		 * @tparam Body the type of operation to be applied on each node
+		 *
+		 * @param body the operation to be applied on each node of the selected kind and level
+		 * @return a scan reference for synchronizing upon the asynchronously processed operation
+		 */
 		template<typename Kind, unsigned Level = 0, typename Body>
 		detail::scan_reference pforAll(const Body& body) const {
 
@@ -3014,7 +3026,7 @@ namespace data {
 			)(detail::SubTreeRef::root());
 		}
 
-		// -- graph data --
+		// -- mesh data --
 
 		template<typename NodeKind, typename T, unsigned Level = 0>
 		MeshData<NodeKind,T,Level,partition_tree_type> createNodeData() const {
