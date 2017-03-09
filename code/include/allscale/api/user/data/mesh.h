@@ -11,11 +11,13 @@
 #include "allscale/utils/io_utils.h"
 #include "allscale/utils/range.h"
 #include "allscale/utils/raw_buffer.h"
+#include "allscale/utils/serializer.h"
 #include "allscale/utils/static_map.h"
 #include "allscale/utils/table.h"
 
 #include "allscale/utils/printer/vectors.h"
 
+#include "allscale/api/core/data.h"
 #include "allscale/api/core/prec.h"
 
 namespace allscale {
@@ -2866,6 +2868,9 @@ namespace data {
 		using topology_type = detail::MeshTopologyData<nodes<NodeKinds...>,edges<EdgeKinds...>,hierarchies<Hierarchies...>,Levels>;
 
 		using partition_tree_type = detail::PartitionTree<nodes<NodeKinds...>,edges<EdgeKinds...>,hierarchies<Hierarchies...>,Levels,PartitionDepth>;
+
+		template<typename NodeKind,typename ValueType,unsigned Level = 0>
+		using mesh_data_type = MeshData<NodeKind,ValueType,Level,partition_tree_type>;
 
 		using builder_type = MeshBuilder<nodes<NodeKinds...>,edges<EdgeKinds...>,hierarchies<Hierarchies...>,Levels>;
 
