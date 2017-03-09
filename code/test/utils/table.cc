@@ -24,7 +24,7 @@ namespace utils {
 
 	}
 
-	TEST(Table,Basic) {
+	TEST(Table,BasicCtors) {
 
 		using table_t = Table<std::vector<int>>;
 
@@ -56,6 +56,51 @@ namespace utils {
 		EXPECT_EQ("[[12],[12],[12],[12],[12]]",toString(table));
 		EXPECT_EQ("[[12],[12],[12],[12],[12]]",toString(copy));
 		EXPECT_EQ("[[12],[12],[12],[12],[12]]",toString(move));
+
+	}
+
+	TEST(Table,BasicAssignment) {
+
+		using table_t = Table<std::vector<int>>;
+
+		table_t table(5);
+
+		EXPECT_FALSE(table.empty());
+		EXPECT_EQ(5,table.size());
+		EXPECT_TRUE(table.isOwner());
+		EXPECT_EQ("[[],[],[],[],[]]",toString(table));
+
+		for(auto& cur : table) {
+			cur.push_back(12);
+		}
+
+		EXPECT_EQ("[[12],[12],[12],[12],[12]]",toString(table));
+
+		Table<std::vector<int>> copy;
+		copy = table;
+		EXPECT_EQ("[[12],[12],[12],[12],[12]]",toString(copy));
+
+		EXPECT_TRUE(table.isOwner());
+		EXPECT_TRUE(copy.isOwner());
+
+		Table<std::vector<int>> move;
+		move = std::move(table);
+
+		EXPECT_FALSE(table.isOwner());
+		EXPECT_TRUE(copy.isOwner());
+		EXPECT_TRUE(move.isOwner());
+
+		EXPECT_EQ("[[12],[12],[12],[12],[12]]",toString(table));
+		EXPECT_EQ("[[12],[12],[12],[12],[12]]",toString(copy));
+		EXPECT_EQ("[[12],[12],[12],[12],[12]]",toString(move));
+
+	}
+
+
+	TEST(Table,InitCtor) {
+
+		Table<int> table(5,5);
+		EXPECT_EQ("[5,5,5,5,5]",toString(table));
 
 	}
 

@@ -41,6 +41,14 @@ namespace utils {
 			}
 		}
 
+		Table(std::size_t size, const T& value)
+			: length(size), data(allocate(length)), owned(true) {
+			// use in-place copy constructor
+			for(auto& cur : *this) {
+				new (&cur) T(value);
+			}
+		}
+
 		Table(T* data, std::size_t size)
 			: length(size), data(data), owned(false) {}
 
@@ -97,7 +105,7 @@ namespace utils {
 			this->~Table();
 
 			// create a copy of the new state
-			new (this) T(other);
+			new (this) Table(other);
 
 			// done
 			return *this;
@@ -112,7 +120,7 @@ namespace utils {
 			this->~Table();
 
 			// create a copy of the new state
-			new (this) T(std::move(other));
+			new (this) Table(std::move(other));
 
 			// done
 			return *this;
