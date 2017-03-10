@@ -1,25 +1,48 @@
-language: cpp
+language: c++
+dist: trusty
+sudo: false
 matrix:
   include:
     - os: linux
-      dist: trusty
-      sudo: required
       compiler: gcc
+      env: COMPILER_VERSION="5"
     - os: linux
-      dist: trusty
-      sudo: required
+      compiler: gcc
+      env: COMPILER_VERSION="6"
+    - os: linux
       compiler: clang
+      env: COMPILER_VERSION="3.8"
+    - os: linux
+      compiler: clang
+      env: COMPILER_VERSION="3.9"
     - os: osx
       osx_image: xcode8
       compiler: clang
-before_install:
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get update -q ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get install -y gcc-5 g++-5 ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get install -y clang-3.8 clang++-3.8 ; fi
-script: 
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]] && [ $CC == gcc ]; then export CC=gcc-5; export CXX=g++-5; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]] && [ $CC == clang ]; then export CC=clang-3.8; export CXX=clang++-3.8; fi
+    - os: osx
+      osx_image: xcode8.1
+      compiler: clang
+      # bug, xcode8.1 is missing cmake, https://github.com/travis-ci/travis-ci/issues/6258
+      before_install:
+        - brew update
+        - brew install cmake
+    - os: osx
+      osx_image: xcode8.2
+      compiler: clang
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+      - llvm-toolchain-precise-3.9
+    packages:
+      - g++-5
+      - gcc-5
+      - g++-6
+      - gcc-6
+      - clang-3.8
+      - clang-3.9
+script:
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]] && [ $CC == gcc ]; then export CC=gcc-$COMPILER_VERSION; export CXX=g++-$COMPILER_VERSION; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]] && [ $CC == clang ]; then export CC=clang-$COMPILER_VERSION; export CXX=clang++-$COMPILER_VERSION; fi
   - mkdir build_debug
   - cd build_debug
   - cmake ../
