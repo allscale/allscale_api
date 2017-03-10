@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <array>
 #include <type_traits>
 
 #include "allscale/api/core/io.h"

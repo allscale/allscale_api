@@ -971,7 +971,7 @@ namespace reference {
 			const char* name = file.name.c_str();
 
 			// get file descriptor from file name
-			auto fd = open(name, ((readOnly) ? O_RDONLY : O_RDWR ) | O_LARGEFILE );
+			auto fd = open(name, ((readOnly) ? O_RDONLY : O_RDWR ) );
 			assert_ne(-1,fd) << "Error opening file " << name;
 
 			// return the obtained file descriptor
