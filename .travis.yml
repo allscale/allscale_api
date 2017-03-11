@@ -92,4 +92,5 @@ script:
   - cd build
   - cmake ../ -DCMAKE_BUILD_TYPE=$BUILD_TYPE
   - make -j2 
-  - make test ARGS=-j2
+  # limiting number of workers as suggested in https://docs.travis-ci.com/user/languages/cpp/#OpenMP-projects
+  - NUM_WORKERS=3 make test ARGS=-j2
