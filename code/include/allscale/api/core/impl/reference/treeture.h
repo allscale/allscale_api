@@ -1758,6 +1758,14 @@ namespace reference {
 
 			void wait() const;
 
+			bool isDone() const {
+				return !promise || promise->isReady();
+			}
+
+			bool isValid() const {
+				return (bool)promise;
+			}
+
 			task_reference getLeft() const {
 				return getTaskReference().getLeft();
 			}
@@ -1795,7 +1803,9 @@ namespace reference {
 
 	public:
 
-		treeture(const T& value = T())
+		treeture() {}
+
+		treeture(const T& value)
 			: super(std::make_shared<Promise<T>>(value)) {}
 
 		treeture(const treeture&) = delete;
@@ -1805,6 +1815,8 @@ namespace reference {
 		treeture& operator=(treeture&& other) = default;
 
 		const T& get() {
+			static const T defaultValue = T();
+			if (!this->promise) return defaultValue;
 			super::wait();
 			return this->promise->getValue();
 		}
@@ -1828,7 +1840,7 @@ namespace reference {
 
 	public:
 
-		treeture() : super(std::make_shared<Promise<void>>(true)) {}
+		treeture() : super() {}
 
 		treeture(const treeture&) = delete;
 		treeture(treeture&& other) = default;
