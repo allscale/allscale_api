@@ -2173,14 +2173,19 @@ namespace reference {
 
 			/**
 			 * A utility to fix the affinity of the current thread to the given core.
+			 * Does not do anything on operating systems other than linux.
 			 */
-			void fixAffinity(int core) {
-				int num_cores = std::thread::hardware_concurrency();
-				cpu_set_t mask;
-				CPU_ZERO(&mask);
-				CPU_SET(core % num_cores, &mask);
-				pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mask);
-			}
+			#ifdef __linux__
+				void fixAffinity(int core) {
+					int num_cores = std::thread::hardware_concurrency();
+					cpu_set_t mask;
+					CPU_ZERO(&mask);
+					CPU_SET(core % num_cores, &mask);
+					pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mask);
+				}
+			#else
+				void fixAffinity(int) { }
+			#endif
 
 		}
 
