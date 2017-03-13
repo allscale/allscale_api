@@ -1,6 +1,7 @@
 #pragma once
 
 #include "allscale/api/user/operator/pfor.h"
+#include "allscale/api/user/operator/internal/operation_reference.h"
 
 namespace allscale {
 namespace api {
@@ -25,14 +26,14 @@ namespace user {
 
 
 
-	class stencil_reference {
+	class stencil_reference : public internal::operation_reference {
 
-		bool active;
+	public:
 
-
+		// inherit all constructors
+		using operation_reference::operation_reference;
 
 	};
-
 
 	template<typename Container, typename Update>
 	stencil_reference stencil(Container& a, int steps, const Update& update) {

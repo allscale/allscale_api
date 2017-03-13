@@ -1,6 +1,7 @@
 #pragma once
 
 #include "allscale/api/core/treeture.h"
+#include "allscale/api/user/operator/internal/operation_reference.h"
 
 namespace allscale {
 namespace api {
@@ -36,26 +37,13 @@ namespace user {
 	/**
 	 * An entity to reference the full range of a scan. This token
 	 * can not be copied and will wait for the completion of the scan upon destruction.
-	 *
-	 * TODO: use a common base class for loop_reference and scan_reference
 	 */
-	class vcycle_reference {
-
-		core::treeture<void> handle;
+	class vcycle_reference : public internal::operation_reference {
 
 	public:
 
-		vcycle_reference(core::treeture<void>&& handle)
-			: handle(std::move(handle)) {}
-
-		vcycle_reference() {};
-		vcycle_reference(const vcycle_reference&) = delete;
-		vcycle_reference(vcycle_reference&&) = default;
-
-		vcycle_reference& operator=(const vcycle_reference&) = delete;
-		vcycle_reference& operator=(vcycle_reference&&) = default;
-
-		~vcycle_reference() { handle.wait(); }
+		// inherit all constructors
+		using operation_reference::operation_reference;
 
 	};
 
