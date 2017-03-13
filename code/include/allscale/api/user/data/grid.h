@@ -6,6 +6,8 @@
 #include "allscale/api/core/data.h"
 #include "allscale/api/user/data/vector.h"
 
+#include "allscale/api/user/operator/pfor.h"
+
 #include "allscale/utils/assert.h"
 #include "allscale/utils/printer/join.h"
 #include "allscale/utils/large_array.h"
@@ -754,6 +756,54 @@ namespace data {
 		 */
 		const T& operator[](const coordinate_type& index) const {
 			return (*base)[index];
+		}
+
+		/**
+		 * A sequential scan over all elements within this grid, providing
+		 * read-only access.
+		 */
+		template<typename Op>
+		void forEach(const Op& op) const {
+			allscale::api::user::detail::forEach(
+					coordinate_type(0),
+					size(),
+					[&](const auto& pos){
+						op((*this)[pos]);
+					}
+			);
+		}
+
+		/**
+		 * A sequential scan over all elements within this grid, providing
+		 * read/write access.
+		 */
+		template<typename Op>
+		void forEach(const Op& op) {
+			allscale::api::user::detail::forEach(
+					coordinate_type(0),
+					size(),
+					[&](const auto& pos){
+						op((*this)[pos]);
+					}
+			);
+		}
+
+		/**
+		 * A sequential scan over all elements within this grid, providing
+		 * read-only access.
+		 */
+		template<typename Op>
+		auto pforEach(const Op& op) const {
+			return pfor(size(),op);
+		}
+
+		/**
+		 * A parallel scan over all elements within this grid, providing
+		 * read/write access.
+		 */
+		template<typename Op>
+		auto pforEach(const Op& op) {
+			return pfor(size(),op);
 		}
 
 	};
