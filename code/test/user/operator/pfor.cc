@@ -138,6 +138,49 @@ namespace user {
 
 	}
 
+
+	TEST(PFor, Array) {
+
+		const int N = 100;
+
+		using Point = std::array<int,3>;
+		using Grid = std::array<std::array<std::array<int,N>,N>,N>;
+
+		Point zero = {0,0,0};
+		Point full = {N,N,N};
+
+		// create data
+		Grid* data = new Grid();
+
+		// initialize the data
+		for(int i=0; i<N; i++) {
+			for(int j=0; j<N; j++) {
+				for(int k=0; k<N; k++) {
+					(*data)[i][j][k] = 5;
+				}
+			}
+		}
+
+		// update data in parallel
+		pfor(zero,full,[&](const Point& p){
+			(*data)[p[0]][p[1]][p[2]]++;
+		});
+
+		// check that all has been covered
+		for(int i=0; i<N; i++) {
+			for(int j=0; j<N; j++) {
+				for(int k=0; k<N; k++) {
+					EXPECT_EQ(6,(*data)[i][j][k])
+							<< "Position: " << i << "/" << j << "/" << k;
+				}
+			}
+		}
+
+		delete data;
+
+	}
+
+
 	TEST(PFor, Vector) {
 
 		const int N = 100;
@@ -169,7 +212,8 @@ namespace user {
 		for(int i=0; i<N; i++) {
 			for(int j=0; j<N; j++) {
 				for(int k=0; k<N; k++) {
-					EXPECT_EQ(6,(*data)[i][j][k]);
+					EXPECT_EQ(6,(*data)[i][j][k])
+							<< "Position: " << i << "/" << j << "/" << k;
 				}
 			}
 		}

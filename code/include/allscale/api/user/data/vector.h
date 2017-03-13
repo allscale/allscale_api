@@ -60,6 +60,18 @@ namespace data {
 			return !(data == other.data);
 		}
 
+		bool operator<(const Vector& other) const {
+			return data < other.data;
+		}
+
+		bool operator<=(const Vector& other) const {
+			return data <= other.data;
+		}
+
+		bool operator>=(const Vector& other) const {
+			return data >= other.data;
+		}
+
 		bool operator>(const Vector& other) const {
 			return data > other.data;
 		}
@@ -190,12 +202,8 @@ namespace data {
 	// specialization for 3-dimensional vectors, providing access to named data members x, y, z
 	template <typename T>
 	class Vector<T, 3> {
-	private:
-		struct IndexAccessHelper {
-			std::array<T,3> data;
-		};
-
 	public:
+
 		T x, y, z;
 
 		Vector() = default;
@@ -214,11 +222,11 @@ namespace data {
 		}
 
 		T& operator[](int i) {
-			return reinterpret_cast<IndexAccessHelper*>(this)->data[i];
+			return reinterpret_cast<std::array<T,3>&>(*this)[i];
 		}
 
 		const T& operator[](int i) const {
-			return reinterpret_cast<const IndexAccessHelper*>(this)->data[i];
+			return reinterpret_cast<const std::array<T,3>&>(*this)[i];
 		}
 
 		Vector& operator=(const Vector& other) = default;
@@ -233,14 +241,26 @@ namespace data {
 		}
 
 		bool operator<(const Vector& other) const {
-			return std::tie(x,y,z) < std::tie(other.x,other.y,other.z);
+			return asArray() < other.asArray();
+		}
+
+		bool operator<=(const Vector& other) const {
+			return asArray() <= other.asArray();
+		}
+
+		bool operator>=(const Vector& other) const {
+			return asArray() >= other.asArray();
 		}
 
 		bool operator>(const Vector& other) const {
-			return std::tie(x,y,z) > std::tie(other.x,other.y,other.z);
+			return asArray() > other.asArray();
 		}
 
-		operator const std::array<T, 3>&() const { return reinterpret_cast<const IndexAccessHelper*>(this)->data; }
+		operator const std::array<T, 3>&() const { return asArray(); }
+
+		const std::array<T,3>& asArray() const {
+			return reinterpret_cast<const std::array<T,3>&>(*this);
+		}
 
 		bool dominatedBy(const Vector& other) const {
 			return other.x >= x && other.y >= y && other.z >= z;
@@ -269,11 +289,6 @@ namespace data {
 	// specialization for 2-dimensional vectors, providing access to named data members x, y
 	template <typename T>
 	class Vector<T, 2> {
-	private:
-		struct IndexAccessHelper {
-			std::array<T,2> data;
-		};
-
 	public:
 		T x, y;
 
@@ -293,18 +308,18 @@ namespace data {
 		}
 
 		T& operator[](int i) {
-			return reinterpret_cast<IndexAccessHelper*>(this)->data[i];
+			return reinterpret_cast<std::array<T,2>&>(*this)[i];
 		}
 
 		const T& operator[](int i) const {
-			return reinterpret_cast<const IndexAccessHelper*>(this)->data[i];
+			return reinterpret_cast<const std::array<T,2>&>(*this)[i];
 		}
 
 		Vector& operator=(const Vector& other) = default;
 		Vector& operator=(Vector&& other) = default;
 
 		bool operator==(const Vector& other) const {
-			return std::tie(x,y) == std::tie(other.x,other.y);
+			return asArray() == other.asArray();
 		}
 
 		bool operator!=(const Vector& other) const {
@@ -312,14 +327,26 @@ namespace data {
 		}
 
 		bool operator<(const Vector& other) const {
-			return std::tie(x,y) < std::tie(other.x,other.y);
+			return asArray() < other.asArray();
+		}
+
+		bool operator<=(const Vector& other) const {
+			return asArray() <= other.asArray();
+		}
+
+		bool operator>=(const Vector& other) const {
+			return asArray() >= other.asArray();
 		}
 
 		bool operator>(const Vector& other) const {
-			return std::tie(x,y) > std::tie(other.x,other.y);
+			return asArray() > other.asArray();
 		}
 
-		operator const std::array<T, 2>&() const { return reinterpret_cast<const IndexAccessHelper*>(this)->data; }
+		operator const std::array<T, 2>&() const { return asArray(); }
+
+		const std::array<T,2>& asArray() const {
+			return reinterpret_cast<const std::array<T,2>&>(*this);
+		}
 
 		bool dominatedBy(const Vector& other) const {
 			return other.x >= x && other.y >= y;
