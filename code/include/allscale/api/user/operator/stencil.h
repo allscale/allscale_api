@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <vector>
 
 #include "allscale/api/user/data/grid.h"
 #include "allscale/api/user/data/vector.h"
@@ -99,10 +100,7 @@ namespace user {
 					// make sure result is in a
 					if (x != &a) {
 						// move final data to the original container
-						pfor(iter_type(0),a.size(),[x,&a,update](const iter_type& i){
-							a[i] = (*x)[i];
-						});
-
+						std::swap(a,b);
 					}
 
 				});
@@ -143,10 +141,7 @@ namespace user {
 					// make sure result is in a
 					if (x != &a) {
 						// move final data to the original container
-						ref = pfor(iter_type(0),a.size(),[x,&a,update](const iter_type& i){
-							a[i] = (*x)[i];
-						}, neighborhood_sync(ref));
-
+						std::swap(a,b);
 					}
 
 					// wait for the task completion
@@ -163,7 +158,7 @@ namespace user {
 
 		namespace detail {
 
-			using index_type = int64_t;
+			using index_type = Coordinate<0>::element_type;
 			using time_type = std::size_t;
 
 
@@ -179,17 +174,21 @@ namespace user {
 					index_type end;
 				};
 
-			private:
-
 				std::array<range,dims> boundaries;
-
-			public:
 
 				static Base zero() {
 					return full(0);
 				}
 
-				static Base full(const data::Vector<index_type,dims>& size) {
+				static Base full(std::size_t size) {
+					static_assert(dims == 1, "This constructor only supports 1-d bases.");
+					Base res;
+					res.boundaries[0] = { 0, (index_type)size };
+					return res;
+				}
+
+				template<typename T>
+				static Base full(const data::Vector<T,dims>& size) {
 					Base res;
 					for(size_t i=0; i<dims; i++) {
 						res.boundaries[i] = { 0, size[i] };
@@ -206,6 +205,22 @@ namespace user {
 					for(const auto& cur : boundaries) {
 						if (cur.begin >= cur.end) return 0;
 						res *= (cur.end - cur.begin);
+					}
+					return res;
+				}
+
+				Coordinate<dims> extend() const {
+					Coordinate<dims> res;
+					for(size_t i = 0; i<dims; i++) {
+						res[i] = boundaries[i].end - boundaries[i].begin;
+					}
+					return res;
+				}
+
+				index_type getMinimumWidth() const {
+					index_type res = boundaries[0].end - boundaries[0].begin;
+					for(size_t i = 1; i<dims; i++) {
+						res = std::min(res,boundaries[i].end - boundaries[i].begin);
 					}
 					return res;
 				}
@@ -237,13 +252,6 @@ namespace user {
 				}
 			};
 
-
-	//		template<size_t dims>
-	//		Slopes<dims> ones() {
-	//			Slopes<dims> res;
-	//			for(size_t i=0; i<dims; i++) res[i] = 1;
-	//			return res;
-	//		}
 
 			template<size_t dim>
 			struct plain_scanner {
@@ -461,9 +469,24 @@ namespace user {
 				using index_type = detail::index_type;
 			};
 
-			template<typename T, unsigned Dims>
+			template<typename T, std::size_t Dims>
 			struct container_info<data::Grid<T,Dims>> : public container_info_base<Dims> {
 				using index_type = data::Vector<detail::index_type,Dims>;
+			};
+
+
+			template<typename Container>
+			struct coordinate_converter {
+				auto& operator()(const Coordinate<1>& pos) {
+					return pos[0];
+				}
+			};
+
+			template<typename T, std::size_t Dims>
+			struct coordinate_converter<data::Grid<T,Dims>> {
+				auto& operator()(const Coordinate<Dims>& pos) {
+					return pos;
+				}
 			};
 
 		}
@@ -476,60 +499,108 @@ namespace user {
 
 				using namespace detail;
 
+				const unsigned dims = container_info<Container>::dimensions;
 				using base_t = typename container_info<Container>::base_type;
 
 				// iterative implementation
-	//			Container b(a.size());
-	//
-	//			Container* x = &a;
-	//			Container* y = &b;
+				Container b(a.size());
+
+				Container* x = &a;
+				Container* y = &b;
 
 				// TODO: make parallel
 
-				// TODO: generalize data structure
-
 				// get size of structure
 				base_t base = base_t::full(a.size());
+				auto size = base.extend();
 
-	//			detail::index_type size = a.size();
-	//
-	//
-	//			// get step size (height of pyramid)
-	//			auto step = std::min<std::size_t>(steps,size/2);
-	//
-	//			// wrap update function into zoid-interface adapter
-	//			auto wrappedUpdate = [&](const Coordinate<1>& pos, time_t t){
-	//				auto p = pos[0] % size;
-	//				if (t % 2) {
-	//					(*y)[p] = update(t,p,*x);
-	//				} else {
-	//					(*x)[p] = update(t,p,*y);
-	//				}
-	//			};
-	//
-	//			// decompose full space/time block in layers of height step
-	//			for(int i=0; i<steps; i+=step) {
-	//
-	//				auto top = std::min<std::size_t>(i+step,steps);
-	//
-	//				// compute up-zoid
-	//				auto baseUp = detail::Base<1>::full(data::Vector<detail::index_type,1>{size});
-	//				detail::Zoid<1> up(baseUp,1,i,top);
-	//				up.forEach(wrappedUpdate);
-	//
-	//				// compute down-zoid
-	//				auto baseDown = detail::Base<1>::zero() + Coordinate<1>(size);
-	//				detail::Zoid<1> down(baseDown,-1,i,top);
-	//				down.forEach(wrappedUpdate);
-	//
-	//			}
-	//
-	//			// make sure the result is in a
-	//			if (!(steps % 2)) {
-	//				for(int i = 0; i<size; ++i) {
-	//					a[i] = b[i];
-	//				}
-	//			}
+				// the the smallest width (this is the limiting factor for the height)
+				auto width = base.getMinimumWidth();
+
+				// get the height of the largest zoids, thus the height of each layer
+				auto height = width/2;
+
+				// wrap update function into zoid-interface adapter
+				auto wrappedUpdate = [&](const Coordinate<dims>& pos, time_t t){
+					coordinate_converter<Container> conv;
+					auto p = conv(data::elementwiseModulo(pos,size));
+					if (t % 2) {
+						(*y)[p] = update(t,p,*x);
+					} else {
+						(*x)[p] = update(t,p,*y);
+					}
+				};
+
+
+				// compute base area partitioning
+				struct split {
+					typename base_t::range left;
+					typename base_t::range right;
+				};
+				std::array<split,dims> splits;
+				for(std::size_t i = 0; i<dims; i++) {
+					auto curWidth = size[i];
+					auto mid = curWidth - (curWidth - width) / 2;
+					splits[i].left.begin  = 0;
+					splits[i].left.end    = mid;
+					splits[i].right.begin = mid;
+					splits[i].right.end   = curWidth;
+				}
+
+				// process time layer by layer
+				for(int t0=0; t0<steps; t0+=height) {
+
+					// get the top of the current layer
+					auto t1 = std::min<std::size_t>(t0+height,steps);
+
+					// create the list of zoids to be processed
+					std::vector<std::vector<Zoid<dims>>> zoids(dims+1);
+
+					// generate binary patterns from 0 to 2^dims - 1
+					for(size_t i=0; i < (1<<dims); i++) {
+
+						// get base and slopes of the current zoid
+						Base<dims> curBase = base;
+						Slopes<dims> slopes;
+
+						// move base to center on field, edge, or corner
+						for(size_t j=0; j<dims; j++) {
+							if (i & (1<<j)) {
+								slopes[j] = -1;
+								curBase.boundaries[j] = splits[j].right;
+							} else {
+								slopes[j] = 1;
+								curBase.boundaries[j] = splits[j].left;
+							}
+						}
+
+						// count the number of ones -- this determines the execution order
+						int num_ones = 0;
+						for(size_t j=0; j<dims; j++) {
+							if (i & (1<<j)) num_ones++;
+						}
+
+						// add to execution plan
+						zoids[num_ones].push_back(Zoid<dims>(curBase, slopes, t0, t1));
+					}
+
+
+					// process those zoids in order
+					for(const auto& layer : zoids) {
+						pfor(layer,[&](const Zoid<dims>& cur) {
+							cur.forEach(wrappedUpdate);
+						});
+//						for(const auto& cur : layer) {
+//							cur.forEach(wrappedUpdate);
+//						}
+					}
+
+				}
+
+				// make sure the result is in the a copy
+				if (!(steps % 2)) {
+					std::swap(a,b);
+				}
 
 				// done
 				return {};

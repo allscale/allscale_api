@@ -25,19 +25,19 @@ namespace data {
 
 	using coordinate_type = std::int64_t;
 
-	template<unsigned Dims>
+	template<std::size_t Dims>
 	using GridPoint = Vector<coordinate_type,Dims>;
 
-	template<unsigned Dims>
+	template<std::size_t Dims>
 	class GridBox;
 
-	template<unsigned Dims>
+	template<std::size_t Dims>
 	class GridRegion;
 
-	template<typename T, unsigned Dims>
+	template<typename T, std::size_t Dims>
 	class GridFragment;
 
-	template<typename T, unsigned Dims = 2>
+	template<typename T, std::size_t Dims = 2>
 	class Grid;
 
 
@@ -49,12 +49,12 @@ namespace data {
 
 	namespace detail {
 
-		template<unsigned I>
+		template<std::size_t I>
 		struct difference_computer {
 
-			template<unsigned Dims>
+			template<std::size_t Dims>
 			void collectDifferences(const GridBox<Dims>& a, const GridBox<Dims>& b, GridBox<Dims>& cur, std::vector<GridBox<Dims>>& res) {
-				unsigned i = I-1;
+				std::size_t i = I-1;
 
 				// if b is within a
 				if (a.min[i] <= b.min[i] && b.max[i] <= a.max[i]) {
@@ -109,20 +109,20 @@ namespace data {
 		template<>
 		struct difference_computer<0> {
 
-			template<unsigned Dims>
+			template<std::size_t Dims>
 			void collectDifferences(const GridBox<Dims>&, const GridBox<Dims>& b, GridBox<Dims>& cur, std::vector<GridBox<Dims>>& res) {
 				if(!b.covers(cur) && !cur.empty()) res.push_back(cur);
 			}
 		};
 
-		template<unsigned I>
+		template<std::size_t I>
 		struct box_fuser {
-			template<unsigned Dims>
+			template<std::size_t Dims>
 			bool apply(std::vector<GridBox<Dims>>& boxes) {
 
 				// try fuse I-th dimension
-				for(unsigned i = 0; i<boxes.size(); i++) {
-					for(unsigned j = i+1; j<boxes.size(); j++) {
+				for(std::size_t i = 0; i<boxes.size(); i++) {
+					for(std::size_t j = i+1; j<boxes.size(); j++) {
 
 						// check whether a fusion is possible
 						GridBox<Dims>& a = boxes[i];
@@ -155,13 +155,13 @@ namespace data {
 
 		template<>
 		struct box_fuser<0> {
-			template<unsigned Dims>
+			template<std::size_t Dims>
 			bool apply(std::vector<GridBox<Dims>>&) { return false; }
 		};
 
-		template<unsigned I>
+		template<std::size_t I>
 		struct line_scanner {
-			template<unsigned Dims, typename Lambda>
+			template<std::size_t Dims, typename Lambda>
 			void apply(const GridBox<Dims>& box, GridPoint<Dims>& a, GridPoint<Dims>& b, const Lambda& body) {
 				for(coordinate_type i = box.min[Dims-I]; i < box.max[Dims-I]; ++i ) {
 					a[Dims-I] = i;
@@ -173,7 +173,7 @@ namespace data {
 
 		template<>
 		struct line_scanner<1> {
-			template<unsigned Dims, typename Lambda>
+			template<std::size_t Dims, typename Lambda>
 			void apply(const GridBox<Dims>& box, GridPoint<Dims>& a, GridPoint<Dims>& b, const Lambda& body) {
 				a[Dims-1] = box.min[Dims-1];
 				b[Dims-1] = box.max[Dims-1];
@@ -183,18 +183,18 @@ namespace data {
 	}
 
 
-	template<unsigned Dims>
+	template<std::size_t Dims>
 	class GridBox {
 
 		static_assert(Dims >= 1, "0-dimension Grids (=Skalars) not supported yet.");
 
-		template<unsigned I>
+		template<std::size_t I>
 		friend struct detail::difference_computer;
 
-		template<unsigned I>
+		template<std::size_t I>
 		friend struct detail::line_scanner;
 
-		template<unsigned D>
+		template<std::size_t D>
 		friend class GridRegion;
 
 		using point_type = GridPoint<Dims>;
@@ -224,7 +224,7 @@ namespace data {
 
 		std::size_t area() const {
 			std::size_t res = 1;
-			for(unsigned i=0; i<Dims; i++) {
+			for(std::size_t i=0; i<Dims; i++) {
 				if (max[i] <= min[i]) return 0;
 				res *= max[i] - min[i];
 			}
@@ -242,7 +242,7 @@ namespace data {
 		}
 
 		bool covers(const point_type& point) const {
-			for(unsigned i = 0; i<Dims; i++) {
+			for(std::size_t i = 0; i<Dims; i++) {
 				if (!(min[i] <= point[i] && point[i] < max[i])) return false;
 			}
 			return true;
@@ -259,7 +259,7 @@ namespace data {
 			if (other.empty() || empty()) return false;
 
 			// check each dimension
-			for(unsigned i = 0; i<Dims; i++) {
+			for(std::size_t i = 0; i<Dims; i++) {
 				// the minimum of the one has to be between the min and max of the other
 				if (!(
 						(min[i] <= other.min[i] && other.min[i] < max[i]) ||
@@ -287,7 +287,7 @@ namespace data {
 		static GridBox intersect(const GridBox& a, const GridBox& b) {
 			// compute the intersection
 			GridBox res = a;
-			for(unsigned i = 0; i<Dims; i++) {
+			for(std::size_t i = 0; i<Dims; i++) {
 				res.min[i] = std::max(res.min[i],b.min[i]);
 				res.max[i] = std::min(res.max[i],b.max[i]);
 			}
@@ -319,12 +319,12 @@ namespace data {
 			detail::line_scanner<Dims>().template apply<Dims>(*this,a,b,body);
 		}
 
-		template<unsigned D>
+		template<std::size_t D>
 		static bool areFusable(const GridBox& a, const GridBox& b) {
 			static_assert(D < Dims, "Can not fuse on non-existing dimension.");
 			if (a.min > b.min) return areFusable<D>(b,a);
 			if (a.max[D] != b.min[D]) return false;
-			for(unsigned i = 0; i<Dims; i++) {
+			for(std::size_t i = 0; i<Dims; i++) {
 				if (i == D) continue;
 				if (a.min[i] != b.min[i]) return false;
 				if (a.max[i] != b.max[i]) return false;
@@ -332,7 +332,7 @@ namespace data {
 			return true;
 		}
 
-		template<unsigned D>
+		template<std::size_t D>
 		static GridBox fuse(const GridBox& a, const GridBox& b) {
 			assert_true(areFusable<D>(a,b));
 			if (a.min[D] > b.min[D]) return fuse<D>(b,a);
@@ -353,7 +353,7 @@ namespace data {
 
 	};
 
-	template<unsigned Dims>
+	template<std::size_t Dims>
 	class GridRegion {
 
 		using point_type = GridPoint<Dims>;
@@ -562,7 +562,7 @@ namespace data {
 	};
 
 
-	template<typename T, unsigned Dims>
+	template<typename T, std::size_t Dims>
 	class GridFragment {
 	public:
 
@@ -656,7 +656,7 @@ namespace data {
 
 		static std::size_t area(const GridPoint<Dims>& pos) {
 			std::size_t res = 1;
-			for(unsigned i=0; i<Dims; ++i) {
+			for(std::size_t i=0; i<Dims; ++i) {
 				res *= pos[i];
 			}
 			return res;
@@ -676,7 +676,7 @@ namespace data {
 
 	};
 
-	template<typename T, unsigned Dims>
+	template<typename T, std::size_t Dims>
 	class Grid : public core::data_item<GridFragment<T,Dims>> {
 
 		/**

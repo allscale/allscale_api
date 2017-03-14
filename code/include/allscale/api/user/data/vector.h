@@ -20,6 +20,8 @@ namespace data {
 
 	public:
 
+		using element_type = T;
+
 		Vector() = default;
 
 		Vector(const T& e) {
@@ -191,6 +193,17 @@ namespace data {
 	}
 
 	template<typename T, std::size_t Dims>
+	Vector<T,Dims> elementwiseRemainder(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
+		return elementwise(a,b,[](const T& a, const T& b) { return a % b; });
+	}
+
+	template<typename T, std::size_t Dims>
+	Vector<T,Dims> elementwiseModulo(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
+		return elementwiseRemainder(a,b);
+	}
+
+
+	template<typename T, std::size_t Dims>
 	T sumOfSquares(const Vector<T,Dims>& vec) {
 		T sum = T();
 		for(unsigned i = 0; i < Dims; i++) {
@@ -203,6 +216,8 @@ namespace data {
 	template <typename T>
 	class Vector<T, 3> {
 	public:
+
+		using element_type = T;
 
 		T x, y, z;
 
@@ -290,6 +305,9 @@ namespace data {
 	template <typename T>
 	class Vector<T, 2> {
 	public:
+
+		using element_type = T;
+
 		T x, y;
 
 		Vector() = default;
