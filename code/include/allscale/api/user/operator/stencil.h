@@ -456,6 +456,83 @@ namespace user {
 
 			};
 
+			template<std::size_t Dims>
+			std::vector<std::vector<std::vector<Zoid<Dims>>>> computeExecutionPlan(const Base<Dims>& base, int steps) {
+
+				// get size of structure
+				auto size = base.extend();
+
+				// the the smallest width (this is the limiting factor for the height)
+				auto width = base.getMinimumWidth();
+
+				// get the height of the largest zoids, thus the height of each layer
+				auto height = width/2;
+
+				// compute base area partitioning
+				struct split {
+					typename Base<Dims>::range left;
+					typename Base<Dims>::range right;
+				};
+				std::array<split,Dims> splits;
+				for(std::size_t i = 0; i<Dims; i++) {
+					auto curWidth = size[i];
+					auto mid = curWidth - (curWidth - width) / 2;
+					splits[i].left.begin  = 0;
+					splits[i].left.end    = mid;
+					splits[i].right.begin = mid;
+					splits[i].right.end   = curWidth;
+				}
+
+				// create the list of zoids to be processed
+				std::vector<std::vector<std::vector<Zoid<Dims>>>> res;
+
+				// process time layer by layer
+				for(int t0=0; t0<steps; t0+=height) {
+
+					// get the top of the current layer
+					auto t1 = std::min<std::size_t>(t0+height,steps);
+
+					// create the list of zoids in this step
+					std::vector<std::vector<Zoid<Dims>>> zoids(Dims+1);
+
+					// generate binary patterns from 0 to 2^dims - 1
+					for(size_t i=0; i < (1<<Dims); i++) {
+
+						// get base and slopes of the current zoid
+						Base<Dims> curBase = base;
+						Slopes<Dims> slopes;
+
+						// move base to center on field, edge, or corner
+						for(size_t j=0; j<Dims; j++) {
+							if (i & (1<<j)) {
+								slopes[j] = -1;
+								curBase.boundaries[j] = splits[j].right;
+							} else {
+								slopes[j] = 1;
+								curBase.boundaries[j] = splits[j].left;
+							}
+						}
+
+						// count the number of ones -- this determines the execution order
+						int num_ones = 0;
+						for(size_t j=0; j<Dims; j++) {
+							if (i & (1<<j)) num_ones++;
+						}
+
+						// add to execution plan
+						zoids[num_ones].push_back(Zoid<Dims>(curBase, slopes, t0, t1));
+					}
+
+					// add current layer's execution plan to
+					res.push_back(zoids);
+
+				}
+
+				// return the result
+				return res;
+
+			}
+
 
 			template<unsigned Dims>
 			struct container_info_base {
@@ -505,96 +582,36 @@ namespace user {
 				// iterative implementation
 				Container b(a.size());
 
-				Container* x = &a;
-				Container* y = &b;
-
-				// TODO: make parallel
+				// TODO:
+				//  - process zoids recursively
+				//  - switch internally to cache-oblivious access pattern (optional)
+				//  - make parallel with fine-grained dependencies
 
 				// get size of structure
 				base_t base = base_t::full(a.size());
 				auto size = base.extend();
-
-				// the the smallest width (this is the limiting factor for the height)
-				auto width = base.getMinimumWidth();
-
-				// get the height of the largest zoids, thus the height of each layer
-				auto height = width/2;
 
 				// wrap update function into zoid-interface adapter
 				auto wrappedUpdate = [&](const Coordinate<dims>& pos, time_t t){
 					coordinate_converter<Container> conv;
 					auto p = conv(data::elementwiseModulo(pos,size));
 					if (t % 2) {
-						(*y)[p] = update(t,p,*x);
+						b[p] = update(t,p,a);
 					} else {
-						(*x)[p] = update(t,p,*y);
+						a[p] = update(t,p,b);
 					}
 				};
 
+				// get the execution plan
+				auto exec_plan = computeExecutionPlan(base,steps);
 
-				// compute base area partitioning
-				struct split {
-					typename base_t::range left;
-					typename base_t::range right;
-				};
-				std::array<split,dims> splits;
-				for(std::size_t i = 0; i<dims; i++) {
-					auto curWidth = size[i];
-					auto mid = curWidth - (curWidth - width) / 2;
-					splits[i].left.begin  = 0;
-					splits[i].left.end    = mid;
-					splits[i].right.begin = mid;
-					splits[i].right.end   = curWidth;
-				}
-
-				// process time layer by layer
-				for(int t0=0; t0<steps; t0+=height) {
-
-					// get the top of the current layer
-					auto t1 = std::min<std::size_t>(t0+height,steps);
-
-					// create the list of zoids to be processed
-					std::vector<std::vector<Zoid<dims>>> zoids(dims+1);
-
-					// generate binary patterns from 0 to 2^dims - 1
-					for(size_t i=0; i < (1<<dims); i++) {
-
-						// get base and slopes of the current zoid
-						Base<dims> curBase = base;
-						Slopes<dims> slopes;
-
-						// move base to center on field, edge, or corner
-						for(size_t j=0; j<dims; j++) {
-							if (i & (1<<j)) {
-								slopes[j] = -1;
-								curBase.boundaries[j] = splits[j].right;
-							} else {
-								slopes[j] = 1;
-								curBase.boundaries[j] = splits[j].left;
-							}
-						}
-
-						// count the number of ones -- this determines the execution order
-						int num_ones = 0;
-						for(size_t j=0; j<dims; j++) {
-							if (i & (1<<j)) num_ones++;
-						}
-
-						// add to execution plan
-						zoids[num_ones].push_back(Zoid<dims>(curBase, slopes, t0, t1));
-					}
-
-
-					// process those zoids in order
-					for(const auto& layer : zoids) {
+				// process the execution plan
+				for(const auto& step : exec_plan) {
+					for(const auto& layer : step) {
 						pfor(layer,[&](const Zoid<dims>& cur) {
 							cur.forEach(wrappedUpdate);
 						});
-//						for(const auto& cur : layer) {
-//							cur.forEach(wrappedUpdate);
-//						}
 					}
-
 				}
 
 				// make sure the result is in the a copy
