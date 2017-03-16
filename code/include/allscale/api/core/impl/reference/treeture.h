@@ -9,8 +9,11 @@
 #include <memory>
 #include <mutex>
 #include <type_traits>
+#include <random>
 
-#include <pthread.h>
+#ifdef __linux__
+	#include <pthread.h>
+#endif
 
 #include "allscale/utils/assert.h"
 
@@ -2159,7 +2162,7 @@ namespace reference {
 		//						    Worker Pool
 		// -----------------------------------------------------------------
 
-		struct Worker;
+		class Worker;
 
 		thread_local static Worker* tl_worker = nullptr;
 
@@ -2211,14 +2214,14 @@ namespace reference {
 
 			unsigned id;
 
-			unsigned random_seed;
+			std::minstd_rand randGenerator;			
 
 			RuntimePredictor predictions;
 
 		public:
 
 			Worker(WorkerPool& pool, unsigned id)
-				: pool(pool), alive(true), id(id), random_seed(id) { }
+				: pool(pool), alive(true), id(id), randGenerator(id) { }
 
 			Worker(const Worker&) = delete;
 			Worker(Worker&&) = delete;
@@ -2534,7 +2537,7 @@ namespace reference {
 				if (task.getDepth() < distribution_limit) {
 
 					// actively select the worker to issue the task to
-					int num_workers = pool.getNumWorkers();
+					std::size_t num_workers = pool.getNumWorkers();
 					auto path = task.getTaskPath().getPath();
 					auto depth = task.getDepth();
 
@@ -2628,7 +2631,7 @@ namespace reference {
 			if (numWorker <= 1) return false;
 
 			// otherwise, steal a task from another worker
-			Worker& other = pool.getWorker(rand_r(&random_seed) % numWorker);
+			Worker& other = pool.getWorker(randGenerator() % numWorker);
 			if (this == &other) {
 				return schedule_step();
 			}

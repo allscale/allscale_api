@@ -215,7 +215,7 @@ namespace user {
 	 * @param Iter the iterator type utilized to address iterations
 	 */
 	template<typename Iter>
-	struct one_on_one_dependency;
+	class one_on_one_dependency;
 
 
 	/**
@@ -233,7 +233,7 @@ namespace user {
 	 * @param Iter the iterator type utilized to address iterations
 	 */
 	template<typename Iter>
-	struct neighborhood_sync_dependency;
+	class neighborhood_sync_dependency;
 
 	/**
 	 * A factory for one_on_one dependencies.

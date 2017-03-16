@@ -25,7 +25,7 @@ namespace data {
 		Vector() = default;
 
 		Vector(const T& e) {
-			for(size_t i = 0; i < Dims; i++) { data[i] = e; }
+			for(std::size_t i = 0; i < Dims; i++) { data[i] = e; }
 		}
 
 		Vector(const Vector&) = default;
@@ -36,7 +36,7 @@ namespace data {
 
 		Vector(const std::initializer_list<T>& values) {
 			assert_le(Dims, values.size()) << "Expected initializer list of size less or equal " << Dims << " but got " << values.size();
-			size_t pos = 0;
+			std::size_t pos = 0;
 			for(const auto& cur : values) { data[pos++] = cur; }
 		}
 
@@ -82,14 +82,14 @@ namespace data {
 		operator const std::array<T, Dims>&() const { return data; }
 
 		bool dominatedBy(const Vector<T,Dims>& other) const {
-			for(size_t i=0; i<Dims; i++) {
+			for(std::size_t i=0; i<Dims; i++) {
 				if (other[i] < data[i]) return false;
 			}
 			return true;
 		}
 
 		bool strictlyDominatedBy(const Vector<T,Dims>& other) const {
-			for(size_t i=0; i<Dims; i++) {
+			for(std::size_t i=0; i<Dims; i++) {
 				if (other[i] <= data[i]) return false;
 			}
 			return true;
@@ -103,7 +103,7 @@ namespace data {
 
 	template<typename T, std::size_t Dims, typename S>
 	Vector<T,Dims>& operator+=(Vector<T,Dims>& a, const Vector<S,Dims>& b) {
-		for(size_t i = 0; i<Dims; i++) {
+		for(std::size_t i = 0; i<Dims; i++) {
 			a[i] += b[i];
 		}
 		return a;
@@ -232,15 +232,15 @@ namespace data {
 
 		Vector(const std::initializer_list<T>& values) {
 			assert_le(3, values.size()) << "Expected initializer list of size less or equal 3 but got " << values.size();
-			size_t pos = 0;
+			std::size_t pos = 0;
 			for(const auto& cur : values) { (*this)[pos++] = cur; }
 		}
 
-		T& operator[](int i) {
+		T& operator[](std::size_t i) {
 			return reinterpret_cast<std::array<T,3>&>(*this)[i];
 		}
 
-		const T& operator[](int i) const {
+		const T& operator[](std::size_t i) const {
 			return reinterpret_cast<const std::array<T,3>&>(*this)[i];
 		}
 
@@ -321,15 +321,15 @@ namespace data {
 
 		Vector(const std::initializer_list<T>& values) {
 			assert_le(2, values.size()) << "Expected initializer list of size less or equal 2 but got " << values.size();
-			size_t pos = 0;
+			std::size_t pos = 0;
 			for(const auto& cur : values) { (*this)[pos++] = cur; }
 		}
 
-		T& operator[](int i) {
+		T& operator[](std::size_t i) {
 			return reinterpret_cast<std::array<T,2>&>(*this)[i];
 		}
 
-		const T& operator[](int i) const {
+		const T& operator[](std::size_t i) const {
 			return reinterpret_cast<const std::array<T,2>&>(*this)[i];
 		}
 

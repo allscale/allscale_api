@@ -3,13 +3,24 @@
 #include <atomic>
 #include <thread>
 
+#ifdef _MSC_VER
+// required for YieldProcessor macro
+#define NOMINMAX
+#include "windows.h"
+#endif
+
 namespace allscale {
 namespace api {
 namespace core {
 inline namespace simple {
 
 	/* Pause instruction to prevent excess processor bus usage */
-	#define cpu_relax() __builtin_ia32_pause()
+	
+	#ifdef _MSC_VER
+		#define cpu_relax() YieldProcessor()
+	#else
+		#define cpu_relax() __builtin_ia32_pause()
+	#endif
 
 	class Waiter {
 		int i;

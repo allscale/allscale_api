@@ -24,16 +24,16 @@ matrix:
     # ------------ Linux ------------- #
     - os: linux
       compiler: gcc
-      env: COMPILER_VERSION="5" BUILD_TYPE=Debug
+      env: BUILD_TYPE=Debug COMPILER_VERSION="5"
     - os: linux
       compiler: gcc
-      env: COMPILER_VERSION="6" BUILD_TYPE=Debug
+      env: BUILD_TYPE=Debug COMPILER_VERSION="6"
     - os: linux
       compiler: clang
-      env: COMPILER_VERSION="3.8" BUILD_TYPE=Debug
+      env: BUILD_TYPE=Debug COMPILER_VERSION="3.8"
     - os: linux
       compiler: clang
-      env: COMPILER_VERSION="3.9" BUILD_TYPE=Debug
+      env: BUILD_TYPE=Debug COMPILER_VERSION="3.9"
     # ------------- OS X ------------- #
     - os: osx
       osx_image: xcode8
@@ -57,16 +57,16 @@ matrix:
     # ------------ Linux ------------- #
     - os: linux
       compiler: gcc
-      env: COMPILER_VERSION="5" BUILD_TYPE=Release
+      env: BUILD_TYPE=Release COMPILER_VERSION="5"
     - os: linux
       compiler: gcc
-      env: COMPILER_VERSION="6" BUILD_TYPE=Release
+      env: BUILD_TYPE=Release COMPILER_VERSION="6"
     - os: linux
       compiler: clang
-      env: COMPILER_VERSION="3.8" BUILD_TYPE=Release
+      env: BUILD_TYPE=Release COMPILER_VERSION="3.8"
     - os: linux
       compiler: clang
-      env: COMPILER_VERSION="3.9" BUILD_TYPE=Release
+      env: BUILD_TYPE=Release COMPILER_VERSION="3.9"
     # ------------- OS X ------------- #
     - os: osx
       osx_image: xcode8
