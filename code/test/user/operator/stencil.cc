@@ -37,9 +37,9 @@ namespace user {
 			stencil<Impl>(data, T, [](int time, int pos, const std::vector<int>& data){
 
 				// check that input arrays are up-to-date
-				if (pos > 0) EXPECT_EQ(time,data[pos-1]);
+				if (pos > 0) EXPECT_EQ(time,data[pos-1]) << "Position: " << pos << " - 1 = " << (pos-1);
 				EXPECT_EQ(time,data[pos]);
-				if (pos < N-1) EXPECT_EQ(time,data[pos+1]);
+				if (pos < N-1) EXPECT_EQ(time,data[pos+1]) << "Position: " << pos << " + 1 = " << (pos+1);;
 
 				// increase the time step of current sell
 				return data[pos] + 1;
@@ -340,7 +340,8 @@ namespace user {
 	using test_params = ::testing::Types<
 			implementation::coarse_grained_iterative,
 			implementation::fine_grained_iterative,
-			implementation::recursive_stencil
+			implementation::sequential_recursive,
+			implementation::parallel_recursive
 		>;
 	INSTANTIATE_TYPED_TEST_CASE_P(Test,Stencil,test_params);
 

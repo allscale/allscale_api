@@ -1,6 +1,8 @@
 #pragma once
 
 #include <array>
+#include <utility>
+#include <tuple>
 #include <vector>
 
 #include "allscale/api/user/data/grid.h"
@@ -29,7 +31,9 @@ namespace user {
 
 		class fine_grained_iterative;
 
-		class recursive;
+		class sequential_recursive;
+
+		class parallel_recursive;
 
 	}
 
@@ -212,15 +216,27 @@ namespace user {
 				Coordinate<dims> extend() const {
 					Coordinate<dims> res;
 					for(size_t i = 0; i<dims; i++) {
-						res[i] = boundaries[i].end - boundaries[i].begin;
+						res[i] = getWidth(i);
 					}
 					return res;
 				}
 
+				index_type getWidth(std::size_t dim) const {
+					return boundaries[dim].end - boundaries[dim].begin;
+				}
+
 				index_type getMinimumWidth() const {
-					index_type res = boundaries[0].end - boundaries[0].begin;
+					index_type res = getWidth(0);
 					for(size_t i = 1; i<dims; i++) {
-						res = std::min(res,boundaries[i].end - boundaries[i].begin);
+						res = std::min(res,getWidth(i));
+					}
+					return res;
+				}
+
+				index_type getMaximumWidth() const {
+					index_type res = getWidth(0);
+					for(size_t i = 1; i<dims; i++) {
+						res = std::max(res,getWidth(i));
 					}
 					return res;
 				}
@@ -291,110 +307,16 @@ namespace user {
 
 			public:
 
-	//			Zoid() : base(), slopes(1), t0(0), t1(0) {}
+				Zoid() {}
 
 				Zoid(const Base<dims>& base, const Slopes<dims>& slopes, size_t t_begin, size_t t_end)
 					: base(base), slopes(slopes), t_begin(t_begin), t_end(t_end) {}
 
-	//			vector<vector<Zoid>> splitTime() const {
-	//				auto split = getHeight() / 2;
-	//
-	//				Base<dims> baseA = base;
-	//				Base<dims> baseB = base;
-	//
-	//				for(size_t i=0; i<dims; i++) {
-	//					auto slope = slopes[i];
-	//					if (slope < 0) {
-	//						baseA[i].first = baseA[i].first + slope * split;
-	//						baseA[i].second = baseA[i].second - slope * split;
-	//					} else {
-	//						baseB[i].first = baseB[i].first + slope * split;
-	//						baseB[i].second = baseB[i].second - slope * split;
-	//					}
-	//				}
-	//
-	//				return vector<vector<Zoid>>({
-	//					vector<Zoid>({ Zoid(baseA, slopes, t0, t0+split) }),
-	//					vector<Zoid>({ Zoid(baseB, slopes, t0+split, t1) })
-	//				});
-	//			}
-	//
-	//			vector<vector<Zoid>> splitSpace() const {
-	//
-	//				// find longest dimension
-	//				int max_dim;
-	//				int max_width = 0;
-	//				for(size_t i=0; i<dims; i++) {
-	//					int width = getWidth(i);
-	//					if (width>max_width) {
-	//						max_width = width;
-	//						max_dim = i;
-	//					}
-	//				}
-	//
-	//				// the max dimension is the split dimensin
-	//				auto split_dim = max_dim;
-	//
-	//				// check whether longest dimension can be split
-	//				assert(splitable(split_dim));
-	//
-	//				// create 3 fragments
-	//				Zoid a = *this;
-	//				Zoid b = *this;
-	//				Zoid c = *this;
-	//
-	//				// get the split point
-	//				auto center = (base.boundaries[split_dim].first + base.boundaries[split_dim].second) / 2;
-	//				auto left = center;
-	//				auto right = center;
-	//
-	//				if (slopes[split_dim] < 0) {
-	//					auto hight = getHeight();
-	//					left -= hight;
-	//					right += hight;
-	//				}
-	//
-	//				a.base.boundaries[split_dim].second = left;
-	//				b.base.boundaries[split_dim] = { left, right };
-	//				c.base.boundaries[split_dim].first = right;
-	//
-	//				// invert direction of center piece
-	//				b.slopes[split_dim] *= -1;
-	//
-	//				// add fragments in right order
-	//				if (slopes[split_dim] < 0) {
-	//					return vector<vector<Zoid>>({
-	//						vector<Zoid>({ b }),
-	//						vector<Zoid>({ a,c })
-	//					});
-	//				}
-	//
-	//				// return positive order
-	//				return vector<vector<Zoid>>({
-	//					vector<Zoid>({ a, c }),
-	//					vector<Zoid>({ b })
-	//				});
-	//			}
-	//
-	//			vector<vector<Zoid>> split() const {
-	//				assert(!isTerminal() && "Do not split terminal Zoid!");
-	//
-	//				// try a space split
-	//				if (spaceSplitable()) {
-	//					return splitSpace();
-	//				}
-	//
-	//				// fall back to time split
-	//				return splitTime();
-	//			}
-	//
-	//			bool isTerminal() const {
-	//				return getFootprint() < 100;			// todo: find better limit
-	//			}
-
 
 				template<typename Lambda>
 				void forEach(const Lambda& lambda) const {
+
+					// TODO: make this one cache oblivious
 
 					// create the plain scanner
 					plain_scanner<dims-1> scanner;
@@ -417,121 +339,366 @@ namespace user {
 
 				}
 
-	//			int getWidth(int dim) const {
-	//				int res = base.width(dim);
-	//				if (slopes[dim] < 0) res += 2*getHeight();
-	//				return res;
-	//			}
-	//
-	//			int getHeight() const {
-	//				return t1-t0;
-	//			}
-	//
-	//			bool spaceSplitable() const {
-	//				for(size_t i=0; i<dims; i++) {
-	//					if (splitable(i)) return true;
-	//				}
-	//				return false;
-	//			}
-	//
-	//			bool splitable(int dim) const {
-	//				return (slopes[dim] > 0) ?
-	//					base.width(dim) > 4*getHeight()
-	//				:
-	//					base.width(dim) > 2*getHeight()
-	//				;
-	//			}
-	//
-	//			int getFootprint() const {
-	//				int size = 1;
-	//				for(size_t i=0; i<dims; i++) {
-	//					size *= base.width(i);				// todo: this is wrong!
-	//				}
-	//				return size;
-	//			}
+
+				template<typename Lambda>
+				core::treeture<void> pforEach(const Lambda& lambda) const {
+
+					// recursively decompose the covered space-time volume
+					return core::prec(
+						[](const Zoid& zoid) {
+							// check whether this zoid can no longer be divided
+							return zoid.isTerminal();
+						},
+						[&](const Zoid& zoid) {
+							// process final steps sequentially
+							zoid.forEach(lambda);
+						},
+						core::pick(
+							[](const Zoid& zoid, const auto& rec) {
+								// make sure the zoid is not terminal
+								assert_false(zoid.isTerminal());
+
+								// check whether it can be split in space
+								if (!zoid.isSpaceSplitable()) {
+									// we need a time split
+									auto parts = zoid.splitTime();
+									return core::sequential(
+										rec(parts.bottom),
+										rec(parts.top)
+									);
+								}
+
+								// let's do a space split
+								auto parts = zoid.splitSpace();
+
+								// schedule depending on the orientation
+								return (parts.opening)
+										? core::sequential(
+											rec(parts.c),
+											core::parallel(
+												rec(parts.l),
+												rec(parts.r)
+											)
+										)
+										: core::sequential(
+											core::parallel(
+												rec(parts.l),
+												rec(parts.r)
+											),
+											rec(parts.c)
+										);
+
+
+							},
+							[&](const Zoid& zoid, const auto&) {
+								// provide sequential alternative
+								zoid.forEach(lambda);
+							}
+						)
+					)(*this);
+
+				}
+
+
+				/**
+				 * The height of this zoid in temporal direction.
+				 */
+				int getHeight() const {
+					return t_end-t_begin;
+				}
+
+				/**
+				 * Compute the number of elements this volume is covering
+				 * when being projected to the space domain.
+				 */
+				int getFootprint() const {
+					int size = 1;
+					int dt = getHeight();
+					for(size_t i=0; i<dims; i++) {
+						auto curWidth = base.width(i);
+						if (slopes[i] < 0) {
+							curWidth += 2*dt;
+						}
+						size *= curWidth;
+					}
+					return size;
+				}
 
 				friend std::ostream& operator<<(std::ostream& out, const Zoid& zoid) {
 					return out << "Zoid(" << zoid.base << "," << zoid.slopes << "," << zoid.t_begin << "-" << zoid.t_end << ")";
 				}
 
+			private:
+
+				/**
+				 * Tests whether this zoid can not be further divided.
+				 */
+				bool isTerminal() const {
+					// reached when the height is 1 and width is 3
+					return getHeight() <= 1 && base.getMaximumWidth() < 3;
+				}
+
+
+				/**
+				 * Computes the width of the shadow projected of this zoid on
+				 * the given space dimension.
+				 */
+				int getWidth(int dim) const {
+					int res = base.getWidth(dim);
+					if (slopes[dim] < 0) res += 2*getHeight();
+					return res;
+				}
+
+
+				/**
+				 * Determines whether this zoid is splitable in space.
+				 */
+				bool isSpaceSplitable() const {
+					for(size_t i=0; i<dims; i++) {
+						if (isSplitable(i)) return true;
+					}
+					return false;
+				}
+
+				/**
+				 * Tests whether it can be split along the given space dimension.
+				 */
+				bool isSplitable(int dim) const {
+					return getWidth(dim) > 4*getHeight();
+				}
+
+				// the result of a time split
+				struct TimeDecomposition {
+					Zoid top;
+					Zoid bottom;
+				};
+
+				/**
+				 * Splits this zoid in two sub-zoids along the time dimension. The
+				 * First component will be the bottom, the second the top.
+				 */
+				TimeDecomposition splitTime() const {
+					auto split = getHeight() / 2;
+
+					Base<dims> mid = base;
+
+					for(size_t i=0; i<dims; i++) {
+						auto diff  = slopes[i] * split;
+						mid[i].begin += diff;
+						mid[i].end   -= diff;
+					}
+
+					return {
+						Zoid(mid,   slopes, t_begin+split, t_end),		// top
+						Zoid(base,  slopes, t_begin, t_begin+split)		// bottom
+					};
+				}
+
+
+				// the result of a space split
+				struct SpaceDecomposition {
+					Zoid l;			// < the left fragment
+					Zoid c;			// < the middle fragment
+					Zoid r;			// < the right fragment
+					bool opening;	// < determines whether the splitting dimension was opening (negative slope) or closing (positive slope)
+				};
+
+				/**
+				 * Splits this zoid into three sub-zoids along the space dimension.
+				 */
+				SpaceDecomposition splitSpace() const {
+					assert_true(isSpaceSplitable());
+
+					// find longest dimension
+					int max_dim;
+					int max_width = 0;
+					for(size_t i=0; i<dims; i++) {
+						int width = getWidth(i);
+						if (width>max_width) {
+							max_width = width;
+							max_dim = i;
+						}
+					}
+
+					// the max dimension is the split dimensin
+					auto split_dim = max_dim;
+
+					// check whether longest dimension can be split
+					assert(isSplitable(split_dim));
+
+					// create 3 fragments
+					SpaceDecomposition res {
+						*this, *this, *this, (slopes[split_dim] < 0)
+					};
+
+					// get the split point
+					auto center = (base.boundaries[split_dim].begin + base.boundaries[split_dim].end) / 2;
+					auto left = center;
+					auto right = center;
+
+					if (slopes[split_dim] < 0) {
+						auto hight = getHeight();
+						left -= hight;
+						right += hight;
+					}
+
+					res.l.base.boundaries[split_dim].end = left;
+					res.c.base.boundaries[split_dim] = { left, right };
+					res.r.base.boundaries[split_dim].begin = right;
+
+					// invert direction of center piece
+					res.c.slopes[split_dim] *= -1;
+
+					// return decomposition
+					return res;
+				}
+
 			};
 
 			template<std::size_t Dims>
-			std::vector<std::vector<std::vector<Zoid<Dims>>>> computeExecutionPlan(const Base<Dims>& base, int steps) {
+			class ExecutionPlan {
 
-				// get size of structure
-				auto size = base.extend();
+				using zoid_type = Zoid<Dims>;
 
-				// the the smallest width (this is the limiting factor for the height)
-				auto width = base.getMinimumWidth();
+				// the execution plan of one layer -- represented as an embedded hyper-cube
+				using layer_plan = std::array<zoid_type,1 << Dims>;
 
-				// get the height of the largest zoids, thus the height of each layer
-				auto height = width/2;
+				// the list of execution plans of all layers
+				std::vector<layer_plan> layers;
 
-				// compute base area partitioning
-				struct split {
-					typename Base<Dims>::range left;
-					typename Base<Dims>::range right;
-				};
-				std::array<split,Dims> splits;
-				for(std::size_t i = 0; i<Dims; i++) {
-					auto curWidth = size[i];
-					auto mid = curWidth - (curWidth - width) / 2;
-					splits[i].left.begin  = 0;
-					splits[i].left.end    = mid;
-					splits[i].right.begin = mid;
-					splits[i].right.end   = curWidth;
-				}
+			public:
 
-				// create the list of zoids to be processed
-				std::vector<std::vector<std::vector<Zoid<Dims>>>> res;
+				template<typename Op>
+				void runSequential(const Op& op) const {
+					const std::size_t num_tasks = 1 << Dims;
 
-				// process time layer by layer
-				for(int t0=0; t0<steps; t0+=height) {
-
-					// get the top of the current layer
-					auto t1 = std::min<std::size_t>(t0+height,steps);
-
-					// create the list of zoids in this step
-					std::vector<std::vector<Zoid<Dims>>> zoids(Dims+1);
-
-					// generate binary patterns from 0 to 2^dims - 1
-					for(size_t i=0; i < (1<<Dims); i++) {
-
-						// get base and slopes of the current zoid
-						Base<Dims> curBase = base;
-						Slopes<Dims> slopes;
-
-						// move base to center on field, edge, or corner
-						for(size_t j=0; j<Dims; j++) {
-							if (i & (1<<j)) {
-								slopes[j] = -1;
-								curBase.boundaries[j] = splits[j].right;
-							} else {
-								slopes[j] = 1;
-								curBase.boundaries[j] = splits[j].left;
-							}
-						}
-
-						// count the number of ones -- this determines the execution order
-						int num_ones = 0;
-						for(size_t j=0; j<Dims; j++) {
-							if (i & (1<<j)) num_ones++;
-						}
-
-						// add to execution plan
-						zoids[num_ones].push_back(Zoid<Dims>(curBase, slopes, t0, t1));
+					// fill a vector with the indices of the tasks
+					std::array<std::size_t,num_tasks> order;
+					for(std::size_t i = 0; i<num_tasks;++i) {
+						order[i] = i;
 					}
 
-					// add current layer's execution plan to
-					res.push_back(zoids);
+					// sort the vector by the number of 1-bits
+					std::sort(order.begin(),order.end(),[](std::size_t a, std::size_t b){
+						return getNumBitsSet(a) < getNumBitsSet(b);
+					});
 
+					// process zoids in obtained order
+					for(const auto& cur : layers) {
+						for(const auto& idx : order) {
+							cur[idx].forEach(op);
+						}
+					}
 				}
 
-				// return the result
-				return res;
+				template<typename Op>
+				core::treeture<void> runParallel(const Op& op) const {
 
-			}
+					const std::size_t num_tasks = 1 << Dims;
+
+					// fill a vector with the indices of the tasks
+					std::array<std::size_t,num_tasks> order;
+					for(std::size_t i = 0; i<num_tasks;++i) {
+						order[i] = i;
+					}
+
+					// sort the vector by the number of 1-bits
+					std::sort(order.begin(),order.end(),[](std::size_t a, std::size_t b){
+						return getNumBitsSet(a) < getNumBitsSet(b);
+					});
+
+					// process zoids in obtained order
+					// TODO: process independent zoids in parallel
+					for(const auto& cur : layers) {
+						for(const auto& idx : order) {
+							cur[idx].pforEach(op).wait();
+						}
+					}
+
+					// TODO: provide an asynchronous handle
+					return core::done();
+				}
+
+				static ExecutionPlan create(const Base<Dims>& base, int steps) {
+
+					// get size of structure
+					auto size = base.extend();
+
+					// the the smallest width (this is the limiting factor for the height)
+					auto width = base.getMinimumWidth();
+
+					// get the height of the largest zoids, thus the height of each layer
+					auto height = width/2;
+
+					// compute base area partitioning
+					struct split {
+						typename Base<Dims>::range left;
+						typename Base<Dims>::range right;
+					};
+					std::array<split,Dims> splits;
+					for(std::size_t i = 0; i<Dims; i++) {
+						auto curWidth = size[i];
+						auto mid = curWidth - (curWidth - width) / 2;
+						splits[i].left.begin  = 0;
+						splits[i].left.end    = mid;
+						splits[i].right.begin = mid;
+						splits[i].right.end   = curWidth;
+					}
+
+					// create the list of per-layer plans to be processed
+					ExecutionPlan plan;
+
+					// process time layer by layer
+					for(int t0=0; t0<steps; t0+=height) {
+
+						// get the top of the current layer
+						auto t1 = std::min<std::size_t>(t0+height,steps);
+
+						// create the list of zoids in this step
+						plan.layers.emplace_back();
+						layer_plan& zoids = plan.layers.back();
+
+						// generate binary patterns from 0 to 2^dims - 1
+						for(size_t i=0; i < (1<<Dims); i++) {
+
+							// get base and slopes of the current zoid
+							Base<Dims> curBase = base;
+							Slopes<Dims> slopes;
+
+							// move base to center on field, edge, or corner
+							for(size_t j=0; j<Dims; j++) {
+								if (i & (1<<j)) {
+									slopes[j] = -1;
+									curBase.boundaries[j] = splits[j].right;
+								} else {
+									slopes[j] = 1;
+									curBase.boundaries[j] = splits[j].left;
+								}
+							}
+
+							// count the number of ones -- this determines the execution order
+							int num_ones = 0;
+							for(size_t j=0; j<Dims; j++) {
+								if (i & (1<<j)) num_ones++;
+							}
+
+							// add to execution plan
+							zoids[i] = Zoid<Dims>(curBase, slopes, t0, t1);
+						}
+
+					}
+
+					// build the final result
+					return plan;
+				}
+
+			private:
+
+				static std::size_t getNumBitsSet(std::size_t mask) {
+					return __builtin_popcount(mask);
+				}
+
+			};
 
 
 			template<unsigned Dims>
@@ -568,11 +735,10 @@ namespace user {
 
 		}
 
-
-		struct recursive_stencil {
+		struct sequential_recursive {
 
 			template<typename Container, typename Update>
-			stencil_reference<recursive_stencil> process(Container& a, int steps, const Update& update) {
+			stencil_reference<sequential_recursive> process(Container& a, int steps, const Update& update) {
 
 				using namespace detail;
 
@@ -583,7 +749,54 @@ namespace user {
 				Container b(a.size());
 
 				// TODO:
-				//  - process zoids recursively
+				//  - switch internally to cache-oblivious access pattern (optional)
+
+				// get size of structure
+				base_t base = base_t::full(a.size());
+				auto size = base.extend();
+
+				// wrap update function into zoid-interface adapter
+				auto wrappedUpdate = [&](const Coordinate<dims>& pos, time_t t){
+					coordinate_converter<Container> conv;
+					auto p = conv(data::elementwiseModulo(pos,size));
+					if (t % 2) {
+						b[p] = update(t,p,a);
+					} else {
+						a[p] = update(t,p,b);
+					}
+				};
+
+				// get the execution plan
+				auto exec_plan = ExecutionPlan<dims>::create(base,steps);
+
+				// process the execution plan
+				exec_plan.runSequential(wrappedUpdate);
+
+				// make sure the result is in the a copy
+				if (!(steps % 2)) {
+					std::swap(a,b);
+				}
+
+				// done
+				return {};
+			}
+		};
+
+
+		struct parallel_recursive {
+
+			template<typename Container, typename Update>
+			stencil_reference<parallel_recursive> process(Container& a, int steps, const Update& update) {
+
+				using namespace detail;
+
+				const unsigned dims = container_info<Container>::dimensions;
+				using base_t = typename container_info<Container>::base_type;
+
+				// iterative implementation
+				Container b(a.size());
+
+				// TODO:
 				//  - switch internally to cache-oblivious access pattern (optional)
 				//  - make parallel with fine-grained dependencies
 
@@ -602,17 +815,13 @@ namespace user {
 					}
 				};
 
+
 				// get the execution plan
-				auto exec_plan = computeExecutionPlan(base,steps);
+				auto exec_plan = ExecutionPlan<dims>::create(base,steps);
 
 				// process the execution plan
-				for(const auto& step : exec_plan) {
-					for(const auto& layer : step) {
-						pfor(layer,[&](const Zoid<dims>& cur) {
-							cur.forEach(wrappedUpdate);
-						});
-					}
-				}
+				exec_plan.runParallel(wrappedUpdate);
+
 
 				// make sure the result is in the a copy
 				if (!(steps % 2)) {
