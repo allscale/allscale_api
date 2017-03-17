@@ -9,7 +9,7 @@ namespace core {
 inline namespace simple {
 
 	/* Pause instruction to prevent excess processor bus usage */
-	#define cpu_relax() asm volatile("pause\n": : :"memory")
+	#define cpu_relax() __builtin_ia32_pause()
 
 	class Waiter {
 		int i;

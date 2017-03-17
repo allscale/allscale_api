@@ -10,173 +10,8 @@ namespace core {
 namespace impl {
 namespace reference {
 
-	TEST(TaskQueue, Basic) {
-
-		runtime::SimpleQueue<int,3> queue;
-
-		EXPECT_TRUE(queue.empty());
-		EXPECT_FALSE(queue.full());
-		EXPECT_EQ(0, queue.size());
-
-		std::cout << queue << "\n";
-
-		EXPECT_TRUE(queue.push_front(12));
-		std::cout << queue << "\n";
-		EXPECT_FALSE(queue.empty());
-		EXPECT_FALSE(queue.full());
-		EXPECT_EQ(1, queue.size());
-
-		EXPECT_EQ(12, queue.pop_front());
-		std::cout << queue << "\n";
-
-		EXPECT_TRUE(queue.empty());
-		EXPECT_FALSE(queue.full());
-		EXPECT_EQ(0, queue.size());
-
-		EXPECT_TRUE(queue.push_front(12));
-
-		EXPECT_FALSE(queue.empty());
-		EXPECT_FALSE(queue.full());
-		EXPECT_EQ(1, queue.size());
-
-		std::cout << queue << "\n";
-		EXPECT_EQ(12, queue.pop_back());
-		std::cout << queue << "\n";
-
-	}
-
-	TEST(TaskQueue, Size) {
-
-		runtime::SimpleQueue<int,3> queue;
-
-		EXPECT_EQ(0, queue.size());
-		queue.push_front(1);
-		EXPECT_EQ(1, queue.size());
-		queue.push_front(1);
-		EXPECT_EQ(2, queue.size());
-		queue.push_front(1);
-		EXPECT_EQ(3, queue.size());
-
-		for (int i =0; i<10; i++) {
-			queue.pop_front();
-			EXPECT_EQ(2, queue.size());
-			queue.pop_front();
-			EXPECT_EQ(1, queue.size());
-
-			queue.push_front(1);
-			EXPECT_EQ(2, queue.size());
-			queue.push_front(1);
-			EXPECT_EQ(3, queue.size());
-		}
-
-	}
-
-
-	TEST(TaskQueue, Order) {
-
-
-		runtime::SimpleQueue<int,3> queue;
-
-		// fill queue in the front
-		EXPECT_FALSE(queue.full());
-		EXPECT_TRUE(queue.push_front(1)) << queue;
-		EXPECT_FALSE(queue.full());
-		EXPECT_TRUE(queue.push_front(2)) << queue;
-		EXPECT_FALSE(queue.full());
-		EXPECT_TRUE(queue.push_front(3)) << queue;
-		EXPECT_TRUE(queue.full());
-		EXPECT_FALSE(queue.push_front(4)) << queue;
-		EXPECT_TRUE(queue.full());
-
-		// pop in the back
-		EXPECT_FALSE(queue.empty());
-		EXPECT_TRUE(queue.full());
-		EXPECT_EQ(1,queue.pop_back());
-		EXPECT_FALSE(queue.empty());
-		EXPECT_FALSE(queue.full());
-		EXPECT_EQ(2,queue.pop_back());
-		EXPECT_FALSE(queue.empty());
-		EXPECT_FALSE(queue.full());
-		EXPECT_EQ(3,queue.pop_back());
-		EXPECT_TRUE(queue.empty());
-		EXPECT_FALSE(queue.full());
-
-		// fill queue in the front again
-		EXPECT_FALSE(queue.full());
-		EXPECT_TRUE(queue.push_front(1)) << queue;
-		EXPECT_FALSE(queue.full());
-		EXPECT_TRUE(queue.push_front(2)) << queue;
-		EXPECT_FALSE(queue.full());
-		EXPECT_TRUE(queue.push_front(3)) << queue;
-		EXPECT_TRUE(queue.full());
-		EXPECT_FALSE(queue.push_front(4)) << queue;
-		EXPECT_TRUE(queue.full());
-
-		// pop in the front
-		EXPECT_FALSE(queue.empty());
-		EXPECT_TRUE(queue.full());
-		EXPECT_EQ(3,queue.pop_front());
-		EXPECT_FALSE(queue.empty());
-		EXPECT_FALSE(queue.full());
-		EXPECT_EQ(2,queue.pop_front());
-		EXPECT_FALSE(queue.empty());
-		EXPECT_FALSE(queue.full());
-		EXPECT_EQ(1,queue.pop_front());
-		EXPECT_TRUE(queue.empty());
-		EXPECT_FALSE(queue.full());
-
-		// fill queue in the back
-		EXPECT_FALSE(queue.full());
-		EXPECT_TRUE(queue.push_back(1)) << queue;
-		EXPECT_FALSE(queue.full());
-		EXPECT_TRUE(queue.push_back(2)) << queue;
-		EXPECT_FALSE(queue.full());
-		EXPECT_TRUE(queue.push_back(3)) << queue;
-		EXPECT_TRUE(queue.full());
-		EXPECT_FALSE(queue.push_back(4)) << queue;
-		EXPECT_TRUE(queue.full());
-
-		// pop in the front
-		EXPECT_FALSE(queue.empty());
-		EXPECT_TRUE(queue.full());
-		EXPECT_EQ(1,queue.pop_front());
-		EXPECT_FALSE(queue.empty());
-		EXPECT_FALSE(queue.full());
-		EXPECT_EQ(2,queue.pop_front());
-		EXPECT_FALSE(queue.empty());
-		EXPECT_FALSE(queue.full());
-		EXPECT_EQ(3,queue.pop_front());
-		EXPECT_TRUE(queue.empty());
-		EXPECT_FALSE(queue.full());
-
-		// fill queue in the back again
-		EXPECT_FALSE(queue.full());
-		EXPECT_TRUE(queue.push_back(1)) << queue;
-		EXPECT_FALSE(queue.full());
-		EXPECT_TRUE(queue.push_back(2)) << queue;
-		EXPECT_FALSE(queue.full());
-		EXPECT_TRUE(queue.push_back(3)) << queue;
-		EXPECT_TRUE(queue.full());
-		EXPECT_FALSE(queue.push_back(4)) << queue;
-		EXPECT_TRUE(queue.full());
-
-		// pop in the back
-		EXPECT_FALSE(queue.empty());
-		EXPECT_TRUE(queue.full());
-		EXPECT_EQ(3,queue.pop_back());
-		EXPECT_FALSE(queue.empty());
-		EXPECT_FALSE(queue.full());
-		EXPECT_EQ(2,queue.pop_back());
-		EXPECT_FALSE(queue.empty());
-		EXPECT_FALSE(queue.full());
-		EXPECT_EQ(1,queue.pop_back());
-		EXPECT_TRUE(queue.empty());
-		EXPECT_FALSE(queue.full());
-
-	}
-
 	TEST(Runtime, SimpleTask) {
-		treeture<int> future = spawn([]{ return 12; });
+		treeture<int> future = spawn<false>([]{ return 12; });
 		EXPECT_EQ(12,future.get());
 	}
 
@@ -197,16 +32,16 @@ namespace reference {
 		EXPECT_EQ(10, d.get());
 
 		// build a simple task
-		auto f = spawn([](){ return 12; });
+		auto f = spawn<false>([](){ return 12; });
 
 		// compute with futures
 		EXPECT_EQ(5, add(done(2),done(3)).get());
 
 		// build a splitable task
-		auto g = spawn(
+		auto g = spawn<false>(
 				[](){ return 6 + 8; },
 				[](){ return add(
-						spawn([](){ return 8; }),
+						spawn<false>([](){ return 8; }),
 						done(6)
 					);
 				}
@@ -231,14 +66,14 @@ namespace reference {
 		EXPECT_EQ(0,y);
 		EXPECT_EQ(0,z);
 
-		treeture<void> a = spawn(
+		treeture<void> a = spawn<false>(
 			[&]{ x++; }
 		);
 
 		EXPECT_EQ(0,y);
 		EXPECT_EQ(0,z);
 
-		treeture<void> b = spawn(
+		treeture<void> b = spawn<false>(
 			[&]{ y++; }
 		);
 
@@ -268,7 +103,7 @@ namespace reference {
 		EXPECT_EQ(0,y);
 		EXPECT_EQ(0,z);
 
-		spawn(
+		spawn<false>(
 			[&]{ z++; }
 		).get();
 
@@ -287,18 +122,14 @@ namespace reference {
 			EXPECT_EQ(0,y);
 			EXPECT_EQ(0,z);
 
-			treeture<void> t = spawn(
+			treeture<void> t = spawn<false>(
 				[&]{ x++; },
 				[&]{ return parallel(
-						spawn([&]{ y++; }),
-						spawn([&]{ z++; })
+						spawn<false>([&]{ y++; }),
+						spawn<false>([&]{ z++; })
 					);
 				}
 			);
-
-			EXPECT_EQ(0,x);
-			EXPECT_EQ(0,y);
-			EXPECT_EQ(0,z);
 
 			t.get();
 
@@ -345,7 +176,7 @@ namespace reference {
 
 		// handle single step case
 		if (begin + 1 == end) {
-			return spawn(
+			return spawn<false>(
 					[=]{
 						body(begin);
 					}
@@ -354,7 +185,7 @@ namespace reference {
 
 		// handle rest
 		int mid = (begin + end) / 2;
-		return spawn(
+		return spawn<false>(
 				[=]() {
 					for(int i=begin; i<end; i++) body(i);
 				},
@@ -420,7 +251,7 @@ namespace reference {
 
 		// handle single step case
 		if (begin + 1 == end) {
-			return spawn(
+			return spawn<false>(
 					[=]{
 						body(begin);
 					}
@@ -429,7 +260,7 @@ namespace reference {
 
 		// handle rest
 		int mid = (begin + end) / 2;
-		return spawn(
+		return spawn<false>(
 				[=]() {
 					for(int i=begin; i<end; i++) body(i);
 				},
@@ -512,7 +343,7 @@ namespace reference {
 		EXPECT_EQ(144, fib(12));
 		EXPECT_EQ(6765, fib(20));
 
-		EXPECT_EQ(STRESS_RES, fib(STRESS_N));
+//		EXPECT_EQ(STRESS_RES, fib(STRESS_N));
 
 	}
 
@@ -540,7 +371,7 @@ namespace reference {
 
 	unreleased_treeture<unsigned> fib_split(unsigned n) {
 		if (n <= 1) return done(n);
-		return spawn(
+		return spawn<false>(
 				[=](){ return fib(n); },
 				[=](){ return add(fib_split(n-1), fib_split(n-2)); }
 		);

@@ -8,38 +8,28 @@ namespace core {
 namespace impl {
 namespace reference {
 
-	TEST(BitQueue, Basic) {
-		BitQueue queue;
+	TEST(TaskDependencyManager, TypeProperties) {
 
-		// check put and pop
-		int x = 577;
-		for(int i=0; i<32; i++) {
-			queue.put(x & (1<<i));
-		}
+		using Mgr = TaskDependencyManager<10>;
 
-		int y = 0;
-		for(int i=0; i<32; i++) {
-			if (queue.pop()) {
-				y = y | (1<<i);
-			}
-		}
+		EXPECT_TRUE(std::is_default_constructible<Mgr>::value);
+		EXPECT_FALSE(std::is_trivially_constructible<Mgr>::value);
+		EXPECT_FALSE(std::is_copy_constructible<Mgr>::value);
+		EXPECT_FALSE(std::is_move_constructible<Mgr>::value);
+		EXPECT_FALSE(std::is_copy_assignable<Mgr>::value);
+		EXPECT_FALSE(std::is_move_assignable<Mgr>::value);
 
-		EXPECT_EQ(x,y);
+	}
 
-		// check the get function
-		for(int i=0; i<32; i++) {
-			queue.put(x & (1<<i));
-		}
+	TEST(TaskFamily, TypeProperties) {
 
-		y = 0;
-		for(int i=0; i<32; i++) {
-			if (queue.get()) {
-				y = y | (1<<i);
-			}
-			queue.pop();
-		}
+		EXPECT_TRUE(std::is_default_constructible<TaskFamily>::value);
+		EXPECT_FALSE(std::is_trivially_constructible<TaskFamily>::value);
+		EXPECT_FALSE(std::is_copy_constructible<TaskFamily>::value);
+		EXPECT_FALSE(std::is_move_constructible<TaskFamily>::value);
+		EXPECT_FALSE(std::is_copy_assignable<TaskFamily>::value);
+		EXPECT_FALSE(std::is_move_assignable<TaskFamily>::value);
 
-		EXPECT_EQ(x,y);
 	}
 
 
@@ -63,9 +53,10 @@ namespace reference {
 
 	}
 
+
 	TEST(Operator, Task) {
 
-		treeture<int> t1 = spawn([](){ return 12; });
+		treeture<int> t1 = spawn<false>([](){ return 12; });
 		EXPECT_EQ(12, t1.get());
 
 	}
@@ -76,9 +67,9 @@ namespace reference {
 
 		// build a not-yet started sequential tasks
 		auto ls = sequential(
-				spawn([&]{ x++; }),
-				spawn([&]{ x*=2; }),
-				spawn([&]{ x-=1; x*=2; })
+				spawn<false>([&]{ x++; }),
+				spawn<false>([&]{ x*=2; }),
+				spawn<false>([&]{ x-=1; x*=2; })
 		);
 
 		// should not be executed yet
@@ -103,9 +94,9 @@ namespace reference {
 
 		// build a not-yet started sequential tasks
 		auto ls = parallel(
-				spawn([&]{ EXPECT_EQ(3,x); x++; }),
-				spawn([&]{ EXPECT_EQ(4,y); y++; }),
-				spawn([&]{ EXPECT_EQ(5,z); z++; })
+				spawn<false>([&]{ EXPECT_EQ(3,x); x++; }),
+				spawn<false>([&]{ EXPECT_EQ(4,y); y++; }),
+				spawn<false>([&]{ EXPECT_EQ(5,z); z++; })
 		);
 
 		// should not be executed yet
@@ -140,22 +131,22 @@ namespace reference {
 
 		int x = 0;
 
-		treeture<void> a = spawn([&]{
+		treeture<void> a = spawn<true>([&]{
 			EXPECT_EQ(0,x);
 			x++;
 		});
 
-		treeture<void> b = spawn(after(a), [&]{
+		treeture<void> b = spawn<true>(after(a), [&]{
 			EXPECT_EQ(1,x);
 			x++;
 		});
 
-		treeture<void> c = spawn(after(b), [&]{
+		treeture<void> c = spawn<true>(after(b), [&]{
 			EXPECT_EQ(2,x);
 			x++;
 		});
 
-		treeture<void> d = spawn(after(a,b,c), [&]{
+		treeture<void> d = spawn<true>(after(a,b,c), [&]{
 			EXPECT_EQ(3,x);
 			x++;
 		});
@@ -167,7 +158,7 @@ namespace reference {
 
 	// --- benchmark ---
 
-	const int N = 32;
+	const int N = 16;
 
 	template<int x>
 	struct c_fib {
@@ -211,7 +202,7 @@ namespace reference {
 		if (x <= 1) {
 			return done(x);
 		}
-		return spawn(
+		return spawn<false>(
 				[=](){ return s_fib(x); },
 				[=](){ return sum(gen_fib(x-1),gen_fib(x-2)); }
 		);

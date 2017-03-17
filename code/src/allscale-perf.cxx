@@ -89,10 +89,26 @@ void createReport(const AnalysisResult& result);
 /**
  * The main entry point, conducting the necessary analysis steps.
  */
-int main() {
+int main(int argc, char** argv) {
 
 	AnalysisConfig config;
 	config.aggregateActivities = true;
+
+	// parse parameters
+	for(int i=1; i<argc; i++) {
+		std::string flag = argv[i];
+		if (flag == "--no-aggregate") {
+			config.aggregateActivities = false;
+		}
+		if (flag == "-h") {
+			std::cout << "Usage: " << argv[0] << " [options]\n";
+			std::cout << "  Options:\n";
+			std::cout << "  \t--no-aggregate ... disable task aggregation\n";
+			std::cout << "  \t-h             ... display this help text\n";
+			return 0;
+		}
+	}
+
 
 	// print welcome note
 	std::cout << "--- AllScale API Reference Implementation Profiling Tool (beta) ---\n";
@@ -261,7 +277,7 @@ std::vector<Activity> extractActivities(const std::vector<ProfileLog>& logs, con
 
 			case ProfileLogEntry::TaskStolen:
 				res.push_back(Activity{
-					i, ActivityType::Steal, timestamp, timestamp + 1
+					i, ActivityType::Steal, timestamp, timestamp + (config.aggregateActivities ? 1 : 0)
 				});
 				break;
 
