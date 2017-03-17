@@ -510,7 +510,7 @@ namespace user {
 					assert_true(isSpaceSplitable());
 
 					// find longest dimension
-					int max_dim;
+					int max_dim = 0;
 					int max_width = 0;
 					for(size_t i=0; i<dims; i++) {
 						int width = getWidth(i);
