@@ -23,7 +23,7 @@ namespace data {
 		Vector() = default;
 
 		Vector(const T& e) {
-			for(size_t i = 0; i < Dims; i++) { data[i] = e; }
+			for(std::size_t i = 0; i < Dims; i++) { data[i] = e; }
 		}
 
 		Vector(const Vector&) = default;
@@ -34,7 +34,7 @@ namespace data {
 
 		Vector(const std::initializer_list<T>& values) {
 			assert_le(Dims, values.size()) << "Expected initializer list of size less or equal " << Dims << " but got " << values.size();
-			size_t pos = 0;
+			std::size_t pos = 0;
 			for(const auto& cur : values) { data[pos++] = cur; }
 		}
 
@@ -60,6 +60,18 @@ namespace data {
 			return !(data == other.data);
 		}
 
+		bool operator<(const Vector& other) const {
+			return data < other.data;
+		}
+
+		bool operator<=(const Vector& other) const {
+			return data <= other.data;
+		}
+
+		bool operator>=(const Vector& other) const {
+			return data >= other.data;
+		}
+
 		bool operator>(const Vector& other) const {
 			return data > other.data;
 		}
@@ -68,14 +80,14 @@ namespace data {
 		operator const std::array<T, Dims>&() const { return data; }
 
 		bool dominatedBy(const Vector<T,Dims>& other) const {
-			for(size_t i=0; i<Dims; i++) {
+			for(std::size_t i=0; i<Dims; i++) {
 				if (other[i] < data[i]) return false;
 			}
 			return true;
 		}
 
 		bool strictlyDominatedBy(const Vector<T,Dims>& other) const {
-			for(size_t i=0; i<Dims; i++) {
+			for(std::size_t i=0; i<Dims; i++) {
 				if (other[i] <= data[i]) return false;
 			}
 			return true;
@@ -89,7 +101,7 @@ namespace data {
 
 	template<typename T, std::size_t Dims, typename S>
 	Vector<T,Dims>& operator+=(Vector<T,Dims>& a, const Vector<S,Dims>& b) {
-		for(size_t i = 0; i<Dims; i++) {
+		for(std::size_t i = 0; i<Dims; i++) {
 			a[i] += b[i];
 		}
 		return a;
@@ -190,12 +202,8 @@ namespace data {
 	// specialization for 3-dimensional vectors, providing access to named data members x, y, z
 	template <typename T>
 	class Vector<T, 3> {
-	private:
-		struct IndexAccessHelper {
-			std::array<T,3> data;
-		};
-
 	public:
+
 		T x, y, z;
 
 		Vector() = default;
@@ -209,16 +217,16 @@ namespace data {
 
 		Vector(const std::initializer_list<T>& values) {
 			assert_le(3, values.size()) << "Expected initializer list of size less or equal 3 but got " << values.size();
-			size_t pos = 0;
+			std::size_t pos = 0;
 			for(const auto& cur : values) { (*this)[pos++] = cur; }
 		}
 
-		T& operator[](int i) {
-			return reinterpret_cast<IndexAccessHelper*>(this)->data[i];
+		T& operator[](std::size_t i) {
+			return reinterpret_cast<std::array<T,3>&>(*this)[i];
 		}
 
-		const T& operator[](int i) const {
-			return reinterpret_cast<const IndexAccessHelper*>(this)->data[i];
+		const T& operator[](std::size_t i) const {
+			return reinterpret_cast<const std::array<T,3>&>(*this)[i];
 		}
 
 		Vector& operator=(const Vector& other) = default;
@@ -233,14 +241,26 @@ namespace data {
 		}
 
 		bool operator<(const Vector& other) const {
-			return std::tie(x,y,z) < std::tie(other.x,other.y,other.z);
+			return asArray() < other.asArray();
+		}
+
+		bool operator<=(const Vector& other) const {
+			return asArray() <= other.asArray();
+		}
+
+		bool operator>=(const Vector& other) const {
+			return asArray() >= other.asArray();
 		}
 
 		bool operator>(const Vector& other) const {
-			return std::tie(x,y,z) > std::tie(other.x,other.y,other.z);
+			return asArray() > other.asArray();
 		}
 
-		operator const std::array<T, 3>&() const { return reinterpret_cast<const IndexAccessHelper*>(this)->data; }
+		operator const std::array<T, 3>&() const { return asArray(); }
+
+		const std::array<T,3>& asArray() const {
+			return reinterpret_cast<const std::array<T,3>&>(*this);
+		}
 
 		bool dominatedBy(const Vector& other) const {
 			return other.x >= x && other.y >= y && other.z >= z;
@@ -269,11 +289,6 @@ namespace data {
 	// specialization for 2-dimensional vectors, providing access to named data members x, y
 	template <typename T>
 	class Vector<T, 2> {
-	private:
-		struct IndexAccessHelper {
-			std::array<T,2> data;
-		};
-
 	public:
 		T x, y;
 
@@ -288,23 +303,23 @@ namespace data {
 
 		Vector(const std::initializer_list<T>& values) {
 			assert_le(2, values.size()) << "Expected initializer list of size less or equal 2 but got " << values.size();
-			size_t pos = 0;
+			std::size_t pos = 0;
 			for(const auto& cur : values) { (*this)[pos++] = cur; }
 		}
 
-		T& operator[](int i) {
-			return reinterpret_cast<IndexAccessHelper*>(this)->data[i];
+		T& operator[](std::size_t i) {
+			return reinterpret_cast<std::array<T,2>&>(*this)[i];
 		}
 
-		const T& operator[](int i) const {
-			return reinterpret_cast<const IndexAccessHelper*>(this)->data[i];
+		const T& operator[](std::size_t i) const {
+			return reinterpret_cast<const std::array<T,2>&>(*this)[i];
 		}
 
 		Vector& operator=(const Vector& other) = default;
 		Vector& operator=(Vector&& other) = default;
 
 		bool operator==(const Vector& other) const {
-			return std::tie(x,y) == std::tie(other.x,other.y);
+			return asArray() == other.asArray();
 		}
 
 		bool operator!=(const Vector& other) const {
@@ -312,14 +327,26 @@ namespace data {
 		}
 
 		bool operator<(const Vector& other) const {
-			return std::tie(x,y) < std::tie(other.x,other.y);
+			return asArray() < other.asArray();
+		}
+
+		bool operator<=(const Vector& other) const {
+			return asArray() <= other.asArray();
+		}
+
+		bool operator>=(const Vector& other) const {
+			return asArray() >= other.asArray();
 		}
 
 		bool operator>(const Vector& other) const {
-			return std::tie(x,y) > std::tie(other.x,other.y);
+			return asArray() > other.asArray();
 		}
 
-		operator const std::array<T, 2>&() const { return reinterpret_cast<const IndexAccessHelper*>(this)->data; }
+		operator const std::array<T, 2>&() const { return asArray(); }
+
+		const std::array<T,2>& asArray() const {
+			return reinterpret_cast<const std::array<T,2>&>(*this);
+		}
 
 		bool dominatedBy(const Vector& other) const {
 			return other.x >= x && other.y >= y;

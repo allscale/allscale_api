@@ -1,12 +1,17 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <cmath>
 #include <thread>
 #include <chrono>
 #include <ostream>
 
-#include <x86intrin.h>
+#ifdef _MSC_VER
+	#include <intrin.h>
+#else
+	#include <x86intrin.h>
+#endif
 
 namespace allscale {
 namespace api {

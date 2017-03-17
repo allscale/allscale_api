@@ -9,8 +9,11 @@
 #include <memory>
 #include <mutex>
 #include <type_traits>
+#include <random>
 
-#include <pthread.h>
+#ifdef __linux__
+	#include <pthread.h>
+#endif
 
 #include "allscale/utils/assert.h"
 
@@ -1758,6 +1761,14 @@ namespace reference {
 
 			void wait() const;
 
+			bool isDone() const {
+				return !promise || promise->isReady();
+			}
+
+			bool isValid() const {
+				return (bool)promise;
+			}
+
 			task_reference getLeft() const {
 				return getTaskReference().getLeft();
 			}
@@ -1795,7 +1806,9 @@ namespace reference {
 
 	public:
 
-		treeture(const T& value = T())
+		treeture() {}
+
+		treeture(const T& value)
 			: super(std::make_shared<Promise<T>>(value)) {}
 
 		treeture(const treeture&) = delete;
@@ -1805,6 +1818,8 @@ namespace reference {
 		treeture& operator=(treeture&& other) = default;
 
 		const T& get() {
+			static const T defaultValue = T();
+			if (!this->promise) return defaultValue;
 			super::wait();
 			return this->promise->getValue();
 		}
@@ -1828,7 +1843,7 @@ namespace reference {
 
 	public:
 
-		treeture() : super(std::make_shared<Promise<void>>(true)) {}
+		treeture() : super() {}
 
 		treeture(const treeture&) = delete;
 		treeture(treeture&& other) = default;
@@ -2147,7 +2162,7 @@ namespace reference {
 		//						    Worker Pool
 		// -----------------------------------------------------------------
 
-		struct Worker;
+		class Worker;
 
 		thread_local static Worker* tl_worker = nullptr;
 
@@ -2161,14 +2176,19 @@ namespace reference {
 
 			/**
 			 * A utility to fix the affinity of the current thread to the given core.
+			 * Does not do anything on operating systems other than linux.
 			 */
-			void fixAffinity(int core) {
-				int num_cores = std::thread::hardware_concurrency();
-				cpu_set_t mask;
-				CPU_ZERO(&mask);
-				CPU_SET(core % num_cores, &mask);
-				pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mask);
-			}
+			#ifdef __linux__
+				void fixAffinity(int core) {
+					int num_cores = std::thread::hardware_concurrency();
+					cpu_set_t mask;
+					CPU_ZERO(&mask);
+					CPU_SET(core % num_cores, &mask);
+					pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mask);
+				}
+			#else
+				void fixAffinity(int) { }
+			#endif
 
 		}
 
@@ -2194,14 +2214,14 @@ namespace reference {
 
 			unsigned id;
 
-			unsigned random_seed;
+			std::minstd_rand randGenerator;			
 
 			RuntimePredictor predictions;
 
 		public:
 
 			Worker(WorkerPool& pool, unsigned id)
-				: pool(pool), alive(true), id(id), random_seed(id) { }
+				: pool(pool), alive(true), id(id), randGenerator(id) { }
 
 			Worker(const Worker&) = delete;
 			Worker(Worker&&) = delete;
@@ -2517,7 +2537,7 @@ namespace reference {
 				if (task.getDepth() < distribution_limit) {
 
 					// actively select the worker to issue the task to
-					int num_workers = pool.getNumWorkers();
+					std::size_t num_workers = pool.getNumWorkers();
 					auto path = task.getTaskPath().getPath();
 					auto depth = task.getDepth();
 
@@ -2611,7 +2631,7 @@ namespace reference {
 			if (numWorker <= 1) return false;
 
 			// otherwise, steal a task from another worker
-			Worker& other = pool.getWorker(rand_r(&random_seed) % numWorker);
+			Worker& other = pool.getWorker(randGenerator() % numWorker);
 			if (this == &other) {
 				return schedule_step();
 			}

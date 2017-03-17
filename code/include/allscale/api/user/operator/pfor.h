@@ -108,6 +108,11 @@ namespace user {
 		return pfor(detail::range<std::array<Iter,dims>>(a,b),body);
 	}
 
+	template<typename Iter, size_t dims, typename Body, typename Dependency>
+	detail::loop_reference<std::array<Iter,dims>> pfor(const std::array<Iter,dims>& a, const std::array<Iter,dims>& b, const Body& body, const Dependency& dependency) {
+		return pfor(detail::range<std::array<Iter,dims>>(a,b),body,dependency);
+	}
+
 	/**
 	 * A parallel for-each implementation iterating over the given range of elements.
 	 */
@@ -167,13 +172,18 @@ namespace user {
 	 * A parallel for-each implementation iterating over the elements of the points covered by
 	 * the hyper-box limited by the given vectors.
 	 */
-	template<typename Elem, size_t Dims, typename Body>
-	auto pfor(const data::Vector<Elem,Dims>& a, const data::Vector<Elem,Dims>& b, const Body& body) {
-		const std::array<Elem,Dims>& x = a;
-		const std::array<Elem,Dims>& y = b;
-		return pfor(x,y,[&](const std::array<Elem,Dims>& pos) {
-			body(static_cast<const data::Vector<Elem,Dims>&>(pos));
-		});
+	template<typename Elem, size_t dims, typename Body>
+	detail::loop_reference<data::Vector<Elem,dims>> pfor(const data::Vector<Elem,dims>& a, const data::Vector<Elem,dims>& b, const Body& body) {
+		return pfor(detail::range<data::Vector<Elem,dims>>(a,b),body);
+	}
+
+	/**
+	 * A parallel for-each implementation iterating over the elements of the points covered by
+	 * the hyper-box limited by the given vectors. Optional dependencies may be passed.
+	 */
+	template<typename Elem, size_t dims, typename Body, typename Dependencies>
+	detail::loop_reference<data::Vector<Elem,dims>> pfor(const data::Vector<Elem,dims>& a, const data::Vector<Elem,dims>& b, const Body& body, const Dependencies& dependencies) {
+		return pfor(detail::range<data::Vector<Elem,dims>>(a,b),body,dependencies);
 	}
 
 	/**
@@ -185,6 +195,14 @@ namespace user {
 		return pfor(data::Vector<Elem,Dims>(0),a,body);
 	}
 
+	/**
+	 * A parallel for-each implementation iterating over the elements of the points covered by
+	 * the hyper-box limited by the given vector. Optional dependencies may be passed.
+	 */
+	template<typename Elem, size_t Dims, typename Body, typename Dependencies>
+	auto pfor(const data::Vector<Elem,Dims>& a, const Body& body, const Dependencies& dependencies) {
+		return pfor(data::Vector<Elem,Dims>(0),a,body,dependencies);
+	}
 
 	// -------------------------------------------------------------------------------------------
 	//								Adaptive Synchronization
@@ -197,7 +215,7 @@ namespace user {
 	 * @param Iter the iterator type utilized to address iterations
 	 */
 	template<typename Iter>
-	struct one_on_one_dependency;
+	class one_on_one_dependency;
 
 
 	/**
@@ -215,7 +233,7 @@ namespace user {
 	 * @param Iter the iterator type utilized to address iterations
 	 */
 	template<typename Iter>
-	struct neighborhood_sync_dependency;
+	class neighborhood_sync_dependency;
 
 	/**
 	 * A factory for one_on_one dependencies.
@@ -263,6 +281,13 @@ namespace user {
 			}
 		};
 
+		template<typename Iter,size_t dims>
+		struct volume<data::Vector<Iter,dims>> {
+			size_t operator()(const data::Vector<Iter,dims>& a, const data::Vector<Iter,dims>& b) const {
+				return volume<std::array<Iter,dims>>()(a,b);
+			}
+		};
+
 
 		// -- coverage --
 
@@ -296,8 +321,8 @@ namespace user {
 		template<size_t idx>
 		struct scanner {
 			scanner<idx-1> nested;
-			template<typename Iter, size_t dims, typename Op>
-			void operator()(const std::array<Iter,dims>& begin, const std::array<Iter,dims>& end, std::array<Iter,dims>& cur, const Op& op) {
+			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Op>
+			void operator()(const Compound<Iter,dims>& begin, const Compound<Iter,dims>& end, Compound<Iter,dims>& cur, const Op& op) {
 				auto& i = cur[dims-idx];
 				for(i = begin[dims-idx]; i != end[dims-idx]; ++i ) {
 					nested(begin, end, cur, op);
@@ -307,8 +332,8 @@ namespace user {
 
 		template<>
 		struct scanner<0> {
-			template<typename Iter, size_t dims, typename Op>
-			void operator()(const std::array<Iter,dims>&, const std::array<Iter,dims>&, std::array<Iter,dims>& cur, const Op& op) {
+			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Op>
+			void operator()(const Compound<Iter,dims>&, const Compound<Iter,dims>&, Compound<Iter,dims>& cur, const Op& op) {
 				op(cur);
 			}
 		};
@@ -322,6 +347,17 @@ namespace user {
 			// scan range
 			detail::scanner<dims>()(begin, end, cur, op);
 		}
+
+		template<typename Elem, size_t dims, typename Op>
+		void forEach(const data::Vector<Elem,dims>& begin, const data::Vector<Elem,dims>& end, const Op& op) {
+
+			// the current position
+			data::Vector<Elem,dims> cur;
+
+			// scan range
+			detail::scanner<dims>()(begin, end, cur, op);
+		}
+
 
 		template<typename Iter>
 		Iter grow(const Iter& value, const Iter& limit, int steps) {
@@ -337,6 +373,16 @@ namespace user {
 			return res;
 		}
 
+		template<typename Iter, size_t dims>
+		data::Vector<Iter,dims> grow(const data::Vector<Iter,dims>& value, const data::Vector<Iter,dims>& limit, int steps) {
+			data::Vector<Iter,dims> res;
+			for(unsigned i=0; i<dims; i++) {
+				res[i] = grow(value[i],limit[i],steps);
+			}
+			return res;
+		}
+
+
 		template<typename Iter>
 		Iter shrink(const Iter& value, const Iter& limit, int steps) {
 			return std::max(limit, value-steps);
@@ -345,6 +391,15 @@ namespace user {
 		template<typename Iter, size_t dims>
 		std::array<Iter,dims> shrink(const std::array<Iter,dims>& value, const std::array<Iter,dims>& limit, int steps) {
 			std::array<Iter,dims> res;
+			for(unsigned i=0; i<dims; i++) {
+				res[i] = shrink(value[i],limit[i],steps);
+			}
+			return res;
+		}
+
+		template<typename Iter, size_t dims>
+		data::Vector<Iter,dims> shrink(const data::Vector<Iter,dims>& value, const data::Vector<Iter,dims>& limit, int steps) {
+			data::Vector<Iter,dims> res;
 			for(unsigned i=0; i<dims; i++) {
 				res[i] = shrink(value[i],limit[i],steps);
 			}
@@ -373,7 +428,7 @@ namespace user {
 
 		public:
 
-			range() {}
+			range() : _begin(), _end() {}
 
 			range(const Iter& begin, const Iter& end)
 				: _begin(begin), _end(end) {
@@ -442,14 +497,17 @@ namespace user {
 
 		};
 
-		template<typename Iter, size_t dims>
-		struct range_spliter<std::array<Iter,dims>> {
+		template<
+			template<typename I, size_t d> class Container,
+			typename Iter, size_t dims
+		>
+		struct range_spliter<Container<Iter,dims>> {
 
-			using rng = range<std::array<Iter,dims>>;
+			using rng = range<Container<Iter,dims>>;
 
 			static std::pair<rng,rng> split(const rng& r) {
 
-				__unused const auto volume = detail::volume<std::array<Iter,dims>>();
+				__unused const auto volume = detail::volume<Container<Iter,dims>>();
 				const auto distance = detail::volume<Iter>();
 
 				const auto& begin = r.begin();
@@ -507,9 +565,6 @@ namespace user {
 			 * The reference to the task processing the covered range.
 			 */
 			core::task_reference handle;
-
-			iteration_reference(core::task_reference&& handle)
-				: handle(std::move(handle)) {}
 
 		public:
 
@@ -732,10 +787,6 @@ namespace user {
 
 			// split up input dependencies
 			assert(size == 3);
-
-			// those dependencies form a closed range
-			assert_true(deps[0].getRange().end() == deps[1].getRange().begin());
-			assert_true(deps[1].getRange().end() == deps[2].getRange().begin());
 
 			// split each of those
 			auto a = deps[0].getRight();
