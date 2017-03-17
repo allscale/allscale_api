@@ -114,7 +114,6 @@ namespace reference {
 		EXPECT_EQ(6,z);
 	}
 
-
 	unreleased_treeture<int> sum(unreleased_treeture<int>&& a, unreleased_treeture<int>&& b) {
 		return combine(std::move(a),std::move(b),[](int a, int b) { return a + b; });
 	}
@@ -124,6 +123,13 @@ namespace reference {
 
 		treeture<int> t = sum(done(4),done(8));
 		EXPECT_EQ(12,t.get());
+
+	}
+
+	TEST(Treeture, FireAndForget) {
+
+		// just trigger a task and forget about the result
+		spawn<true>([]{}).release();
 
 	}
 

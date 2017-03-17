@@ -1,0 +1,21 @@
+sudo: required
+dist: xenial
+language: cpp
+compiler:
+  - gcc
+  - clang
+os:
+  - linux
+before_install:
+  - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+  - sudo apt-get update -q
+  - sudo apt-get install -y gcc-5 g++-5
+  - sudo apt-get install -y clang-3.8 clang++-3.8
+script: 
+  - if [ $CC == gcc ]; then export CC=gcc-5; export CXX=g++-5; fi
+  - if [ $CC == clang ]; then export CC=clang-3.8; export CXX=clang++-3.8; fi
+  - mkdir build_debug
+  - cd build_debug
+  - cmake ../
+  - make -j2 
+  - make test ARGS=-j2

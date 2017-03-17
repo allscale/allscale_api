@@ -149,8 +149,8 @@ namespace core {
 		}
 
 
-		template<bool root, typename ... Funs>
-		impl::reference::unreleased_treeture<O> parallelCall(impl::reference::dependencies&& deps, const I& in, const Funs& ... funs) const {
+		template<bool root, typename DepsKind, typename ... Funs>
+		impl::reference::unreleased_treeture<O> parallelCall(impl::reference::dependencies<DepsKind>&& deps, const I& in, const Funs& ... funs) const {
 			// check for the base case
 			const auto& base = this->base;
 			if (bc_test(in)) {
@@ -261,9 +261,9 @@ namespace core {
 			struct SequentialCallable {
 				rec_defs<Defs...> defs;
 
-				auto operator()(core::dependencies&& deps, const I& in) const {
+				auto operator()(impl::sequential::dependencies&& deps, const I& in) const {
 					return impl::sequential::make_lazy_unreleased_treeture([=](){
-						return defs.template sequentialCall<i,O,I>(deps.toSequentialDependencies(),in);
+						return defs.template sequentialCall<i,O,I>(deps,in);
 					});
 				}
 
@@ -283,8 +283,13 @@ namespace core {
 			struct ParallelCallable {
 				rec_defs<Defs...> defs;
 
-				auto operator()(core::dependencies&& deps, const I& in) const {
-					return defs.template parallelCall<false,i,O,I>(std::move(deps).toReferenceDependencies(),in);
+				template<typename DepsKind>
+				auto operator()(impl::reference::dependencies<DepsKind>&& deps, const I& in) const {
+					return defs.template parallelCall<false,i,O,I>(std::move(deps),in);
+				}
+
+				auto operator()(core::no_dependencies&&, const I& in) const {
+					return defs.template parallelCall<false,i,O,I>(impl::reference::after(),in);
 				}
 
 				auto operator()(const I& in) const {
@@ -312,8 +317,8 @@ namespace core {
 			impl::sequential::unreleased_treeture<O> sequentialCall(const F& f, impl::sequential::dependencies&& deps, const I& i, const D& d, const Args& ... args) const {
 				return caller<n-1>().template sequentialCall<O>(f,std::move(deps),i,d,createCallable<n>(d),args...);
 			}
-			template<bool root, typename O, typename F, typename I, typename D, typename ... Args>
-			impl::reference::unreleased_treeture<O> parallelCall(const F& f, impl::reference::dependencies&& deps, const I& i, const D& d, const Args& ... args) const {
+			template<bool root, typename O, typename DepsKind, typename F, typename I, typename D, typename ... Args>
+			impl::reference::unreleased_treeture<O> parallelCall(const F& f, impl::reference::dependencies<DepsKind>&& deps, const I& i, const D& d, const Args& ... args) const {
 				return caller<n-1>().template parallelCall<root,O>(f,std::move(deps),i,d,createCallable<n>(d),args...);
 			}
 		};
@@ -324,8 +329,8 @@ namespace core {
 			auto sequentialCall(const F& f, impl::sequential::dependencies&& deps, const I& i, const D& d, const Args& ... args) const {
 				return f.sequentialCall(std::move(deps),i,createCallable<0>(d),args...);
 			}
-			template<bool root, typename O, typename F, typename I, typename D, typename ... Args>
-			impl::reference::unreleased_treeture<O> parallelCall(const F& f, impl::reference::dependencies&& deps, const I& i, const D& d, const Args& ... args) const {
+			template<bool root, typename O, typename DepsKind, typename F, typename I, typename D, typename ... Args>
+			impl::reference::unreleased_treeture<O> parallelCall(const F& f, impl::reference::dependencies<DepsKind>&& deps, const I& i, const D& d, const Args& ... args) const {
 				return f.template parallelCall<root>(std::move(deps),i,createCallable<0>(d),args...);
 			}
 		};
@@ -375,9 +380,10 @@ namespace core {
 			bool root,
 			unsigned i,
 			typename O,
-			typename I
+			typename I,
+			typename DepsKind
 		>
-		impl::reference::unreleased_treeture<O> parallelCall(impl::reference::dependencies&& deps, const I& in) const {
+		impl::reference::unreleased_treeture<O> parallelCall(impl::reference::dependencies<DepsKind>&& deps, const I& in) const {
 			// call target function with a spawn
 			return detail::caller<sizeof...(Defs)-1>().template parallelCall<root,O>(std::get<i>(*this),std::move(deps),in,*this);
 		}
@@ -400,8 +406,13 @@ namespace core {
 
 			rec_defs<Defs...> defs;
 
-			treeture<O> operator()(dependencies&& deps, const I& in) {
-				return defs.template parallelCall<true,i,O,I>(std::move(deps).toReferenceDependencies(),in);
+			template<typename DepsKind>
+			treeture<O> operator()(impl::reference::dependencies<DepsKind>&& deps, const I& in) {
+				return defs.template parallelCall<true,i,O,I>(std::move(deps),in);
+			}
+
+			treeture<O> operator()(core::no_dependencies&&, const I& in) {
+				return defs.template parallelCall<true,i,O,I>(impl::reference::after(),in);
 			}
 
 			treeture<O> operator()(const I& in) {

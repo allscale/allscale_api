@@ -185,13 +185,20 @@ namespace user {
 
 	public:
 
+		using shared_data_type = core::no_shared_data;
 		using facade_type = Map<Key,Value>;
 		using region_type = SetRegion<Key>;
 
 		/**
 		 * Create a new fragment covering the given region.
 		 */
-		MapFragment(const region_type& region) : region(region) {
+		MapFragment(const region_type& region)
+			: MapFragment(core::no_shared_data(),region) {}
+
+		/**
+		 * Create a new fragment covering the given region.
+		 */
+		MapFragment(const core::no_shared_data&, const region_type& region) : region(region) {
 			for(const auto& key : region.getElements()) {
 				data[key]; // initialize content by accessing elements
 			}

@@ -237,23 +237,31 @@ namespace user {
 
 		// -- distances between begin and end of iterators --
 
-		template<typename Iter>
-		size_t volume(const Iter& a, const Iter& b) {
-			return std::distance(a,b);
-		}
+		template<typename Iter,typename filter = bool>
+		struct volume {
+			size_t operator()(const Iter& a, const Iter& b) const {
+				return std::distance(a,b);
+			}
+		};
 
-		size_t volume(int a, int b) {
-			return (a < b) ? b-a : 0;
-		}
+		template<typename Int>
+		struct volume<Int,std::enable_if_t<std::template is_integral<Int>::value,bool>> {
+			size_t operator()(Int a, Int b) const {
+				return (a < b) ? b-a : 0;
+			}
+		};
 
 		template<typename Iter,size_t dims>
-		size_t volume(const std::array<Iter,dims>& a, const std::array<Iter,dims>& b) {
-			size_t res = 1;
-			for(size_t i = 0; i<dims; i++) {
-				res *= volume(a[i],b[i]);
+		struct volume<std::array<Iter,dims>> {
+			size_t operator()(const std::array<Iter,dims>& a, const std::array<Iter,dims>& b) const {
+				volume<Iter> inner;
+				size_t res = 1;
+				for(size_t i = 0; i<dims; i++) {
+					res *= inner(a[i],b[i]);
+				}
+				return res;
 			}
-			return res;
-		}
+		};
 
 
 		// -- coverage --
@@ -373,7 +381,7 @@ namespace user {
 			}
 
 			size_t size() const {
-				return detail::volume(_begin,_end);
+				return detail::volume<Iter>()(_begin,_end);
 			}
 
 			bool empty() const {
@@ -441,14 +449,17 @@ namespace user {
 
 			static std::pair<rng,rng> split(const rng& r) {
 
+				__unused const auto volume = detail::volume<std::array<Iter,dims>>();
+				const auto distance = detail::volume<Iter>();
+
 				const auto& begin = r.begin();
 				const auto& end = r.end();
 
 				// get the longest dimension
 				size_t maxDim = 0;
-				size_t maxDist = detail::volume(begin[0],end[0]);
+				size_t maxDist = distance(begin[0],end[0]);
 				for(size_t i = 1; i<dims;++i) {
-					size_t curDist = detail::volume(begin[i],end[i]);
+					size_t curDist = distance(begin[i],end[i]);
 					if (curDist > maxDist) {
 						maxDim = i;
 						maxDist = curDist;
@@ -597,8 +608,8 @@ namespace user {
 					auto& right = fragments.second;
 					auto dep = r.dependencies.split(left,right);
 					return parallel(
-						nested(dep.left, range{left, dep.left} ),
-						nested(dep.right,range{right,dep.right})
+						nested(dep.left.toCoreDependencies(), range{left, dep.left} ),
+						nested(dep.right.toCoreDependencies(),range{right,dep.right})
 					);
 				},
 				[body](const range& r, const auto&) {
@@ -606,7 +617,7 @@ namespace user {
 					r.range.forEach(body);
 				}
 			)
-		)(dependency,range{r,dependency}) };
+		)(dependency.toCoreDependencies(),range{r,dependency}) };
 	}
 
 	template<typename Iter, typename Body>
@@ -654,8 +665,8 @@ namespace user {
 		one_on_one_dependency(const detail::iteration_reference<Iter>& loop)
 			: loop(loop) {}
 
-		operator core::dependencies() const {
-			return loop.getHandle();
+		auto toCoreDependencies() const {
+			return core::after(loop.getHandle());
 		}
 
 		detail::SubDependencies<one_on_one_dependency<Iter>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
@@ -682,29 +693,27 @@ namespace user {
 	template<typename Iter>
 	class neighborhood_sync_dependency : public detail::loop_dependency {
 
-		std::vector<detail::iteration_reference<Iter>> deps;
+		std::array<detail::iteration_reference<Iter>,3> deps;
 
-		neighborhood_sync_dependency(std::vector<detail::iteration_reference<Iter>>&& deps)
-			: deps(std::move(deps)) {}
+		std::size_t size;
+
+		neighborhood_sync_dependency(std::array<detail::iteration_reference<Iter>,3>&& deps)
+			: deps(std::move(deps)), size(3) {}
 
 	public:
 
 		neighborhood_sync_dependency(const detail::iteration_reference<Iter>& loop)
-			: deps({ loop }) {}
+			: deps({ loop }), size(1) {}
 
-		operator core::dependencies() const {
-			core::dependencies res;
-			for(const auto& cur : deps) {
-				res.add(cur);
-			}
-			return res;
+		auto toCoreDependencies() const {
+			return core::after(deps[0],deps[1],deps[2]);
 		}
 
 		detail::SubDependencies<neighborhood_sync_dependency<Iter>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
 			using iter_dependency = detail::iteration_reference<Iter>;
 
 			// check for the root case
-			if (deps.size() == 1) {
+			if (size == 1) {
 				const auto& dependency = deps.front();
 
 				// split the dependency
@@ -722,7 +731,7 @@ namespace user {
 			}
 
 			// split up input dependencies
-			assert(deps.size() == 3);
+			assert(size == 3);
 
 			// those dependencies form a closed range
 			assert_true(deps[0].getRange().end() == deps[1].getRange().begin());

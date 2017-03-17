@@ -239,6 +239,140 @@ namespace reference {
 	};
 
 
+	template<typename T>
+	class OptimisticUnboundQueue {
+
+		mutable OptimisticReadWriteLock lock;
+
+		std::list<T> data;
+
+		std::atomic<std::size_t> num_entries;
+
+	public:
+
+		OptimisticUnboundQueue() : lock(), num_entries(0) {}
+
+		void push_front(const T& t) {
+			lock.start_write();
+			data.push_front(t);
+			++num_entries;
+			lock.end_write();
+		}
+
+		void push_back(const T& t) {
+			lock.start_write();
+			data.push_back(t);
+			++num_entries;
+			lock.end_write();
+		}
+
+	private:
+
+		template<bool tryOnlyOnce>
+		T pop_front_internal() {
+			// manual tail-recursion optimization since
+			// debug builds may fail to do so
+			while(true) {
+
+				// start with a read permit
+				auto lease = lock.start_read();
+
+				// check whether it is empty
+				if (data.empty()) {
+					return T();
+				}
+
+				// to retrieve data, upgrade to a write
+				if (!lock.try_upgrade_to_write(lease)) {
+					// if upgrade failed, restart procedure if requested
+					if (tryOnlyOnce) return T();
+					continue;	// start over again
+				}
+
+				// now this one has write access (exclusive)
+				T res(std::move(data.front()));
+				data.pop_front();
+				--num_entries;
+
+				// write is complete
+				lock.end_write();
+
+				// done
+				return res;
+
+			}
+		}
+
+		template<bool tryOnlyOnce>
+		T pop_back_internal() {
+			// manual tail-recursion optimization since
+			// debug builds may fail to do so
+			while(true) {
+
+				// start with a read permit
+				auto lease = lock.start_read();
+
+				// check whether it is empty
+				if (data.empty()) {
+					return T();
+				}
+
+				// to retrieve data, upgrade to a write
+				if (!lock.try_upgrade_to_write(lease)) {
+					// if upgrade failed, restart procedure if requested
+					if (tryOnlyOnce) return T();
+					continue;	// start over again
+				}
+
+				// now this one has write access (exclusive)
+				T res(std::move(data.back()));
+				data.pop_back();
+				--num_entries;
+
+				// write is complete
+				lock.end_write();
+
+				// done
+				return res;
+			}
+		}
+
+	public:
+
+		T pop_front() {
+			return pop_front_internal<false>();
+		}
+
+		T try_pop_front() {
+			return pop_front_internal<true>();
+		}
+
+		T pop_back() {
+			return pop_back_internal<false>();
+		}
+
+		T try_pop_back() {
+			return pop_back_internal<true>();
+		}
+
+		bool empty() const {
+			return num_entries == 0;
+		}
+
+		size_t size() const {
+			return num_entries;
+		}
+
+		std::vector<T> getSnapshot() const {
+			lock.start_write();
+			std::vector<T> res(data.begin(),data.end());
+			lock.end_write();
+			return res;
+		}
+
+	};
+
+
 } // end namespace reference
 } // end namespace impl
 } // end namespace core

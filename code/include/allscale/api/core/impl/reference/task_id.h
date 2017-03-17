@@ -34,6 +34,10 @@ namespace reference {
 			return TaskPath{0,0};
 		}
 
+		bool isRoot() const {
+			return length == 0;
+		}
+
 		path_t getPath() const {
 			return path;
 		}
@@ -136,6 +140,7 @@ namespace reference {
 
 			path_iterator& operator++() {
 				--pos;
+				if (pos==0) return *this;		// we have reached the end
 				cur = Direction((path >> (pos-1)) % 2);
 				return *this;
 			}

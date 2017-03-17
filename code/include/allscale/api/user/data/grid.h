@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstring>
+#include <memory>
 
 #include "allscale/api/core/data.h"
 #include "allscale/api/user/data/vector.h"
@@ -20,7 +21,7 @@ namespace data {
 	// ---------------------------------------------------------------------------------
 
 
-	using coordinate_type = std::size_t;
+	using coordinate_type = std::int64_t;
 
 	template<unsigned Dims>
 	using GridPoint = Vector<coordinate_type,Dims>;
@@ -408,8 +409,8 @@ namespace data {
 			// compute the bounding box
 			box_type res = regions.front();
 			for(const box_type& cur : regions) {
-				res.min = data::pointwiseMin(res.min, cur.min);
-				res.max = data::pointwiseMax(res.max, cur.max);
+				res.min = data::elementwiseMin(res.min, cur.min);
+				res.max = data::elementwiseMax(res.max, cur.max);
 			}
 			return res;
 		}
@@ -563,6 +564,7 @@ namespace data {
 	class GridFragment {
 	public:
 
+		using shared_data_type = core::no_shared_data;
 		using facade_type = Grid<T,Dims>;
 		using region_type = GridRegion<Dims>;
 
@@ -577,7 +579,10 @@ namespace data {
 
 	public:
 
-		GridFragment(const region_type& size) : size(size), data(area(size.getTotal())) {
+		GridFragment(const region_type& size)
+			: GridFragment(core::no_shared_data(), size) {}
+
+		GridFragment(const core::no_shared_data&, const region_type& size) : size(size), data(area(size.getTotal())) {
 			// allocate covered data space
 			size.scanByLines([&](const point& a, const point& b) {
 				data.allocate(flatten(a),flatten(b));
@@ -598,6 +603,10 @@ namespace data {
 
 		const region_type& getCoveredRegion() const {
 			return size;
+		}
+
+		const point& totalSize() const {
+			return size.getTotal();
 		}
 
 		void resize(const region_type& newSize) {
@@ -676,7 +685,7 @@ namespace data {
 		/**
 		 * A reference to the fragment instance operating on, referencing the owned fragment or an externally managed one.
 		 */
-		GridFragment<T,Dims>& base;
+		GridFragment<T,Dims>* base;
 
 		/**
 		 * Enables fragments to use the private constructor below.
@@ -686,7 +695,7 @@ namespace data {
 		/**
 		 * The constructor to be utilized by the fragment to create a facade for an existing fragment.
 		 */
-		Grid(GridFragment<T,Dims>& base) : base(base) {}
+		Grid(GridFragment<T,Dims>& base) : base(&base) {}
 
 	public:
 
@@ -696,22 +705,55 @@ namespace data {
 		using coordinate_type = GridPoint<Dims>;
 
 		/**
+		 * The type of region utilized by this type.
+		 */
+		using region_type = GridRegion<Dims>;
+
+		/**
 		 * Creates a new map covering the given region.
 		 */
-		Grid(const coordinate_type& size) : owned(std::make_unique<GridFragment<T,Dims>>(size)), base(*owned) {}
+		Grid(const coordinate_type& size)
+			: owned(std::make_unique<GridFragment<T,Dims>>(region_type(size,0,size))), base(owned.get()) {}
+
+		/**
+		 * Disable copy construction.
+		 */
+		Grid(const Grid&) = delete;
+
+		/**
+		 * Enable move construction.
+		 */
+		Grid(Grid&&) = default;
+
+		/**
+		 * Disable copy-assignments.
+		 */
+		Grid& operator=(const Grid&) = delete;
+
+		/**
+		 * Enable move assignments.
+		 */
+		Grid& operator=(Grid&&) = default;
+
+		/**
+		 * Obtains the full size of this grid.
+		 */
+		coordinate_type size() const {
+			return base->totalSize();
+		}
 
 		/**
 		 * Provides read/write access to one of the values stored within this grid.
 		 */
 		T& operator[](const coordinate_type& index) {
-			return base[index];
+			return (*base)[index];
 		}
 
 		/**
 		 * Provides read access to one of the values stored within this grid.
 		 */
 		const T& operator[](const coordinate_type& index) const {
-			return base[index];
+			return (*base)[index];
 		}
 
 	};
