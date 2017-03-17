@@ -378,6 +378,40 @@ namespace user {
 
 	}
 
+	TEST(ExecutionPlan,EvaluationOrder) {
+		const bool debug = false;
+
+		using namespace implementation::detail;
+
+		auto cur = [debug](std::size_t idx, const auto& ... deps) {
+			// for debugging
+			if (debug) std::cout << idx << " depends on " << std::array<std::size_t,sizeof...(deps)>({deps...}) << "\n";
+
+			// expect number of dependencies to be equivalent to number of bits in index
+			EXPECT_EQ(__builtin_popcount(idx),sizeof...(deps));
+
+			// expect that each dependency is only 1 bit off
+			for(const auto& cur : std::array<std::size_t,sizeof...(deps)>({ deps ... })) {
+				// check that idx is a super-set of bits
+				EXPECT_EQ(cur, idx & cur) << idx;
+				// check that there is one bit different
+				EXPECT_EQ(1,__builtin_popcount(cur ^ idx));
+			}
+
+		};
+
+		ExecutionPlan<1>::enumTaskGraph(cur);
+		if (debug) std::cout << "\n";
+		ExecutionPlan<2>::enumTaskGraph(cur);
+		if (debug) std::cout << "\n";
+		ExecutionPlan<3>::enumTaskGraph(cur);
+		if (debug) std::cout << "\n";
+		ExecutionPlan<4>::enumTaskGraph(cur);
+		if (debug) std::cout << "\n";
+		ExecutionPlan<5>::enumTaskGraph(cur);
+
+	}
+
 } // end namespace user
 } // end namespace api
 } // end namespace allscale

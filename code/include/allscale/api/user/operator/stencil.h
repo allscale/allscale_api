@@ -166,10 +166,10 @@ namespace user {
 			using time_type = std::size_t;
 
 
-			template<size_t dims>
+			template<std::size_t dims>
 			using Slopes = data::Vector<index_type,dims>;
 
-			template<size_t dims>
+			template<std::size_t dims>
 			class Base {
 			public:
 
@@ -194,7 +194,7 @@ namespace user {
 				template<typename T>
 				static Base full(const data::Vector<T,dims>& size) {
 					Base res;
-					for(size_t i=0; i<dims; i++) {
+					for(std::size_t i=0; i<dims; i++) {
 						res.boundaries[i] = { 0, size[i] };
 					}
 					return res;
@@ -215,7 +215,7 @@ namespace user {
 
 				Coordinate<dims> extend() const {
 					Coordinate<dims> res;
-					for(size_t i = 0; i<dims; i++) {
+					for(std::size_t i = 0; i<dims; i++) {
 						res[i] = getWidth(i);
 					}
 					return res;
@@ -227,7 +227,7 @@ namespace user {
 
 				index_type getMinimumWidth() const {
 					index_type res = getWidth(0);
-					for(size_t i = 1; i<dims; i++) {
+					for(std::size_t i = 1; i<dims; i++) {
 						res = std::min(res,getWidth(i));
 					}
 					return res;
@@ -235,23 +235,23 @@ namespace user {
 
 				index_type getMaximumWidth() const {
 					index_type res = getWidth(0);
-					for(size_t i = 1; i<dims; i++) {
+					for(std::size_t i = 1; i<dims; i++) {
 						res = std::max(res,getWidth(i));
 					}
 					return res;
 				}
 
-				const range& operator[](size_t i) const {
+				const range& operator[](std::size_t i) const {
 					return boundaries[i];
 				}
 
-				range& operator[](size_t i) {
+				range& operator[](std::size_t i) {
 					return boundaries[i];
 				}
 
 				Base operator+(const Coordinate<dims>& other) const {
 					Base res;
-					for(size_t i=0; i<dims; i++) {
+					for(std::size_t i=0; i<dims; i++) {
 						res.boundaries[i] = { boundaries[i].begin + other[i], boundaries[i].end + other[i] };
 					}
 					return res;
@@ -260,7 +260,7 @@ namespace user {
 				friend std::ostream& operator<<(std::ostream& out, const Base& base) {
 					if (dims == 0) return out << "[]";
 					out << "[";
-					for(size_t i=0; i<dims-1; i++) {
+					for(std::size_t i=0; i<dims-1; i++) {
 						out << base.boundaries[i].begin << "-" << base.boundaries[i].end << ",";
 					}
 					out  << base.boundaries[dims-1].begin << "-" << base.boundaries[dims-1].end;
@@ -269,12 +269,12 @@ namespace user {
 			};
 
 
-			template<size_t dim>
+			template<std::size_t dim>
 			struct plain_scanner {
 
 				plain_scanner<dim-1> nested;
 
-				template<size_t full_dim, typename Lambda>
+				template<std::size_t full_dim, typename Lambda>
 				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, int t) const {
 					for(pos[dim]=base[dim].begin; pos[dim]<base[dim].end; pos[dim]++) {
 						 nested(base, lambda, pos, t);
@@ -286,7 +286,7 @@ namespace user {
 			template<>
 			struct plain_scanner<0> {
 
-				template<size_t full_dim, typename Lambda>
+				template<std::size_t full_dim, typename Lambda>
 				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, int t) const {
 					for(pos[0]=base[0].begin; pos[0]<base[0].end; pos[0]++) {
 						lambda(pos, t);
@@ -295,7 +295,70 @@ namespace user {
 
 			};
 
-			template<size_t dims>
+			template<std::size_t length>
+			class TaskDependencyList {
+
+				core::task_reference dep;
+
+				TaskDependencyList<length-1> nested;
+
+			public:
+
+				TaskDependencyList() {}
+
+				template<typename ... Rest>
+				TaskDependencyList(const core::task_reference& first, const Rest& ... rest)
+					: dep(first), nested(rest...) {}
+
+
+				// support conversion into core dependencies
+				auto toCoreDependencies() const {
+					return nested.toCoreDependencies(dep);
+				}
+
+				template<typename ... Deps>
+				auto toCoreDependencies(const Deps& ... deps) const {
+					return nested.toCoreDependencies(dep,deps...);
+				}
+
+			};
+
+			template<>
+			class TaskDependencyList<0> {
+
+			public:
+
+				TaskDependencyList() {}
+
+				// support conversion into core dependencies
+				auto toCoreDependencies() const {
+					return core::after();
+				}
+
+				template<typename ... Deps>
+				auto toCoreDependencies(const Deps& ... deps) const {
+					return core::after(deps...);
+				}
+
+			};
+
+
+			template<std::size_t dims>
+			class ZoidDependencies : public TaskDependencyList<3*dims> {
+
+				using super = TaskDependencyList<3*dims>;
+
+			public:
+
+				// TODO: support dependency refinement
+
+				// inherit constructors
+				using super::super;
+
+			};
+
+
+			template<std::size_t dims>
 			class Zoid {
 
 				Base<dims> base;			// the projection of the zoid to the space dimensions
@@ -309,7 +372,7 @@ namespace user {
 
 				Zoid() {}
 
-				Zoid(const Base<dims>& base, const Slopes<dims>& slopes, size_t t_begin, size_t t_end)
+				Zoid(const Base<dims>& base, const Slopes<dims>& slopes, std::size_t t_begin, std::size_t t_end)
 					: base(base), slopes(slopes), t_begin(t_begin), t_end(t_end) {}
 
 
@@ -325,13 +388,13 @@ namespace user {
 					auto plainBase = base;
 
 					// over the time
-					for(size_t t = t_begin; t < t_end; ++t) {
+					for(std::size_t t = t_begin; t < t_end; ++t) {
 
 						// process this plain
 						scanner(plainBase, lambda, x, t);
 
 						// update the plain for the next level
-						for(size_t i=0; i<dims; ++i) {
+						for(std::size_t i=0; i<dims; ++i) {
 							plainBase[i].begin  += slopes[i];
 							plainBase[i].end    -= slopes[i];
 						}
@@ -341,20 +404,29 @@ namespace user {
 
 
 				template<typename Lambda>
-				core::treeture<void> pforEach(const Lambda& lambda) const {
+				core::treeture<void> pforEach(const ZoidDependencies<dims>& deps, const Lambda& lambda) const {
+
+					struct Params {
+						Zoid zoid;
+						ZoidDependencies<dims> deps;
+					};
 
 					// recursively decompose the covered space-time volume
 					return core::prec(
-						[](const Zoid& zoid) {
+						[](const Params& params) {
 							// check whether this zoid can no longer be divided
-							return zoid.isTerminal();
+							return params.zoid.isTerminal();
 						},
-						[&](const Zoid& zoid) {
+						[&](const Params& params) {
 							// process final steps sequentially
-							zoid.forEach(lambda);
+							params.zoid.forEach(lambda);
 						},
 						core::pick(
-							[](const Zoid& zoid, const auto& rec) {
+							[](const Params& params, const auto& rec) {
+								// unpack parameters
+								const auto& zoid = params.zoid;
+								const auto& deps = params.deps;
+
 								// make sure the zoid is not terminal
 								assert_false(zoid.isTerminal());
 
@@ -363,8 +435,8 @@ namespace user {
 									// we need a time split
 									auto parts = zoid.splitTime();
 									return core::sequential(
-										rec(parts.bottom),
-										rec(parts.top)
+										rec(deps.toCoreDependencies(),Params{parts.bottom,deps}),
+										rec(deps.toCoreDependencies(),Params{parts.top,deps})
 									);
 								}
 
@@ -374,29 +446,35 @@ namespace user {
 								// schedule depending on the orientation
 								return (parts.opening)
 										? core::sequential(
-											rec(parts.c),
+											rec(deps.toCoreDependencies(),Params{parts.c,deps}),
 											core::parallel(
-												rec(parts.l),
-												rec(parts.r)
+												rec(deps.toCoreDependencies(),Params{parts.l,deps}),
+												rec(deps.toCoreDependencies(),Params{parts.r,deps})
 											)
 										)
 										: core::sequential(
 											core::parallel(
-												rec(parts.l),
-												rec(parts.r)
+												rec(deps.toCoreDependencies(),Params{parts.l,deps}),
+												rec(deps.toCoreDependencies(),Params{parts.r,deps})
 											),
-											rec(parts.c)
+											rec(deps.toCoreDependencies(),Params{parts.c,deps})
 										);
 
 
 							},
-							[&](const Zoid& zoid, const auto&) {
+							[&](const Params& params, const auto&) {
 								// provide sequential alternative
-								zoid.forEach(lambda);
+								params.zoid.forEach(lambda);
 							}
 						)
-					)(*this);
+					)(deps.toCoreDependencies(),Params{*this,deps});
 
+				}
+
+				template<typename Lambda>
+				core::treeture<void> pforEach(const Lambda& lambda) const {
+					// run the pforEach with no initial dependencies
+					return pforEach(ZoidDependencies<dims>(),lambda);
 				}
 
 
@@ -414,7 +492,7 @@ namespace user {
 				int getFootprint() const {
 					int size = 1;
 					int dt = getHeight();
-					for(size_t i=0; i<dims; i++) {
+					for(std::size_t i=0; i<dims; i++) {
 						auto curWidth = base.width(i);
 						if (slopes[i] < 0) {
 							curWidth += 2*dt;
@@ -454,7 +532,7 @@ namespace user {
 				 * Determines whether this zoid is splitable in space.
 				 */
 				bool isSpaceSplitable() const {
-					for(size_t i=0; i<dims; i++) {
+					for(std::size_t i=0; i<dims; i++) {
 						if (isSplitable(i)) return true;
 					}
 					return false;
@@ -482,7 +560,7 @@ namespace user {
 
 					Base<dims> mid = base;
 
-					for(size_t i=0; i<dims; i++) {
+					for(std::size_t i=0; i<dims; i++) {
 						auto diff  = slopes[i] * split;
 						mid[i].begin += diff;
 						mid[i].end   -= diff;
@@ -512,7 +590,7 @@ namespace user {
 					// find longest dimension
 					int max_dim = 0;
 					int max_width = 0;
-					for(size_t i=0; i<dims; i++) {
+					for(std::size_t i=0; i<dims; i++) {
 						int width = getWidth(i);
 						if (width>max_width) {
 							max_width = width;
@@ -555,6 +633,96 @@ namespace user {
 
 			};
 
+			/**
+			 * A utility class for enumerating the dependencies of a task in a
+			 * n-dimensional top-level task graph.
+			 */
+			template<std::size_t taskIdx, std::size_t pos>
+			struct task_dependency_extractor {
+
+				template<typename Body,typename ... Args>
+				void operator()(const Body& body, const Args& ... args) {
+					task_dependency_extractor<taskIdx,pos-1> nested;
+					if (taskIdx & (1<<pos)) {
+						nested(body,args...,taskIdx & ~(1<<pos));
+					} else {
+						nested(body,args...);
+					}
+				}
+
+			};
+
+			template<std::size_t taskIdx>
+			struct task_dependency_extractor<taskIdx,0> {
+
+				template<typename Body,typename ... Args>
+				void operator()(const Body& body, const Args& ... args) {
+					if (taskIdx & 0x1) {
+						body(args...,taskIdx & ~0x1);
+					} else {
+						body(args...);
+					}
+				}
+
+			};
+
+
+			/**
+			 * A utility class for enumerating the dependencies of a task in a
+			 * n-dimensional top-level task graph.
+			 */
+			template<std::size_t Dims, std::size_t taskIdx>
+			struct task_dependency_enumerator {
+
+				template<typename Body>
+				void operator()(const Body& body) {
+					for(std::size_t i=0;i<=Dims;i++) {
+						visit(body,i);
+					}
+				}
+
+				template<typename Body>
+				void visit(const Body& body,std::size_t numBits) {
+					task_dependency_enumerator<Dims,taskIdx-1>().visit(body,numBits);
+					if (__builtin_popcount(taskIdx)==numBits) {
+						task_dependency_extractor<taskIdx,Dims-1>()(body,taskIdx);
+					}
+				}
+
+			};
+
+			template<std::size_t Dims>
+			struct task_dependency_enumerator<Dims,0> {
+
+				template<typename Body>
+				void visit(const Body& body,std::size_t numBits) {
+					if (numBits == 0) {
+						task_dependency_extractor<0,Dims-1>()(body,0);
+					}
+				}
+
+			};
+
+			/**
+			 * A utility to statically enumerate the tasks and dependencies for
+			 * the top-level zoid task decomposition scheme. On the top level,
+			 * the set of tasks and its dependencies are isomorph to the vertices
+			 * and edges in a n-dimensional hyper cube. This utility is enumerating
+			 * those edges, as well as listing its predecessors according to the
+			 * sub-set relation.
+			 */
+			template<std::size_t Dims>
+			struct task_graph_enumerator {
+
+				template<typename Body>
+				void operator()(const Body& body) {
+					task_dependency_enumerator<Dims,(1<<Dims)-1> enumerator;
+					enumerator(body);
+				}
+
+			};
+
+
 			template<std::size_t Dims>
 			class ExecutionPlan {
 
@@ -596,27 +764,36 @@ namespace user {
 
 					const std::size_t num_tasks = 1 << Dims;
 
-					// fill a vector with the indices of the tasks
-					std::array<std::size_t,num_tasks> order;
-					for(std::size_t i = 0; i<num_tasks;++i) {
-						order[i] = i;
-					}
-
-					// sort the vector by the number of 1-bits
-					std::sort(order.begin(),order.end(),[](std::size_t a, std::size_t b){
-						return getNumBitsSet(a) < getNumBitsSet(b);
-					});
-
-					// process zoids in obtained order
-					// TODO: process independent zoids in parallel
+					// start tasks with mutual dependencies
+					core::treeture<void> last = core::done();
 					for(const auto& cur : layers) {
-						for(const auto& idx : order) {
-							cur[idx].pforEach(op).wait();
-						}
+
+						std::array<core::treeture<void>,num_tasks> jobs;
+
+						// walk through graph dependency graph
+						enumTaskGraph([&](std::size_t idx, const auto& ... deps){
+
+							// special case handling for first task (has to depend on previous task)
+							if (idx == 0) {
+								// create first task
+								jobs[idx] = (last.isDone())
+										? cur[idx].pforEach(op)
+										: cur[idx].pforEach(ZoidDependencies<Dims>(last),op);
+								return;
+							}
+
+							// create this task with corresponding dependencies
+							jobs[idx] = cur[idx].pforEach(ZoidDependencies<Dims>(jobs[deps]...),op);
+
+						});
+
+						// update last
+						last = std::move(jobs.back());
 					}
 
-					// TODO: provide an asynchronous handle
-					return core::done();
+					// return handle to last task
+					return last;
+
 				}
 
 				static ExecutionPlan create(const Base<Dims>& base, int steps) {
@@ -690,6 +867,11 @@ namespace user {
 
 					// build the final result
 					return plan;
+				}
+
+				template<typename Body>
+				static void enumTaskGraph(const Body& body) {
+					task_graph_enumerator<Dims>()(body);
 				}
 
 			private:
@@ -820,8 +1002,7 @@ namespace user {
 				auto exec_plan = ExecutionPlan<dims>::create(base,steps);
 
 				// process the execution plan
-				exec_plan.runParallel(wrappedUpdate);
-
+				exec_plan.runParallel(wrappedUpdate).wait();
 
 				// make sure the result is in the a copy
 				if (!(steps % 2)) {
