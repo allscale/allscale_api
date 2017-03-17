@@ -117,6 +117,10 @@ namespace core {
 			return impl::reference::after();
 		}
 
+		operator impl::reference::dependencies<impl::reference::dynamic_sized>() const {
+			return impl::reference::after(std::vector<task_reference>());
+		}
+
 	};
 
 
