@@ -8,6 +8,7 @@
 #include <cstring>
 
 #include "allscale/utils/assert.h"
+#include "allscale/utils/bitmanipulation.h"
 #include "allscale/utils/io_utils.h"
 #include "allscale/utils/range.h"
 #include "allscale/utils/raw_buffer.h"
@@ -1544,7 +1545,7 @@ namespace data {
 
 			value_t getDepth() const {
 				if (PathRefBase::mask == 0) return 0;
-				return sizeof(PathRefBase::mask) * 8 - __builtin_clz(PathRefBase::mask);
+				return sizeof(PathRefBase::mask) * 8 - utils::countLeadingZeros(PathRefBase::mask);
 			}
 
 			bool isRoot() const {
@@ -1860,7 +1861,7 @@ namespace data {
 			SubTreeRef getEnclosingSubTree() const {
 				return SubTreeRef(
 					super::path,
-					(1 << __builtin_ctz(~super::mask)) - 1
+					(1 << utils::countTrailingZeros(~super::mask)) - 1
 				);
 			}
 
@@ -1868,7 +1869,7 @@ namespace data {
 			void scan(const Body& body) const {
 
 				// look for last 0 in mask
-				unsigned zeroPos = __builtin_ctz(~super::mask);
+				unsigned zeroPos = utils::countTrailingZeros(~super::mask);
 				if (zeroPos >= getDepth()) {
 					body(SubTreeRef(super::path,super::mask));
 					return;

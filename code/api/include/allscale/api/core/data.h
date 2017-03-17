@@ -105,7 +105,8 @@ namespace core {
 			std::is_same<decltype(std::declval<const S&>().save(std::declval<utils::Archive&>())),void>::value &&
 
 			// there is a static load operator
-			std::is_same<decltype(S::load(std::declval<utils::Archive&>())),S>::value,
+			// Note: not using std::declval here due to a bug in Visual Studio (at least version 15 2017)
+			std::is_same<decltype(S::load(reinterpret_cast<utils::Archive&>(*(utils::Archive*)(nullptr)))), S>::value,
 
 		void>::type> : public std::true_type {};
 

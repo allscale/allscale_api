@@ -16,6 +16,7 @@
 #endif
 
 #include "allscale/utils/assert.h"
+#include "allscale/utils/bitmanipulation.h"
 
 #include "allscale/api/core/impl/reference/lock.h"
 #include "allscale/api/core/impl/reference/profiling.h"
@@ -2348,7 +2349,7 @@ namespace reference {
 			std::size_t getInitialSplitDepthLimit() const {
 				auto num_workers = getNumWorkers();
 				// we go down to ~ 4 times the number of threads
-				return sizeof(num_workers) * 8 - __builtin_clz(num_workers-1) + 2;
+				return sizeof(num_workers) * 8 - utils::countLeadingZeros((int)num_workers-1) + 2;
 			}
 
 			Worker& getWorker(int i) {
@@ -2541,7 +2542,7 @@ namespace reference {
 					auto path = task.getTaskPath().getPath();
 					auto depth = task.getDepth();
 
-					auto trgWorker = (depth==0) ? 0 : (path * num_workers) / (1 << depth);
+					auto trgWorker = (depth==0) ? 0 : (path * num_workers) / ((uint64_t)1 << depth);
 
 					// check the computation of the target worker
 					assert_lt(trgWorker,(std::size_t)pool.getNumWorkers())
@@ -2556,7 +2557,7 @@ namespace reference {
 					if (trgWorker != id) {
 
 						// submit this task to the selected worker
-						pool.getWorker(trgWorker).schedule(task);
+						pool.getWorker((int)trgWorker).schedule(task);
 
 						// done
 						return;

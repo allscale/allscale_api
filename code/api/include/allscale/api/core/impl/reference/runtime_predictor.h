@@ -20,7 +20,7 @@ namespace impl {
 namespace reference {
 
 	/**
-	 * A type to represent a type save cycle count.
+	 * A type to represent a type safe cycle count.
 	 */
 	class CycleCount {
 
@@ -196,7 +196,7 @@ namespace reference {
 		void updateTime(std::size_t level, const duration& time) {
 
 			// update estimate of time of a task on this level
-			auto N = samples[level];
+			long unsigned N = (long unsigned)samples[level];
 			times[level] = (N * times[level] + time) / (N+1);
 
 			// update sample count
