@@ -1,2 +1,7 @@
+build/
+third_party/
+
+# Editor Specific
+*.swp
 *~
-build_*
+.\#*

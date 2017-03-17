@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(allscale VERSION 0.0.0 LANGUAGES C CXX)
+project(%PROJECT% VERSION 0.0.0 LANGUAGES C CXX)
 
 # -- Module Path
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/../cmake)
@@ -14,10 +14,10 @@ include(build_settings)
 include(doxygen)
 
 # -- Dependency Versions
-#set(BOOST_VERSION 1.59.0 CACHE STRING "Boost Version")
+set(BOOST_VERSION 1.59.0 CACHE STRING "Boost Version")
 
 # -- Dependency Settings
-#include(boost_settings)
+include(boost_settings)
 include(valgrind_settings)
 
 # -- CMake Modules
@@ -27,5 +27,3 @@ include(msvc_source_group)
 include(nproc)
 
 # -- Project Modules
-add_subdirectory(api)
-add_subdirectory(utils)
