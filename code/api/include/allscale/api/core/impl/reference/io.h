@@ -868,7 +868,7 @@ namespace reference {
 #else
 			// if no support for memory mapped io, try to read the entire file into a buffer
 			file.base = malloc(file.size);
-			auto bytesRead = READ_WRAPPER(file.fd, file.base, file.size);
+			auto bytesRead = READ_WRAPPER(file.fd, file.base, (unsigned)file.size);
 			if (bytesRead < 0) {
 				free(file.base);
 				file.base = nullptr;
@@ -939,7 +939,7 @@ namespace reference {
 			if (succ != 0) return;
 #else
 			// if no support for memory mapped io, just write full buffer contents to file and free buffer
-			auto bytesWritten = WRITE_WRAPPER(file.fd, file.base, file.size);
+			auto bytesWritten = WRITE_WRAPPER(file.fd, file.base, (unsigned)file.size);
 			free(file.base);
 			assert_le(0, bytesWritten)
 				<< "Unable to write to file " << file.name;
@@ -991,7 +991,7 @@ namespace reference {
 			assert_ne(-1,fd) << "Error creating file " << file.name;
 
 			// fix size of file
-			LSEEK_WRAPPER(fd,size-1,SEEK_SET);
+			LSEEK_WRAPPER(fd,(long)(size-1),SEEK_SET);
 
 			// write a byte at the end
 			char data = 0;

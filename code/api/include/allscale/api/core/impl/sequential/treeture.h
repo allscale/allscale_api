@@ -97,7 +97,7 @@ namespace sequential {
 		}
 
 		template<typename T>
-		treeture(const treeture<T>& other) {}
+		treeture(const treeture<T>& /*other*/) {}
 
 		void get() const {
 			// nothing to do

@@ -44,7 +44,7 @@ namespace user {
 	class stencil_reference;
 
 	template<typename Impl = implementation::fine_grained_iterative, typename Container, typename Update>
-	stencil_reference<Impl> stencil(Container& res, int steps, const Update& update);
+	stencil_reference<Impl> stencil(Container& res, std::size_t steps, const Update& update);
 
 
 
@@ -65,7 +65,7 @@ namespace user {
 
 
 	template<typename Impl, typename Container, typename Update>
-	stencil_reference<Impl> stencil(Container& a, int steps, const Update& update) {
+	stencil_reference<Impl> stencil(Container& a, std::size_t steps, const Update& update) {
 
 		// forward everything to the implementation
 		return Impl().process(a,steps,update);
@@ -79,7 +79,7 @@ namespace user {
 		struct coarse_grained_iterative {
 
 			template<typename Container, typename Update>
-			stencil_reference<coarse_grained_iterative> process(Container& a, int steps, const Update& update) {
+			stencil_reference<coarse_grained_iterative> process(Container& a, std::size_t steps, const Update& update) {
 
 				// return handle to asynchronous execution
 				return async([&a,steps,update]{
@@ -92,7 +92,7 @@ namespace user {
 
 					using iter_type = decltype(a.size());
 
-					for(int t=0; t<steps; t++) {
+					for(std::size_t t=0; t<steps; t++) {
 
 						// loop based parallel implementation with blocking synchronization
 						pfor(iter_type(0),a.size(),[x,y,t,update](const iter_type& i){
@@ -118,7 +118,7 @@ namespace user {
 		struct fine_grained_iterative {
 
 			template<typename Container, typename Update>
-			stencil_reference<fine_grained_iterative> process(Container& a, int steps, const Update& update) {
+			stencil_reference<fine_grained_iterative> process(Container& a, std::size_t steps, const Update& update) {
 
 				// return handle to asynchronous execution
 				return async([&a,steps,update]{
@@ -133,7 +133,7 @@ namespace user {
 
 					user::detail::loop_reference<iter_type> ref;
 
-					for(int t=0; t<steps; t++) {
+					for(std::size_t t=0; t<steps; t++) {
 
 						// loop based parallel implementation with fine grained dependencies
 						ref = pfor(iter_type(0),a.size(),[x,y,t,update](const iter_type& i){
@@ -277,7 +277,7 @@ namespace user {
 				plain_scanner<dim-1> nested;
 
 				template<size_t full_dim, typename Lambda>
-				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, int t) const {
+				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, std::size_t t) const {
 					for(pos[dim]=base[dim].begin; pos[dim]<base[dim].end; pos[dim]++) {
 						 nested(base, lambda, pos, t);
 					}
@@ -289,7 +289,7 @@ namespace user {
 			struct plain_scanner<0> {
 
 				template<size_t full_dim, typename Lambda>
-				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, int t) const {
+				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, std::size_t t) const {
 					for(pos[0]=base[0].begin; pos[0]<base[0].end; pos[0]++) {
 						lambda(pos, t);
 					}
@@ -297,7 +297,7 @@ namespace user {
 
 			};
 
-			template<size_t dims>
+			template<std::size_t dims>
 			class Zoid {
 
 				Base<dims> base;			// the projection of the zoid to the space dimensions
@@ -311,7 +311,7 @@ namespace user {
 
 				Zoid() {}
 
-				Zoid(const Base<dims>& base, const Slopes<dims>& slopes, size_t t_begin, size_t t_end)
+				Zoid(const Base<dims>& base, const Slopes<dims>& slopes, std::size_t t_begin, std::size_t t_end)
 					: base(base), slopes(slopes), t_begin(t_begin), t_end(t_end) {}
 
 
@@ -327,13 +327,13 @@ namespace user {
 					auto plainBase = base;
 
 					// over the time
-					for(size_t t = t_begin; t < t_end; ++t) {
+					for(std::size_t t = t_begin; t < t_end; ++t) {
 
 						// process this plain
 						scanner(plainBase, lambda, x, t);
 
 						// update the plain for the next level
-						for(size_t i=0; i<dims; ++i) {
+						for(std::size_t i=0; i<dims; ++i) {
 							plainBase[i].begin  += slopes[i];
 							plainBase[i].end    -= slopes[i];
 						}
@@ -405,18 +405,18 @@ namespace user {
 				/**
 				 * The height of this zoid in temporal direction.
 				 */
-				int getHeight() const {
-					return (int)t_end-t_begin;
+				std::size_t getHeight() const {
+					return t_end-t_begin;
 				}
 
 				/**
 				 * Compute the number of elements this volume is covering
 				 * when being projected to the space domain.
 				 */
-				int getFootprint() const {
-					int size = 1;
-					int dt = getHeight();
-					for(size_t i=0; i<dims; i++) {
+				std::size_t getFootprint() const {
+					std::size_t size = 1;
+					std::size_t dt = getHeight();
+					for(std::size_t i=0; i<dims; i++) {
 						auto curWidth = base.width(i);
 						if (slopes[i] < 0) {
 							curWidth += 2*dt;
@@ -445,8 +445,8 @@ namespace user {
 				 * Computes the width of the shadow projected of this zoid on
 				 * the given space dimension.
 				 */
-				size_t getWidth(size_t dim) const {
-					size_t res = base.getWidth(dim);
+				std::size_t getWidth(std::size_t dim) const {
+					std::size_t res = base.getWidth(dim);
 					if (slopes[dim] < 0) res += 2*getHeight();
 					return res;
 				}
@@ -456,7 +456,7 @@ namespace user {
 				 * Determines whether this zoid is splitable in space.
 				 */
 				bool isSpaceSplitable() const {
-					for(size_t i=0; i<dims; i++) {
+					for(std::size_t i=0; i<dims; i++) {
 						if (isSplitable(i)) return true;
 					}
 					return false;
@@ -465,7 +465,7 @@ namespace user {
 				/**
 				 * Tests whether it can be split along the given space dimension.
 				 */
-				bool isSplitable(size_t dim) const {
+				bool isSplitable(std::size_t dim) const {
 					return getWidth(dim) > 4*getHeight();
 				}
 
@@ -512,17 +512,17 @@ namespace user {
 					assert_true(isSpaceSplitable());
 
 					// find longest dimension
-					int max_dim;
-					int max_width = 0;
-					for(size_t i=0; i<dims; i++) {
-						int width = getWidth(i);
+					std::size_t max_dim = 0;
+					std::size_t max_width = 0;
+					for(std::size_t i=0; i<dims; i++) {
+						std::size_t width = getWidth(i);
 						if (width>max_width) {
 							max_width = width;
 							max_dim = i;
 						}
 					}
 
-					// the max dimension is the split dimensin
+					// the max dimension is the split dimension
 					auto split_dim = max_dim;
 
 					// check whether longest dimension can be split
@@ -539,9 +539,9 @@ namespace user {
 					auto right = center;
 
 					if (slopes[split_dim] < 0) {
-						auto hight = getHeight();
-						left -= hight;
-						right += hight;
+						auto height = getHeight();
+						left -= height;
+						right += height;
 					}
 
 					res.l.base.boundaries[split_dim].end = left;
@@ -621,7 +621,7 @@ namespace user {
 					return core::done();
 				}
 
-				static ExecutionPlan create(const Base<Dims>& base, int steps) {
+				static ExecutionPlan create(const Base<Dims>& base, std::size_t steps) {
 
 					// get size of structure
 					auto size = base.extend();
@@ -651,7 +651,7 @@ namespace user {
 					ExecutionPlan plan;
 
 					// process time layer by layer
-					for(int t0=0; t0<steps; t0+=height) {
+					for(std::size_t t0=0; t0<steps; t0+=height) {
 
 						// get the top of the current layer
 						auto t1 = std::min<std::size_t>(t0+height,steps);
@@ -661,15 +661,15 @@ namespace user {
 						layer_plan& zoids = plan.layers.back();
 
 						// generate binary patterns from 0 to 2^dims - 1
-						for(size_t i=0; i < (1<<Dims); i++) {
+						for(std::size_t i=0; i < (1<<Dims); i++) {
 
 							// get base and slopes of the current zoid
 							Base<Dims> curBase = base;
 							Slopes<Dims> slopes;
 
 							// move base to center on field, edge, or corner
-							for(size_t j=0; j<Dims; j++) {
-								if (i & (1<<j)) {
+							for(std::size_t j=0; j<Dims; j++) {
+								if (i & ((std::size_t)(1)<<j)) {
 									slopes[j] = -1;
 									curBase.boundaries[j] = splits[j].right;
 								} else {
@@ -680,8 +680,8 @@ namespace user {
 
 							// count the number of ones -- this determines the execution order
 							int num_ones = 0;
-							for(size_t j=0; j<Dims; j++) {
-								if (i & (1<<j)) num_ones++;
+							for(std::size_t j=0; j<Dims; j++) {
+								if (i & ((std::size_t)(1)<<j)) num_ones++;
 							}
 
 							// add to execution plan
@@ -697,7 +697,7 @@ namespace user {
 			private:
 
 				static std::size_t getNumBitsSet(std::size_t mask) {
-					return utils::countOnes(mask);
+					return (std::size_t)utils::countOnes((unsigned)mask);
 				}
 
 			};
@@ -740,7 +740,7 @@ namespace user {
 		struct sequential_recursive {
 
 			template<typename Container, typename Update>
-			stencil_reference<sequential_recursive> process(Container& a, int steps, const Update& update) {
+			stencil_reference<sequential_recursive> process(Container& a, std::size_t steps, const Update& update) {
 
 				using namespace detail;
 
@@ -788,7 +788,7 @@ namespace user {
 		struct parallel_recursive {
 
 			template<typename Container, typename Update>
-			stencil_reference<parallel_recursive> process(Container& a, int steps, const Update& update) {
+			stencil_reference<parallel_recursive> process(Container& a, std::size_t steps, const Update& update) {
 
 				using namespace detail;
 

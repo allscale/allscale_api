@@ -75,7 +75,7 @@ namespace reference {
 		}
 
 		TaskPath getLeftChildPath() const {
-			assert_lt((int)length,sizeof(path)*8);
+			assert_lt((std::size_t)length,sizeof(path)*8);
 			auto res = *this;
 			res.path = res.path << 1;
 			++res.length;

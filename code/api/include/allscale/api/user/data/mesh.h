@@ -521,7 +521,7 @@ namespace data {
 				return *this;
 			}
 
-			bool operator==(const NodeSet& other) const {
+			bool operator==(const NodeSet& /*other*/) const {
 				return true;
 			}
 
@@ -803,7 +803,7 @@ namespace data {
 				return *this;
 			}
 
-			bool operator==(const EdgeSet& other) const {
+			bool operator==(const EdgeSet& /*other*/) const {
 				return true;
 			}
 
@@ -1089,7 +1089,7 @@ namespace data {
 				return *this;
 			}
 
-			bool operator==(const HierarchySet& other) const {
+			bool operator==(const HierarchySet& /*other*/) const {
 				return true;
 			}
 

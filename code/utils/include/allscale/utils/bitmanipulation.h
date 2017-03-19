@@ -10,7 +10,7 @@ namespace utils {
 	/**
 	 * A wrapper function for counting leading zeros
 	 */
-	inline int countLeadingZeros(int value) {
+	inline int countLeadingZeros(unsigned value) {
 		#ifdef _MSC_VER
 			unsigned long retVal = 0;
 			if(_BitScanReverse(&retVal, value))
@@ -25,7 +25,7 @@ namespace utils {
 	/**
 	* A wrapper function for counting trailing zeros
 	*/
-	inline int countTrailingZeros(int value) {
+	inline int countTrailingZeros(unsigned value) {
 		#ifdef _MSC_VER
 			unsigned long retVal = 0;
 			if(_BitScanForward(&retVal, value))
@@ -40,7 +40,7 @@ namespace utils {
 	/**
 	* A wrapper function for counting 1-bits
 	*/
-	inline int countOnes(int value) {
+	inline int countOnes(unsigned value) {
 		#ifdef _MSC_VER
 			return __popcnt(value);
 		#else

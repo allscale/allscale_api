@@ -234,7 +234,7 @@ namespace core {
 
 		auto& dataOut = out.access<data>();
 		for(std::size_t i=0; i<dataOut.size(); ++i) {
-			dataOut[i] = i;
+			dataOut[i] = (int)i;
 		}
 
 		mgr.close(out);
@@ -265,7 +265,7 @@ namespace core {
 
 		auto& dataOut = out.access<data>();
 		for(std::size_t i=0; i<dataOut.size(); ++i) {
-			dataOut[i] = i;
+			dataOut[i] = (int)i;
 		}
 
 		mgr.close(out);
@@ -304,7 +304,7 @@ namespace core {
 
 		auto& dataOut = out.access<data>();
 		for(std::size_t i=0; i<dataOut.size(); ++i) {
-			dataOut[i] = i;
+			dataOut[i] = (int)i;
 		}
 
 		mgr.close(out);
