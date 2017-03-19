@@ -1046,6 +1046,8 @@ namespace reference {
 				<< "Unable to unmap file " << file.name;
 			// if it was not successful, stop it here
 			if (succ != 0) return;
+			// silence unused parameter warning
+			(void)requiresWrite;
 #else
 			// if no support for memory mapped io, just write full buffer contents to file and free buffer
 			if (requiresWrite) {
