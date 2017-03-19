@@ -1,8 +1,9 @@
 #pragma once
 
 #include <algorithm>
-#include <set>
 #include <map>
+#include <memory>
+#include <set>
 
 #include "allscale/api/core/data.h"
 #include "allscale/utils/assert.h"

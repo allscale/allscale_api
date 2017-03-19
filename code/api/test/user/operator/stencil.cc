@@ -34,7 +34,7 @@ namespace user {
 			for(int& x : data) x = 0;
 
 			// run the stencil
-			stencil<Impl>(data, T, [](int time, int pos, const std::vector<int>& data){
+			stencil<Impl>(data, T, [N](int time, int pos, const std::vector<int>& data){
 
 				// check that input arrays are up-to-date
 				if (pos > 0) EXPECT_EQ(time,data[pos-1]) << "Position: " << pos << " - 1 = " << (pos-1);
@@ -70,7 +70,7 @@ namespace user {
 			});
 
 			// run the stencil
-			stencil<Impl>(data, T, [](int time, const data::GridPoint<1>& pos, const data::Grid<int,1>& data){
+			stencil<Impl>(data, T, [N](int time, const data::GridPoint<1>& pos, const data::Grid<int,1>& data){
 
 				// check that input arrays are up-to-date
 				for(int dx = -1; dx <= 1; ++dx) {
@@ -109,7 +109,7 @@ namespace user {
 			});
 
 			// run the stencil
-			stencil<Impl>(data, T, [](int time, const data::GridPoint<2>& pos, const data::Grid<int,2>& data){
+			stencil<Impl>(data, T, [N](int time, const data::GridPoint<2>& pos, const data::Grid<int,2>& data){
 
 				// check that input arrays are up-to-date
 				for(int dx = -1; dx <= 1; ++dx) {
@@ -152,7 +152,7 @@ namespace user {
 			});
 
 			// run the stencil
-			stencil<Impl>(data, T, [](int time, const data::GridPoint<3>& pos, const data::Grid<int,3>& data){
+			stencil<Impl>(data, T, [N](int time, const data::GridPoint<3>& pos, const data::Grid<int,3>& data){
 
 				// check that input arrays are up-to-date
 				for(int dx = -1; dx <= 1; ++dx) {
@@ -198,7 +198,7 @@ namespace user {
 			});
 
 			// run the stencil
-			stencil<Impl>(data, T, [](int time, const data::GridPoint<4>& pos, const data::Grid<int,4>& data){
+			stencil<Impl>(data, T, [N](int time, const data::GridPoint<4>& pos, const data::Grid<int,4>& data){
 
 				// check that input arrays are up-to-date
 				for(int dx = -1; dx <= 1; ++dx) {
@@ -246,7 +246,7 @@ namespace user {
 			});
 
 			// run the stencil
-			stencil<Impl>(data, T, [](int time, const data::GridPoint<5>& pos, const data::Grid<int,5>& data){
+			stencil<Impl>(data, T, [N](int time, const data::GridPoint<5>& pos, const data::Grid<int,5>& data){
 
 				// check that input arrays are up-to-date
 				for(int dx = -1; dx <= 1; ++dx) {
@@ -294,7 +294,7 @@ namespace user {
 			for(int& x : data) x = 0;
 
 			// run the stencil
-			stencil(data, T, [](int time, int pos, const std::vector<int>& data){
+			stencil(data, T, [N](int time, int pos, const std::vector<int>& data){
 
 				// check that input arrays are up-to-date
 				if (pos > 0) EXPECT_EQ(time,data[pos-1]);

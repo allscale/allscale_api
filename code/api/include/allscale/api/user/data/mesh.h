@@ -156,7 +156,7 @@ namespace data {
 
 		NodeRef() = default;
 
-		constexpr explicit NodeRef(std::size_t id) : id(id) {}
+		constexpr explicit NodeRef(std::size_t id) : id(NodeID(id)) {}
 
 		NodeID getOrdinal() const {
 			return id;
@@ -861,7 +861,7 @@ namespace data {
 
 			utils::Table<NodeRef<Src,Level>> parent_targets;
 
-			utils::Table<uint32_t> children_offsets;
+			utils::Table<std::size_t> children_offsets;
 			utils::Table<NodeRef<Trg,Level-1>> children_targets;
 
 			// -- other hierarchies --
@@ -934,7 +934,7 @@ namespace data {
 
 				// init forward / backward vectors
 				auto numParents = data.template getNumNodes<Src,Level>();
-				children_offsets = utils::Table<uint32_t>(numParents + 1, 0);
+				children_offsets = utils::Table<std::size_t>(numParents + 1, 0);
 				children_targets = utils::Table<NodeRef<Trg,Level-1>>(numParentChildLinks);
 
 				// init child offsets
@@ -1039,7 +1039,7 @@ namespace data {
 				// restore parents
 				res.parent_targets = utils::Table<NodeRef<Src,Level>>::load(in);
 
-				res.children_offsets = utils::Table<uint32_t>::load(in);
+				res.children_offsets = utils::Table<std::size_t>::load(in);
 				res.children_targets = utils::Table<NodeRef<Trg,Level-1>>::load(in);
 
 				// restore nested
@@ -1056,7 +1056,7 @@ namespace data {
 				// restore parents
 				res.parent_targets = utils::Table<NodeRef<Src,Level>>::interpret(buffer);
 
-				res.children_offsets = utils::Table<uint32_t>::interpret(buffer);
+				res.children_offsets = utils::Table<std::size_t>::interpret(buffer);
 				res.children_targets = utils::Table<NodeRef<Trg,Level-1>>::interpret(buffer);
 
 				// restore nested
@@ -1150,7 +1150,7 @@ namespace data {
 			> {
 
 			template<unsigned Lvl>
-			using LevelData = Levels<Lvl,nodes<Nodes...>,edges<Edges...>,hierarchies<Hierarchies...>>;
+			using LevelData = Levels<Lvl,data::nodes<Nodes...>,data::edges<Edges...>,data::hierarchies<Hierarchies...>>;
 
 			// the data of the lower levels
 			LevelData<Level-1> nested;
@@ -1294,7 +1294,7 @@ namespace data {
 		struct Levels<0,nodes<Nodes...>,edges<Edges...>,hierarchies<Hierarchies...>> {
 
 			template<unsigned Lvl>
-			using LevelData = Levels<Lvl,nodes<Nodes...>,edges<Edges...>,hierarchies<Hierarchies...>>;
+			using LevelData = Levels<Lvl,data::nodes<Nodes...>,data::edges<Edges...>,data::hierarchies<Hierarchies...>>;
 
 			// the set of nodes on this level
 			NodeSet<0,Nodes...> nodes;
@@ -1661,7 +1661,7 @@ namespace data {
 				auto diff = thisValid ^ thatValid;
 
 				// if there is more than 1 bit difference, there is nothing we can do
-				if (__builtin_popcount(diff) != 1) return false;
+				if (utils::countOnes(diff) != 1) return false;
 
 				// ignore this one bit in the mask
 				PathRefBase::mask = PathRefBase::mask & (~diff);
@@ -2555,16 +2555,16 @@ namespace data {
 
 						// get node kind and level
 						using NodeKind = plain_type<decltype(nodeKind)>;
-						const unsigned lvl = get_level<decltype(level)>::value;
-
+						// not directly accessing lvl::value here, as MSVC 15 refuses to acknowledge its constexpr-ness
+						using lvl = get_level<decltype(level)>;
 
 						// set root node to cover the full range
-						auto num_nodes = data.template getNumNodes<NodeKind,lvl>();
-						res.template setNodeRange<NodeKind,lvl>(
+						auto num_nodes = data.template getNumNodes<NodeKind, lvl::value>();
+						res.template setNodeRange<NodeKind, lvl::value>(
 								SubTreeRef::root(),
-								NodeRange<NodeKind,lvl>(
-									NodeRef<NodeKind,lvl>{ 0 },
-									NodeRef<NodeKind,lvl>{ num_nodes }
+								NodeRange<NodeKind, lvl::value>(
+									NodeRef<NodeKind, lvl::value>{ 0 },
+									NodeRef<NodeKind, lvl::value>{ num_nodes }
 								)
 						);
 
@@ -2574,24 +2574,24 @@ namespace data {
 							if (ref.isRoot()) return;
 
 							// get the range of the parent
-							auto range = res.template getNodeRange<NodeKind,lvl>(ref.getParent());
+							auto range = res.template getNodeRange<NodeKind, lvl::value>(ref.getParent());
 
 							// extract begin / end
 							auto begin = range.getBegin();
 							auto end = range.getEnd();
 
 							// compute mid
-							auto mid = NodeRef<NodeKind,lvl>(begin.id + (end.id - begin.id) / 2);
+							auto mid = NodeRef<NodeKind, lvl::value>(begin.id + (end.id - begin.id) / 2);
 
 							// get range for this node
 							if (ref.isLeftChild()) {
-								range = NodeRange<NodeKind,lvl>(begin,mid);
+								range = NodeRange<NodeKind, lvl::value>(begin,mid);
 							} else {
-								range = NodeRange<NodeKind,lvl>(mid,end);
+								range = NodeRange<NodeKind, lvl::value>(mid,end);
 							}
 
 							// update the range
-							res.template setNodeRange<NodeKind,lvl>(ref,range);
+							res.template setNodeRange<NodeKind, lvl::value>(ref,range);
 
 						});
 
@@ -2602,7 +2602,8 @@ namespace data {
 
 					// get edge kind and level
 					using EdgeKind = plain_type<decltype(edgeKind)>;
-					const unsigned lvl = get_level<decltype(level)>::value;
+					// not directly accessing lvl::value here, as MSVC 15 refuses to acknowledge its constexpr-ness
+					using lvl = get_level<decltype(level)>;
 
 					// the closure is everything for now
 					MeshRegion closure = SubMeshRef::root();
@@ -2610,10 +2611,10 @@ namespace data {
 					// initialize all the closured with the full region
 					res.visitPreOrder([&](const SubTreeRef& ref) {
 						// fix forward closure
-						res.template setForwardClosure<EdgeKind,lvl>(ref,closure);
+						res.template setForwardClosure<EdgeKind,lvl::value>(ref,closure);
 
 						// fix backward closure
-						res.template setBackwardClosure<EdgeKind,lvl>(ref,closure);
+						res.template setBackwardClosure<EdgeKind,lvl::value>(ref,closure);
 					});
 
 				});
@@ -2624,10 +2625,11 @@ namespace data {
 
 					// get hierarchy kind and level
 					using HierarchyKind = plain_type<decltype(hierarchyKind)>;
-					const unsigned lvl = get_level<decltype(level)>::value;
+					// not directly accessing lvl::value here, as MSVC 15 refuses to acknowledge its constexpr-ness
+					using lvl = get_level<decltype(level)>;
 
 					// make sure this is not called for level 0
-					assert_gt(lvl,0) << "There should not be any hierarchies on level 0.";
+					assert_gt(lvl::value,0) << "There should not be any hierarchies on level 0.";
 
 					// the closure is everything for now
 					MeshRegion closure = SubMeshRef::root();
@@ -2636,10 +2638,10 @@ namespace data {
 					res.visitPreOrder([&](const SubTreeRef& ref) {
 
 						// fix parent closure
-						res.template setParentClosure<HierarchyKind,lvl-1>(ref,closure);
+						res.template setParentClosure<HierarchyKind,lvl::value-1>(ref,closure);
 
 						// fix child closure
-						res.template setChildClosure<HierarchyKind,lvl>(ref,closure);
+						res.template setChildClosure<HierarchyKind,lvl::value>(ref,closure);
 					});
 
 				});

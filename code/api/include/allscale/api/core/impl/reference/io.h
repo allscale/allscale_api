@@ -1,10 +1,35 @@
 #pragma once
 
-#include <string>
+#include <map>
 #include <mutex>
 #include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
 
-#include <sys/mman.h>
+#ifdef _MSC_VER
+	// includes
+	#include <io.h>	
+	// marcos for function identifiers
+	#define CLOSE_WRAPPER _close
+	#define LSEEK_WRAPPER _lseek
+	#define OPEN_WRAPPER _open
+	#define READ_WRAPPER _read
+	#define WRITE_WRAPPER _write
+	// macros for flags
+	#define S_IRUSR _S_IREAD
+	#define S_IWUSR _S_IWRITE
+#else
+	// includes
+	#include <sys/mman.h>
+	// marcos for function identifiers
+	#define CLOSE_WRAPPER close
+	#define LSEEK_WRAPPER lseek
+	#define OPEN_WRAPPER open
+	#define READ_WRAPPER read
+	#define WRITE_WRAPPER write
+#endif
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -355,7 +380,7 @@ namespace reference {
 		 * Register a new output stream with the given name within the system.
 		 * The call will create the underlying file and prepare output operations.
 		 *
-		 *  NOTE: this method is not thread save!
+		 *  NOTE: this method is not thread safe!
 		 *
 		 * @param name the name of the stream to be opened -- nothing happens if already opened
 		 */
@@ -403,7 +428,7 @@ namespace reference {
 		 * Register a new memory mapped input with the given name within the system.
 		 * The call will load the underlying storage and prepare input operations.
 		 *
-		 *  NOTE: this method is not thread save!
+		 *  NOTE: this method is not thread safe!
 		 *
 		 * @param entry the storage entry to be opened -- nothing happens if already opened
 		 */
@@ -713,7 +738,7 @@ namespace reference {
 			auto pos = memoryMappedBuffers.find(entry);
 			if (pos != memoryMappedBuffers.end()) {
 				// use existing
-				assert_eq(size,pos->second.size) << "Cannot change size of buffere during re-opening!";
+				assert_eq(size,pos->second.size) << "Cannot change size of buffer during re-opening!";
 				return pos->second.base;
 			}
 
@@ -835,11 +860,20 @@ namespace reference {
 			// resolve the file size
 			file.size = getFileSize(file);
 
+#ifndef _MSC_VER
 			// map file into address space
 			file.base = mmap(nullptr,file.size, PROT_READ, MAP_PRIVATE, file.fd, 0);
-
 			// check result of mmap
 			if (!checkMappedAddress(file.base)) file.base = nullptr;
+#else
+			// if no support for memory mapped io, try to read the entire file into a buffer
+			file.base = malloc(file.size);
+			auto bytesRead = READ_WRAPPER(file.fd, file.base, file.size);
+			if (bytesRead < 0) {
+				free(file.base);
+				file.base = nullptr;
+			}
+#endif
 
 			// return pointer to base address
 			return file.base;
@@ -860,11 +894,14 @@ namespace reference {
 			// fix the file size
 			file.size = size;
 
+#ifndef _MSC_VER
 			// map file into address space
 			file.base = mmap(nullptr,file.size, PROT_READ | PROT_WRITE, MAP_PRIVATE, file.fd, 0);
-
 			// check result of mmap
 			if (!checkMappedAddress(file.base)) file.base = nullptr;
+#else
+			file.base = malloc(size);
+#endif
 
 			// return pointer to base address
 			return file.base;
@@ -884,7 +921,7 @@ namespace reference {
 
 			// check valid entry id
 			if (entry.id >= files.size()) {
-				assert(false && "Unable to create memory mapped input to unknown entity!");
+				assert(false && "Unable to close memory mapped input to unknown entity!");
 				return;
 			}
 
@@ -892,16 +929,24 @@ namespace reference {
 			File& file = files[entry.id];
 			if (!file.base) return;
 
+			int succ = 0;
+#ifndef _MSC_VER
 			// unmap the file from the address space
-			auto succ = munmap(file.base,file.size);
+			succ = munmap(file.base,file.size);
 			assert_eq(0,succ)
 				<< "Unable to unmap file " << file.name;
-
 			// if it was not successful, stop it here
 			if (succ != 0) return;
+#else
+			// if no support for memory mapped io, just write full buffer contents to file and free buffer
+			auto bytesWritten = WRITE_WRAPPER(file.fd, file.base, file.size);
+			free(file.base);
+			assert_le(0, bytesWritten)
+				<< "Unable to write to file " << file.name;
+#endif
 
 			// close the file descriptor
-			succ = ::close(file.fd);
+			succ = ::CLOSE_WRAPPER(file.fd);
 			assert_eq(0,succ)
 				<< "Unable to close file " << file.name;
 
@@ -942,21 +987,21 @@ namespace reference {
 		static file_descriptor createFile(const File& file, std::size_t size) {
 
 			// create the new file
-			auto fd = open(file.name.c_str(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR );
+			auto fd = OPEN_WRAPPER(file.name.c_str(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR );
 			assert_ne(-1,fd) << "Error creating file " << file.name;
 
 			// fix size of file
-			lseek(fd,size-1,SEEK_SET);
+			LSEEK_WRAPPER(fd,size-1,SEEK_SET);
 
 			// write a byte at the end
 			char data = 0;
-			auto res = write(fd,&data,1);
+			auto res = WRITE_WRAPPER(fd,&data,1);
 			assert_eq(1,res)
 				<< "Could not write byte at end of file.";
 			if (res != 1) return 0;
 
 			// move cursor back to start
-			lseek(fd,0,SEEK_SET);
+			LSEEK_WRAPPER(fd,0,SEEK_SET);
 
 			// return file descriptor
 			return fd;
@@ -971,7 +1016,7 @@ namespace reference {
 			const char* name = file.name.c_str();
 
 			// get file descriptor from file name
-			auto fd = open(name, ((readOnly) ? O_RDONLY : O_RDWR ) );
+			auto fd = OPEN_WRAPPER(name, ((readOnly) ? O_RDONLY : O_RDWR ) );
 			assert_ne(-1,fd) << "Error opening file " << name;
 
 			// return the obtained file descriptor
@@ -994,10 +1039,14 @@ namespace reference {
 		}
 
 		static bool checkMappedAddress(void* addr) {
+#ifndef _MSC_VER
 			// compare with error token
 			if (addr != MAP_FAILED) return true;
 			char buffer[2000];
 			std::cout << strerror_r(errno,buffer,2000);
+#endif
+			// fail with message if mapping failed 
+			// or if mapped address checking was requested on MSVC platforms
 			assert_fail() << "Failed to map file into address space!";
 			return false;
 		}

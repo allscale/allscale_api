@@ -79,7 +79,7 @@ namespace detail {
 
 
 template<unsigned levels = 1, unsigned partitionDepth = 5>
-BarMesh<levels,partitionDepth> createBarMesh(std::size_t length) {
+BarMesh<levels,partitionDepth> createBarMesh(unsigned length) {
 	using builder_type = BarMeshBuilder<levels>;
 
 	// create a mesh builder

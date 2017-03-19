@@ -1,7 +1,10 @@
 #pragma once
 
-#include <sys/mman.h>
-#include <unistd.h>
+#ifndef _MSC_VER
+	#include <sys/mman.h>
+	#include <unistd.h>
+#endif
+
 #include <cstddef>
 
 #include <algorithm>
@@ -365,11 +368,15 @@ namespace utils {
 		 */
 		LargeArray(std::size_t size) : size(size) {
 			// allocate the address space
-			data = (T*)mmap(nullptr,sizeof(T)*size,
-					PROT_READ | PROT_WRITE,
-					MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE,
-					-1,0
-				);
+			#ifdef _MSC_VER
+				data = (T*)malloc(sizeof(T)*size);
+			#else
+				data = (T*)mmap(nullptr,sizeof(T)*size,
+						PROT_READ | PROT_WRITE,
+						MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE,
+						-1,0
+					);
+			#endif
 			assert_ne((void*)-1,(void*)data);
 		}
 
@@ -403,7 +410,11 @@ namespace utils {
 			}
 
 			// free the data
-			munmap(data,sizeof(T)*size);
+			#ifdef _MSC_VER
+				::free(data);
+			#else
+				munmap(data,sizeof(T)*size);
+			#endif
 		}
 
 		/**
@@ -416,7 +427,14 @@ namespace utils {
 		 */
 		LargeArray& operator=(LargeArray&& other) {
 			assert_ne(data,other.data);
-			if (data) munmap(data, sizeof(T)*size);
+			if (data) {
+			#ifdef _MSC_VER
+				::free(data);
+				//delete data;
+			#else
+				munmap(data, sizeof(T)*size);
+			#endif
+			}
 			std::swap(data,other.data);
 			size = other.size;
 			active_ranges.swap(other.active_ranges);
@@ -470,7 +488,7 @@ namespace utils {
 
 				// delete elements to be removed
 				removedElements.forEach([this](std::size_t i){
-					data[i].~T(); // explicit destrutor call
+					data[i].~T(); // explicit destructor call
 				});
 
 			}
@@ -478,38 +496,42 @@ namespace utils {
 			// remove range from active ranges
 			active_ranges.remove(start,end);
 
-			// get address of lower boundary
-			uintptr_t ptr_start = (uintptr_t)(data + start);
-			uintptr_t ptr_end = (uintptr_t)(data + end);
+			#ifdef _MSC_VER
+				// do nothing
+			#else
+				// get address of lower boundary
+				uintptr_t ptr_start = (uintptr_t)(data + start);
+				uintptr_t ptr_end = (uintptr_t)(data + end);
 
-			auto page_size = getPageSize();
-			uintptr_t pg_start = ptr_start - (ptr_start % page_size);
-			uintptr_t pg_end = ptr_end - (ptr_end % page_size) + page_size;
+				auto page_size = getPageSize();
+				uintptr_t pg_start = ptr_start - (ptr_start % page_size);
+				uintptr_t pg_end = ptr_end - (ptr_end % page_size) + page_size;
 
-			std::size_t idx_start = (pg_start - (uintptr_t)(data)) / sizeof(T);
-			std::size_t idx_end   = (pg_end - (uintptr_t)(data)) / sizeof(T);
+				std::size_t idx_start = (pg_start - (uintptr_t)(data)) / sizeof(T);
+				std::size_t idx_end   = (pg_end - (uintptr_t)(data)) / sizeof(T);
 
-			assert_le(idx_start,start);
-			assert_le(end,idx_end);
+				assert_le(idx_start,start);
+				assert_le(end,idx_end);
 
-			if (active_ranges.coversAny(idx_start,start)) pg_start += page_size;
-			if (active_ranges.coversAny(end,idx_end))     pg_end -= page_size;
-			pg_end = std::min(pg_end,ptr_end);
+				if (active_ranges.coversAny(idx_start,start)) pg_start += page_size;
+				if (active_ranges.coversAny(end,idx_end))     pg_end -= page_size;
+				pg_end = std::min(pg_end,ptr_end);
 
-			if (pg_start >= pg_end) return;
+				if (pg_start >= pg_end) return;
 
-			void* section_start = (void*)pg_start;
-			std::size_t length = pg_end - pg_start;
 
-			munmap(section_start, length);
-			auto res = mmap(section_start, length,
-					PROT_READ | PROT_WRITE,
-					MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE | MAP_FIXED,
-					-1,0
-				);
-			if ((void*)-1 == (void*)res) {
-				assert_ne((void*)-1,(void*)res);
-			}
+					void* section_start = (void*)pg_start;
+					std::size_t length = pg_end - pg_start;
+					munmap(section_start, length);
+					auto res = mmap(section_start, length,
+							PROT_READ | PROT_WRITE,
+							MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE | MAP_FIXED,
+							-1,0
+						);
+					if ((void*)-1 == (void*)res) {
+						assert_ne((void*)-1,(void*)res);
+					}
+			#endif
 		}
 
 		/**
@@ -532,7 +554,11 @@ namespace utils {
 		 * Determines the memory page size of the system.
 		 */
 		static long getPageSize() {
-			static const long PAGE_SIZE = sysconf(_SC_PAGESIZE);
+			#ifndef _MSC_VER
+				static const long PAGE_SIZE = sysconf(_SC_PAGESIZE);
+			#else
+				static const long PAGE_SIZE = 0;
+			#endif
 			return PAGE_SIZE;
 		}
 

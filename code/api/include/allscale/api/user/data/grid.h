@@ -662,9 +662,9 @@ namespace data {
 			return res;
 		}
 
-		int flatten(const GridPoint<Dims>& pos) const {
-			int res = 0;
-			int size = 1;
+		coordinate_type flatten(const GridPoint<Dims>& pos) const {
+			coordinate_type res = 0;
+			coordinate_type size = 1;
 
 			for(int i=Dims-1; i>=0; i--) {
 				res += pos[i] * size;

@@ -640,39 +640,39 @@ namespace user {
 	template<typename Iter, typename Body, typename Dependency>
 	detail::loop_reference<Iter> pfor(const detail::range<Iter>& r, const Body& body, const Dependency& dependency) {
 
-		struct range {
+		struct rangeHelper {
 			detail::range<Iter> range;
 			Dependency dependencies;
 		};
 
 		// trigger parallel processing
 		return { r, core::prec(
-			[](const range& r) {
+			[](const rangeHelper& rg) {
 				// if there is only one element left, we reached the base case
-				return r.range.size() <= 1;
+				return rg.range.size() <= 1;
 			},
-			[body](const range& r) {
+			[body](const rangeHelper& rg) {
 				// apply the body operation to every element in the remaining range
-				r.range.forEach(body);
+				rg.range.forEach(body);
 			},
 			core::pick(
-				[](const range& r, const auto& nested) {
+				[](const rangeHelper& rg, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
-					auto fragments = r.range.split();
+					auto fragments = rg.range.split();
 					auto& left = fragments.first;
 					auto& right = fragments.second;
-					auto dep = r.dependencies.split(left,right);
+					auto dep = rg.dependencies.split(left,right);
 					return parallel(
-						nested(dep.left.toCoreDependencies(), range{left, dep.left} ),
-						nested(dep.right.toCoreDependencies(),range{right,dep.right})
+						nested(dep.left.toCoreDependencies(), rangeHelper{left, dep.left} ),
+						nested(dep.right.toCoreDependencies(), rangeHelper{right,dep.right})
 					);
 				},
-				[body](const range& r, const auto&) {
+				[body](const rangeHelper& rg, const auto&) {
 					// the alternative is processing the step sequentially
-					r.range.forEach(body);
+					rg.range.forEach(body);
 				}
 			)
-		)(dependency.toCoreDependencies(),range{r,dependency}) };
+		)(dependency.toCoreDependencies(),rangeHelper{r,dependency}) };
 	}
 
 	template<typename Iter, typename Body>

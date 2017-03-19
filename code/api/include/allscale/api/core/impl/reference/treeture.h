@@ -912,7 +912,7 @@ namespace reference {
 			assert_le(2,num_active_dependencies);
 
 			// increase the number of active dependencies
-			num_active_dependencies += end - begin;
+			num_active_dependencies += (int)(end - begin);
 
 			// register dependencies
 			for(auto it = begin; it != end; ++it) {
@@ -2343,7 +2343,7 @@ namespace reference {
 			}
 
 			int getNumWorkers() const {
-				return workers.size();
+				return (int)workers.size();
 			}
 
 			std::size_t getInitialSplitDepthLimit() const {
@@ -2628,7 +2628,7 @@ namespace reference {
 			}
 
 			// check that there are other workers
-			int numWorker = pool.getNumWorkers();
+			auto numWorker = pool.getNumWorkers();
 			if (numWorker <= 1) return false;
 
 			// otherwise, steal a task from another worker

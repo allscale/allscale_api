@@ -15,6 +15,8 @@ namespace utils {
 			unsigned long retVal = 0;
 			if(_BitScanReverse(&retVal, value))
 				return 31-retVal;
+			// all zeros is undefined behavior, we simply return 32
+			return 32;
 		#else
 			return __builtin_clz(value);
 		#endif
@@ -27,9 +29,22 @@ namespace utils {
 		#ifdef _MSC_VER
 			unsigned long retVal = 0;
 			if(_BitScanForward(&retVal, value))
-				return 31 - retVal;
+				return retVal;
+			// all zeros is undefined behavior, we simply return 32
+			return 32;
 		#else
 			return __builtin_ctz(value);
+		#endif
+	}
+	
+	/**
+	* A wrapper function for counting 1-bits
+	*/
+	inline int countOnes(int value) {
+		#ifdef _MSC_VER
+			return __popcnt(value);
+		#else
+			return __builtin_popcount(value);
 		#endif
 	}
 

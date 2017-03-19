@@ -63,6 +63,7 @@ namespace data {
 		// -- constructors --
 
 		Point p;		// just works, no restrictions on the values
+		(void)p;
 
 		Point p0 = 0;
 		EXPECT_EQ("[0,0]", toString(p0));
@@ -124,6 +125,7 @@ namespace data {
 		// -- constructors --
 
 		Point p;		// just works, no restrictions on the values
+		(void)p;
 
 		Point p0 = 0;
 		EXPECT_EQ("[0,0,0]", toString(p0));
@@ -196,6 +198,7 @@ namespace data {
 		// -- constructors --
 
 		Point p;		// just works, no restrictions on the values
+		(void)p;
 
 		Point p0 = 0;
 		EXPECT_EQ("[0,0,0,0,0]", toString(p0));

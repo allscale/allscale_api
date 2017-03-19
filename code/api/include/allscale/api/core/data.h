@@ -9,6 +9,9 @@ namespace allscale {
 namespace api {
 namespace core {
 
+	// Workaround for std::declval due to a bug in Visual Studio (at least version 15 2017)
+	#define DECL_VAL_REF(__TYPE__) reinterpret_cast<__TYPE__&>(*(__TYPE__*)(nullptr))
+
 
 	// ---------------------------------------------------------------------------------
 	//									  Regions
@@ -55,32 +58,32 @@ namespace core {
 	template<typename F>
 	struct is_fragment<F,typename std::enable_if<
 
-			// fragment needs to expose a region type
+			//// fragment needs to expose a region type
 			is_region<typename F::region_type>::value &&
 
 			// fragments need to be constructible for a given region
-			std::is_same<decltype(F(std::declval<const typename F::shared_data_type&>(),std::declval<const typename F::region_type&>())),F>::value &&
-
+			std::is_same<decltype(F(DECL_VAL_REF(const typename F::shared_data_type), DECL_VAL_REF(const typename F::region_type))),F>::value &&
+		
 			// fragments need to be destructible
 			std::is_destructible<F>::value &&
 
-			// the region covered by the fragment has to be obtainable
-			std::is_same<decltype(std::declval<const F&>().getCoveredRegion()),const typename F::region_type&>::value &&
+			//// the region covered by the fragment has to be obtainable
+			std::is_same<decltype(DECL_VAL_REF(const F).getCoveredRegion()),const typename F::region_type&>::value &&
 
-			// there has to be a resize operator
-			std::is_same<decltype(std::declval<F&>().resize(std::declval<const typename F::region_type&>())),void>::value &&
+			//// there has to be a resize operator
+			std::is_same<decltype(DECL_VAL_REF(F).resize(std::declval<const typename F::region_type&>())),void>::value &&
 
-			// there is an insert operator
-			std::is_same<decltype(std::declval<F&>().insert(std::declval<const F&>(),std::declval<const typename F::region_type&>())),void>::value &&
+			//// there is an insert operator
+			std::is_same<decltype(DECL_VAL_REF(F).insert(DECL_VAL_REF(const F),std::declval<const typename F::region_type&>())),void>::value &&
 
-			// there is a save operator
-			std::is_same<decltype(std::declval<const F&>().save(std::declval<utils::Archive&>(),std::declval<const typename F::region_type&>())),void>::value &&
+			//// there is a save operator
+			std::is_same<decltype(DECL_VAL_REF(const F).save(DECL_VAL_REF(utils::Archive),std::declval<const typename F::region_type&>())),void>::value &&
 
-			// there is a load operator
-			std::is_same<decltype(std::declval<F&>().load(std::declval<utils::Archive&>())),void>::value &&
+			//// there is a load operator
+			std::is_same<decltype(DECL_VAL_REF(F).load(DECL_VAL_REF(utils::Archive))),void>::value &&
 
-			// can be concerted into a facade
-			std::is_same<decltype(std::declval<F&>().mask()), typename F::facade_type>::value,
+			//// can be concerted into a facade
+			std::is_same<decltype(DECL_VAL_REF(F).mask()), typename F::facade_type>::value,
 
 		void>::type> : public std::true_type {};
 
@@ -90,7 +93,6 @@ namespace core {
 	// ---------------------------------------------------------------------------------
 	//									SharedData
 	// ---------------------------------------------------------------------------------
-
 
 	template<typename S, typename _ = void>
 	struct is_shared_data : public std::false_type {};
@@ -105,8 +107,7 @@ namespace core {
 			std::is_same<decltype(std::declval<const S&>().save(std::declval<utils::Archive&>())),void>::value &&
 
 			// there is a static load operator
-			// Note: not using std::declval here due to a bug in Visual Studio (at least version 15 2017)
-			std::is_same<decltype(S::load(reinterpret_cast<utils::Archive&>(*(utils::Archive*)(nullptr)))), S>::value,
+			std::is_same<decltype(S::load(DECL_VAL_REF(utils::Archive))), S>::value,
 
 		void>::type> : public std::true_type {};
 

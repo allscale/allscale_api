@@ -12,6 +12,8 @@
 #include "allscale/api/user/operator/async.h"
 #include "allscale/api/user/operator/internal/operation_reference.h"
 
+#include "allscale/utils/bitmanipulation.h"
+
 namespace allscale {
 namespace api {
 namespace user {
@@ -27,13 +29,13 @@ namespace user {
 
 	namespace implementation {
 
-		class coarse_grained_iterative;
+		struct coarse_grained_iterative;
 
-		class fine_grained_iterative;
+		struct fine_grained_iterative;
 
-		class sequential_recursive;
+		struct sequential_recursive;
 
-		class parallel_recursive;
+		struct parallel_recursive;
 
 	}
 
@@ -129,7 +131,7 @@ namespace user {
 
 					using iter_type = decltype(a.size());
 
-					detail::loop_reference<iter_type> ref;
+					user::detail::loop_reference<iter_type> ref;
 
 					for(int t=0; t<steps; t++) {
 
@@ -404,7 +406,7 @@ namespace user {
 				 * The height of this zoid in temporal direction.
 				 */
 				int getHeight() const {
-					return t_end-t_begin;
+					return (int)t_end-t_begin;
 				}
 
 				/**
@@ -443,8 +445,8 @@ namespace user {
 				 * Computes the width of the shadow projected of this zoid on
 				 * the given space dimension.
 				 */
-				int getWidth(int dim) const {
-					int res = base.getWidth(dim);
+				size_t getWidth(size_t dim) const {
+					size_t res = base.getWidth(dim);
 					if (slopes[dim] < 0) res += 2*getHeight();
 					return res;
 				}
@@ -463,7 +465,7 @@ namespace user {
 				/**
 				 * Tests whether it can be split along the given space dimension.
 				 */
-				bool isSplitable(int dim) const {
+				bool isSplitable(size_t dim) const {
 					return getWidth(dim) > 4*getHeight();
 				}
 
@@ -695,7 +697,7 @@ namespace user {
 			private:
 
 				static std::size_t getNumBitsSet(std::size_t mask) {
-					return __builtin_popcount(mask);
+					return utils::countOnes(mask);
 				}
 
 			};

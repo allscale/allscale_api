@@ -441,6 +441,8 @@ namespace utils {
 
 	}
 
+#ifndef _MSC_VER
+
 	TEST(DISABLED_LargeArray, MemoryManagement) {
 
 		using value_t = uint64_t;
@@ -582,6 +584,8 @@ namespace utils {
 		EXPECT_EQ(0,InstanceCounted::num_instances);
 
 	}
+
+#endif
 
 } // end namespace utils
 } // end namespace allscale

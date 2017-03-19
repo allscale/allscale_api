@@ -1,8 +1,9 @@
-#include <iostream>
-#include <fstream>
-#include <map>
-#include <vector>
 #include <algorithm>
+#include <fstream>
+#include <iostream>
+#include <map>
+#include <string>
+#include <vector>
 
 #include "allscale/api/core/impl/reference/profiling.h"
 
@@ -181,7 +182,7 @@ std::vector<EventCounters> extractEventCounters(const std::vector<ProfileLog>& l
 			switch(event.getKind()) {
 			case ProfileLogEntry::TaskStarted:
 				res[time].numTasksStarted++;
-				res[time].maxTaskDepth = std::max<std::size_t>(res[time].maxTaskDepth,event.getTask().getDepth());
+				res[time].maxTaskDepth = std::max<int>(res[time].maxTaskDepth,event.getTask().getDepth());
 				break;
 			case ProfileLogEntry::TaskStolen:  res[time].numTasksStolen++;  break;
 			default: break;
