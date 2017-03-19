@@ -2,16 +2,13 @@
 
 #include <type_traits>
 
+#include "allscale/utils/compatibility.h"
 #include "allscale/utils/concepts.h"
 #include "allscale/utils/serializer.h"
 
 namespace allscale {
 namespace api {
 namespace core {
-
-	// Workaround for std::declval due to a bug in Visual Studio (at least version 15 2017)
-	#define DECL_VAL_REF(__TYPE__) reinterpret_cast<__TYPE__&>(*(__TYPE__*)(nullptr))
-
 
 	// ---------------------------------------------------------------------------------
 	//									  Regions

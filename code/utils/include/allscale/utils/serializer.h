@@ -2,9 +2,10 @@
 
 #include <type_traits>
 
+#include "allscale/utils/compatibility.h"
+
 namespace allscale {
 namespace utils {
-
 
 	// ---------------------------------------------------------------------------------
 	//									Declarations
@@ -96,8 +97,8 @@ namespace utils {
 
 	template <typename T>
 	struct is_serializable<T, typename std::enable_if<
-			std::is_same<decltype(serializer<T>::load(std::declval<Archive&>())),T>::value &&
-			std::is_same<decltype(serializer<T>::store(std::declval<Archive&>(),std::declval<const T&>())),void>::value,
+			std::is_same<decltype(serializer<T>::load(DECL_VAL_REF(Archive))),T>::value &&
+			std::is_same<decltype(serializer<T>::store(DECL_VAL_REF(Archive), DECL_VAL_REF(const T))),void>::value,
 		void>::type> : public std::true_type {};
 
 	template <typename T>

@@ -632,9 +632,17 @@ namespace reference {
 		/**
 		 * Close the given memory mapped IO connection.
 		 */
-		void closeMemoryMappedIO(const MemoryMappedIO& io) {
-			// close this memory mapped io
-			store.close(io);
+		void closeMemoryMappedIO(const MemoryMappedInput& input) {
+			// closes the memory mapped input
+			store.close(input);
+		}
+
+		/**
+		* Close the given memory mapped IO connection.
+		*/
+		void closeMemoryMappedIO(const MemoryMappedOutput& output) {
+			// closes the memory mapped output
+			store.close(output);
 		}
 
 	};
@@ -915,47 +923,12 @@ namespace reference {
 			delete &stream;
 		}
 
-		void close(const MemoryMappedIO& mmio) {
+		void close(const MemoryMappedInput& mmi) {
+			close(mmi, false);
+		}
 
-			auto entry = mmio.getEntry();
-
-			// check valid entry id
-			if (entry.id >= files.size()) {
-				assert(false && "Unable to close memory mapped input to unknown entity!");
-				return;
-			}
-
-			// get the register entry
-			File& file = files[entry.id];
-			if (!file.base) return;
-
-			int succ = 0;
-#ifndef _MSC_VER
-			// unmap the file from the address space
-			succ = munmap(file.base,file.size);
-			assert_eq(0,succ)
-				<< "Unable to unmap file " << file.name;
-			// if it was not successful, stop it here
-			if (succ != 0) return;
-#else
-			// if no support for memory mapped io, just write full buffer contents to file and free buffer
-			auto bytesWritten = WRITE_WRAPPER(file.fd, file.base, (unsigned)file.size);
-			free(file.base);
-			assert_le(0, bytesWritten)
-				<< "Unable to write to file " << file.name;
-#endif
-
-			// close the file descriptor
-			succ = ::CLOSE_WRAPPER(file.fd);
-			assert_eq(0,succ)
-				<< "Unable to close file " << file.name;
-
-			// reset the file descriptor
-			file.fd = 0;
-
-			// reset the base pointer
-			file.base = nullptr;
-
+		void close(const MemoryMappedOutput& mmo) {
+			close(mmo, true);
 		}
 
 		bool exists(Entry entry) const {
@@ -1049,6 +1022,51 @@ namespace reference {
 			// or if mapped address checking was requested on MSVC platforms
 			assert_fail() << "Failed to map file into address space!";
 			return false;
+		}
+
+		void close(const MemoryMappedIO& mmio, bool requiresWrite) {
+
+			auto entry = mmio.getEntry();
+
+			// check valid entry id
+			if (entry.id >= files.size()) {
+				assert(false && "Unable to close memory mapped input to unknown entity!");
+				return;
+			}
+
+			// get the register entry
+			File& file = files[entry.id];
+			if (!file.base) return;
+
+			int succ = 0;
+#ifndef _MSC_VER
+			// unmap the file from the address space
+			succ = munmap(file.base, file.size);
+			assert_eq(0, succ)
+				<< "Unable to unmap file " << file.name;
+			// if it was not successful, stop it here
+			if (succ != 0) return;
+#else
+			// if no support for memory mapped io, just write full buffer contents to file and free buffer
+			if (requiresWrite) {
+				auto bytesWritten = WRITE_WRAPPER(file.fd, file.base, (unsigned)file.size);
+				free(file.base);
+				assert_le(0, bytesWritten)
+					<< "Unable to write to file " << file.name << ", " << strerror(errno) << " " << file.fd;
+			}
+#endif
+
+			// close the file descriptor
+			succ = ::CLOSE_WRAPPER(file.fd);
+			assert_eq(0, succ)
+				<< "Unable to close file " << file.name;
+
+			// reset the file descriptor
+			file.fd = 0;
+
+			// reset the base pointer
+			file.base = nullptr;
+
 		}
 
 	};
