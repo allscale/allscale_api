@@ -419,8 +419,8 @@ namespace user {
 					: base(base), slopes(slopes), t_begin(t_begin), t_end(t_end) {}
 
 
-				template<typename Lambda>
-				void forEach(const Lambda& lambda) const {
+				template<typename EvenOp, typename OddOp>
+				void forEach(const EvenOp& even, const OddOp& odd) const {
 
 					// TODO: make this one cache oblivious
 
@@ -434,7 +434,11 @@ namespace user {
 					for(std::size_t t = t_begin; t < t_end; ++t) {
 
 						// process this plain
-						scanner(plainBase, lambda, x, t);
+						if ( t & 0x1 ) {
+							scanner(plainBase, odd, x, t);
+						} else {
+							scanner(plainBase, even, x, t);
+						}
 
 						// update the plain for the next level
 						for(std::size_t i=0; i<dims; ++i) {
@@ -445,9 +449,8 @@ namespace user {
 
 				}
 
-
-				template<typename Lambda>
-				core::treeture<void> pforEach(const ZoidDependencies<dims>& deps, const Lambda& lambda) const {
+				template<typename EvenOd, typename OddOp>
+				core::treeture<void> pforEach(const ZoidDependencies<dims>& deps, const EvenOd& even, const OddOp& odd) const {
 
 					struct Params {
 						Zoid zoid;
@@ -462,7 +465,7 @@ namespace user {
 						},
 						[&](const Params& params) {
 							// process final steps sequentially
-							params.zoid.forEach(lambda);
+							params.zoid.forEach(even,odd);
 						},
 						core::pick(
 							[](const Params& params, const auto& rec) {
@@ -507,17 +510,17 @@ namespace user {
 							},
 							[&](const Params& params, const auto&) {
 								// provide sequential alternative
-								params.zoid.forEach(lambda);
+								params.zoid.forEach(even,odd);
 							}
 						)
 					)(deps.toCoreDependencies(),Params{*this,deps});
 
 				}
 
-				template<typename Lambda>
-				core::treeture<void> pforEach(const Lambda& lambda) const {
+				template<typename EvenOd, typename OddOp>
+				core::treeture<void> pforEach(const EvenOd& even, const OddOp& odd) const {
 					// run the pforEach with no initial dependencies
-					return pforEach(ZoidDependencies<dims>(),lambda);
+					return pforEach(ZoidDependencies<dims>(),even,odd);
 				}
 
 
@@ -779,8 +782,8 @@ namespace user {
 
 			public:
 
-				template<typename Op>
-				void runSequential(const Op& op) const {
+				template<typename EvenOp, typename OddOp>
+				void runSequential(const EvenOp& even, const OddOp& odd) const {
 					const std::size_t num_tasks = 1 << Dims;
 
 					// fill a vector with the indices of the tasks
@@ -797,13 +800,13 @@ namespace user {
 					// process zoids in obtained order
 					for(const auto& cur : layers) {
 						for(const auto& idx : order) {
-							cur[idx].forEach(op);
+							cur[idx].forEach(even,odd);
 						}
 					}
 				}
 
-				template<typename Op>
-				core::treeture<void> runParallel(const Op& op) const {
+				template<typename EvenOp, typename OddOp>
+				core::treeture<void> runParallel(const EvenOp& even, const OddOp& odd) const {
 
 					const std::size_t num_tasks = 1 << Dims;
 
@@ -820,13 +823,13 @@ namespace user {
 							if (idx == 0) {
 								// create first task
 								jobs[idx] = (last.isDone())
-										? cur[idx].pforEach(op)
-										: cur[idx].pforEach(ZoidDependencies<Dims>(last),op);
+										? cur[idx].pforEach(even,odd)
+										: cur[idx].pforEach(ZoidDependencies<Dims>(last),even,odd);
 								return;
 							}
 
 							// create this task with corresponding dependencies
-							jobs[idx] = cur[idx].pforEach(ZoidDependencies<Dims>(jobs[deps]...),op);
+							jobs[idx] = cur[idx].pforEach(ZoidDependencies<Dims>(jobs[deps]...),even,odd);
 
 						});
 
@@ -974,6 +977,7 @@ namespace user {
 				Container b(a.size());
 
 				// TODO:
+				//  - avoid computation of elementwise modula in each dimension
 				//  - switch internally to cache-oblivious access pattern (optional)
 
 				// get size of structure
@@ -981,24 +985,29 @@ namespace user {
 				auto size = base.extend();
 
 				// wrap update function into zoid-interface adapter
-				auto wrappedUpdate = [&](const Coordinate<dims>& pos, time_t t){
+				auto even = [&](const Coordinate<dims>& pos, time_t t){
 					coordinate_converter<Container> conv;
+					assert_eq(t%2,0);
 					auto p = conv(data::elementwiseModulo(pos,size));
-					if (t % 2) {
-						b[p] = update(t,p,a);
-					} else {
-						a[p] = update(t,p,b);
-					}
+					b[p] = update(t,p,a);
+				};
+
+				auto odd = [&](const Coordinate<dims>& pos, time_t t){
+					coordinate_converter<Container> conv;
+					assert_eq(t%2,1);
+					auto p = conv(data::elementwiseModulo(pos,size));
+					a[p] = update(t,p,b);
 				};
 
 				// get the execution plan
 				auto exec_plan = ExecutionPlan<dims>::create(base,steps);
 
 				// process the execution plan
-				exec_plan.runSequential(wrappedUpdate);
+				exec_plan.runSequential(even,odd);
+
 
 				// make sure the result is in the a copy
-				if (!(steps % 2)) {
+				if (steps % 2) {
 					std::swap(a,b);
 				}
 
@@ -1022,6 +1031,7 @@ namespace user {
 				Container b(a.size());
 
 				// TODO:
+				//  - avoid computation of elementwise modula in each dimension
 				//  - switch internally to cache-oblivious access pattern (optional)
 				//  - make parallel with fine-grained dependencies
 
@@ -1030,25 +1040,26 @@ namespace user {
 				auto size = base.extend();
 
 				// wrap update function into zoid-interface adapter
-				auto wrappedUpdate = [&](const Coordinate<dims>& pos, time_t t){
+				auto even = [&](const Coordinate<dims>& pos, time_t t){
 					coordinate_converter<Container> conv;
 					auto p = conv(data::elementwiseModulo(pos,size));
-					if (t % 2) {
-						b[p] = update(t,p,a);
-					} else {
-						a[p] = update(t,p,b);
-					}
+					b[p] = update(t,p,a);
 				};
 
+				auto odd = [&](const Coordinate<dims>& pos, time_t t){
+					coordinate_converter<Container> conv;
+					auto p = conv(data::elementwiseModulo(pos,size));
+					a[p] = update(t,p,b);
+				};
 
 				// get the execution plan
 				auto exec_plan = ExecutionPlan<dims>::create(base,steps);
 
 				// process the execution plan
-				exec_plan.runParallel(wrappedUpdate).wait();
+				exec_plan.runParallel(even,odd).wait();
 
 				// make sure the result is in the a copy
-				if (!(steps % 2)) {
+				if (steps % 2) {
 					std::swap(a,b);
 				}
 
