@@ -101,10 +101,10 @@ namespace core {
 			std::is_destructible<S>::value &&
 
 			// there is a save operator
-			std::is_same<decltype(std::declval<const S&>().save(std::declval<utils::Archive&>())),void>::value &&
+			std::is_same<decltype(&S::save),void (S::*)(utils::Archive&) const>::value &&
 
 			// there is a static load operator
-			std::is_same<decltype(S::load(DECL_VAL_REF(utils::Archive))), S>::value,
+			std::is_same<decltype(&S::load),S (*)(utils::Archive&)>::value,
 
 		void>::type> : public std::true_type {};
 
