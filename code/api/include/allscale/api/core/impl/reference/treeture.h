@@ -606,7 +606,7 @@ namespace reference {
 		}
 
 		const task_reference* end() const {
-			return &(list[Size]);
+			return begin()+Size;
 		}
 
 	};
