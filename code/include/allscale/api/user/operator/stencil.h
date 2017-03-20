@@ -27,6 +27,8 @@ namespace user {
 
 	namespace implementation {
 
+		class sequential_iterative;
+
 		class coarse_grained_iterative;
 
 		class fine_grained_iterative;
@@ -73,6 +75,45 @@ namespace user {
 	namespace implementation {
 
 		// -- Iterative Stencil Implementation ---------------------------------------------------------
+
+		struct sequential_iterative {
+
+			template<typename Container, typename Update>
+			stencil_reference<sequential_iterative> process(Container& a, int steps, const Update& update) {
+
+				// return handle to asynchronous execution
+				return async([&a,steps,update]{
+
+					// iterative implementation
+					Container b(a.size());
+
+					Container* x = &a;
+					Container* y = &b;
+
+					using iter_type = decltype(a.size());
+
+					for(int t=0; t<steps; t++) {
+
+						// loop based sequential implementation
+						detail::forEach(iter_type(0),a.size(),[x,y,t,update](const iter_type& i){
+							(*y)[i] = update(t,i,*x);
+						});
+
+						// swap buffers
+						std::swap(x,y);
+					}
+
+					// make sure result is in a
+					if (x != &a) {
+						// move final data to the original container
+						std::swap(a,b);
+					}
+
+				});
+
+			}
+		};
+
 
 		struct coarse_grained_iterative {
 
@@ -276,7 +317,8 @@ namespace user {
 
 				template<std::size_t full_dim, typename Lambda>
 				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, int t) const {
-					for(pos[dim]=base[dim].begin; pos[dim]<base[dim].end; pos[dim]++) {
+					constexpr const auto idx = full_dim - dim - 1;
+					for(pos[idx]=base[idx].begin; pos[idx]<base[idx].end; pos[idx]++) {
 						 nested(base, lambda, pos, t);
 					}
 				}
@@ -288,7 +330,8 @@ namespace user {
 
 				template<std::size_t full_dim, typename Lambda>
 				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, int t) const {
-					for(pos[0]=base[0].begin; pos[0]<base[0].end; pos[0]++) {
+					constexpr const auto idx = full_dim - 1;
+					for(pos[idx]=base[idx].begin; pos[idx]<base[idx].end; pos[idx]++) {
 						lambda(pos, t);
 					}
 				}
