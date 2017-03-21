@@ -1540,7 +1540,7 @@ namespace reference {
 
 	public:
 
-		Task() : TaskBase() {}
+		Task(bool done = false) : TaskBase(done) {}
 
 		Task(TaskBase* left, TaskBase* right, bool parallel)
 			: TaskBase(left,right,parallel) {}
@@ -2013,7 +2013,7 @@ namespace reference {
 
 	template<typename DepsKind>
 	unreleased_treeture<void> done(dependencies<DepsKind>&& deps) {
-		auto res = new Task<void>();
+		auto res = new Task<void>(true);
 		res->addDependencies(deps.begin(),deps.end());
 		return res;
 	}
