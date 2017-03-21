@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "allscale/utils/assert.h"
 #include "allscale/utils/printer/arrays.h"
 
