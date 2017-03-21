@@ -2317,13 +2317,16 @@ namespace reference {
 			~WorkerPool() {
 				// shutdown threads
 
-				// poison all workers
-				for(auto& cur : workers) {
-					cur->poison();
-				}
+				{
+					// poison all workers
+					std::lock_guard<std::mutex> guard(m);
+					for(auto& cur : workers) {
+						cur->poison();
+					}
 
-				// make work available
-				workAvailable();
+					// make work available
+					workAvailable();
+				}
 
 				// wait for their death
 				for(std::size_t i=1; i<workers.size(); ++i) {
@@ -2372,8 +2375,9 @@ namespace reference {
 
 			friend Worker;
 
-			void waitForWork() {
+			void waitForWork(volatile bool& alive) {
 				std::unique_lock<std::mutex> lk(m);
+				if (!alive) return;
 				LOG_SCHEDULE("Going to sleep");
 				cv.wait(lk);
 				LOG_SCHEDULE("Woken up again");
@@ -2426,7 +2430,7 @@ namespace reference {
 						logProfilerEvent(ProfileLogEntry::createWorkerSuspendedEntry());
 
 						// wait for work by putting thread to sleep
-						pool.waitForWork();
+						pool.waitForWork(alive);
 
 						// report awakening
 						logProfilerEvent(ProfileLogEntry::createWorkerResumedEntry());
