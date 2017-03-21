@@ -748,7 +748,9 @@ namespace user {
 	template<typename Iter>
 	class neighborhood_sync_dependency : public detail::loop_dependency {
 
-		std::array<detail::iteration_reference<Iter>,3> deps;
+		using deps_list = std::array<detail::iteration_reference<Iter>,3>;
+
+		deps_list deps;
 
 		std::size_t size;
 
@@ -758,7 +760,7 @@ namespace user {
 	public:
 
 		neighborhood_sync_dependency(const detail::iteration_reference<Iter>& loop)
-			: deps({ loop }), size(1) {}
+			: deps({{ loop }}), size(1) {}
 
 		auto toCoreDependencies() const {
 			return core::after(deps[0],deps[1],deps[2]);
@@ -776,12 +778,12 @@ namespace user {
 				const iter_dependency& right = dependency.getRight();
 
 				// combine sub-dependencies
-				iter_dependency start ({left.getRange().begin(),left.getRange().begin()});
-				iter_dependency finish({right.getRange().end(), right.getRange().end() });
+				iter_dependency start ({{left.getRange().begin(),left.getRange().begin()}});
+				iter_dependency finish({{right.getRange().end(), right.getRange().end() }});
 
 				return {
-					neighborhood_sync_dependency({ start, left,  right  }),
-					neighborhood_sync_dependency({ left,  right, finish })
+					neighborhood_sync_dependency(deps_list{{ start, left,  right  }}),
+					neighborhood_sync_dependency(deps_list{{ left,  right, finish }})
 				};
 			}
 
@@ -807,8 +809,8 @@ namespace user {
 
 			// and pack accordingly
 			return {
-				leftPart.covers(left.grow(full))   ? neighborhood_sync_dependency({ a,b,c }) : *this,
-				rightPart.covers(right.grow(full)) ? neighborhood_sync_dependency({ b,c,d }) : *this
+				leftPart.covers(left.grow(full))   ? neighborhood_sync_dependency(deps_list{{ a,b,c }}) : *this,
+				rightPart.covers(right.grow(full)) ? neighborhood_sync_dependency(deps_list{{ b,c,d }}) : *this
 			};
 
 		}

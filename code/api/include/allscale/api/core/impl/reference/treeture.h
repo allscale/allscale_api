@@ -585,7 +585,7 @@ namespace reference {
 	public:
 
 		template<typename ... Args>
-		dependencies(const Args& ... args) : list({args...}) {}
+		dependencies(const Args& ... args) : list({{args...}}) {}
 
 		dependencies(const dependencies&) = default;
 		dependencies(dependencies&&) = default;

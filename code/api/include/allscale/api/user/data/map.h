@@ -140,7 +140,7 @@ namespace user {
 		/**
 		 * An operator to load an instance of this range from the given archive.
 		 */
-		static SetRegion load(utils::Archive& a) {
+		static SetRegion load(utils::Archive&) {
 			assert_not_implemented();
 			return SetRegion();
 		}
@@ -148,7 +148,7 @@ namespace user {
 		/**
 		 * An operator to store an instance of this range into the given archive.
 		 */
-		void store(utils::Archive& a) const {
+		void store(utils::Archive&) const {
 			assert_not_implemented();
 			// nothing so far
 		}
@@ -255,11 +255,11 @@ namespace user {
 			}
 		}
 
-		void save(utils::Archive& a, const region_type& keys) const {
+		void save(utils::Archive&, const region_type&) const {
 			assert_not_implemented();
 		}
 
-		void load(utils::Archive& a) {
+		void load(utils::Archive&) {
 			assert_not_implemented();
 		}
 
