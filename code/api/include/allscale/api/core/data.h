@@ -2,7 +2,6 @@
 
 #include <type_traits>
 
-#include "allscale/utils/compatibility.h"
 #include "allscale/utils/concepts.h"
 #include "allscale/utils/serializer.h"
 
@@ -49,40 +48,48 @@ namespace core {
 	// ---------------------------------------------------------------------------------
 
 
+	
 	template<typename F, typename _ = void>
 	struct is_fragment : public std::false_type {};
 
 	template<typename F>
-	struct is_fragment<F,typename std::enable_if<
+	struct is_fragment<F, typename std::enable_if<
 
-			//// fragment needs to expose a region type
-			is_region<typename F::region_type>::value &&
+		// fragment needs to expose a region type
+		is_region<typename F::region_type>::value &&
 
-			// fragments need to be constructible for a given region
-			std::is_same<decltype(F(DECL_VAL_REF(const typename F::shared_data_type), DECL_VAL_REF(const typename F::region_type))),F>::value &&
-		
-			// fragments need to be destructible
-			std::is_destructible<F>::value &&
+		// fragments need to be constructible for a given region
+		std::is_same<decltype(F(std::declval<const typename F::shared_data_type&>(), std::declval<const typename F::region_type&>())), F>::value &&
 
-			//// the region covered by the fragment has to be obtainable
-			std::is_same<decltype(DECL_VAL_REF(const F).getCoveredRegion()),const typename F::region_type&>::value &&
+		// fragments need to be destructible
+		std::is_destructible<F>::value &&
 
-			//// there has to be a resize operator
-			std::is_same<decltype(DECL_VAL_REF(F).resize(std::declval<const typename F::region_type&>())),void>::value &&
+		// the region covered by the fragment has to be obtainable
+		//std::is_same<decltype(std::declval<const F&>().getCoveredRegion()), const typename F::region_type&>::value &&
+		std::is_same<decltype((void (F::*)(utils::Archive&) const)(&F::getCoveredRegion)), void (F::*)(utils::Archive&) const>::value &&
 
-			//// there is an insert operator
-			std::is_same<decltype(DECL_VAL_REF(F).insert(DECL_VAL_REF(const F),std::declval<const typename F::region_type&>())),void>::value &&
+		// there has to be a resize operator
+		//std::is_same<decltype(std::declval<F&>().resize(std::declval<const typename F::region_type&>())), void>::value &&
+		std::is_same<decltype((void (F::*)(const typename F::region_type&))(&F::resize)), void (F::*)(const typename F::region_type&)>::value &&
 
-			//// there is a save operator
-			std::is_same<decltype(DECL_VAL_REF(const F).save(DECL_VAL_REF(utils::Archive),std::declval<const typename F::region_type&>())),void>::value &&
+		// there is an insert operator
+		//std::is_same<decltype(std::declval<F&>().insert(std::declval<const F&>(), std::declval<const typename F::region_type&>())), void>::value &&
+		std::is_same<decltype((void (F::*)(const F&, const typename F::region_type&))(&F::insert)), void (F::*)(const F&, const typename F::region_type&)>::value &&
 
-			//// there is a load operator
-			std::is_same<decltype(DECL_VAL_REF(F).load(DECL_VAL_REF(utils::Archive))),void>::value &&
+		// there is a save operator
+		//std::is_same<decltype(std::declval<const F&>().save(std::declval<utils::Archive&>(), std::declval<const typename F::region_type&>())), void>::value &&
+		std::is_same<decltype((void (F::*)(utils::Archive&, const typename F::region_type&) const)(&F::save)), void (F::*)(utils::Archive&, const typename F::region_type&) const>::value &&
 
-			//// can be concerted into a facade
-			std::is_same<decltype(DECL_VAL_REF(F).mask()), typename F::facade_type>::value,
+		// there is a load operator
+		//sstd::is_same<decltype(std::declval<F&>().load(std::declval<utils::Archive&>())), void>::value &&
+		std::is_same<decltype((void (F::*)(utils::Archive&))(&F::load)), void (F::*)(utils::Archive&)>::value &&
 
-		void>::type> : public std::true_type {};
+		// can be concerted into a facade
+		//std::is_same<decltype(std::declval<F&>().mask()), typename F::facade_type>::value,
+		std::is_same<decltype((typename F::facade_type (F::*)(void))(&F::mask)), typename F::facade_type(F::*)(void)>::value,
+
+		void>::type> : public std::true_type{};
+
 
 
 
@@ -101,10 +108,10 @@ namespace core {
 			std::is_destructible<S>::value &&
 
 			// there is a save operator
-			std::is_same<decltype(&S::save),void (S::*)(utils::Archive&) const>::value &&
+			std::is_same<decltype((void (S::*)(utils::Archive&) const)(&S::save)),void (S::*)(utils::Archive&) const>::value &&
 
 			// there is a static load operator
-			std::is_same<decltype(&S::load),S (*)(utils::Archive&)>::value,
+			std::is_same<decltype((S(*)(utils::Archive&))(&S::load)),S (*)(utils::Archive&)>::value,
 
 		void>::type> : public std::true_type {};
 
