@@ -25,6 +25,9 @@ namespace user {
 	template<std::size_t dims>
 	using Coordinate = data::Vector<std::int64_t,dims>;
 
+	template<std::size_t dims>
+	using Size = Coordinate<dims>;
+
 	namespace implementation {
 
 		struct sequential_iterative;
@@ -316,10 +319,32 @@ namespace user {
 				plain_scanner<dim-1> nested;
 
 				template<std::size_t full_dim, typename Lambda>
-				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, int t) const {
+				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, int t, const Coordinate<full_dim>& size) const {
 					constexpr const auto idx = full_dim - dim - 1;
-					for(pos[idx]=base[idx].begin; pos[idx]<base[idx].end; pos[idx]++) {
-						 nested(base, lambda, pos, t);
+
+					// compute boundaries
+					auto from = base[idx].begin;
+					auto to = base[idx].end;
+					auto length = size[idx];
+
+					// shift range to size window
+					if (from > length) {
+						from -= length;
+						to -= length;
+					}
+
+					// process range from start to limit
+					auto limit = std::min(to,length);
+					for(pos[idx]=from; pos[idx]<limit; pos[idx]++) {
+						nested(base, lambda, pos, t, size);
+					}
+
+					// and if necessary the elements beyond, after a wrap-around
+					if (to <= length) return;
+
+					to -= length;
+					for(pos[idx]=0; pos[idx]<to; pos[idx]++) {
+						nested(base, lambda, pos, t, size);
 					}
 				}
 
@@ -329,11 +354,34 @@ namespace user {
 			struct plain_scanner<0> {
 
 				template<std::size_t full_dim, typename Lambda>
-				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, int t) const {
+				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, int t, const Coordinate<full_dim>& size) const {
 					constexpr const auto idx = full_dim - 1;
-					for(pos[idx]=base[idx].begin; pos[idx]<base[idx].end; pos[idx]++) {
+
+					// compute boundaries
+					auto from = base[idx].begin;
+					auto to = base[idx].end;
+					auto length = size[idx];
+
+					// shift range to size window
+					if (from > length) {
+						from -= length;
+						to -= length;
+					}
+
+					// process range from start to limit
+					auto limit = std::min(to,length);
+					for(pos[idx]=from; pos[idx]<limit; pos[idx]++) {
 						lambda(pos, t);
 					}
+
+					// and if necessary the elements beyond, after a wrap-around
+					if (to <= length) return;
+
+					to -= length;
+					for(pos[idx]=0; pos[idx]<to; pos[idx]++) {
+						lambda(pos, t);
+					}
+
 				}
 
 			};
@@ -420,7 +468,7 @@ namespace user {
 
 
 				template<typename EvenOp, typename OddOp>
-				void forEach(const EvenOp& even, const OddOp& odd) const {
+				void forEach(const EvenOp& even, const OddOp& odd, const Size<dims>& limits) const {
 
 					// TODO: make this one cache oblivious
 
@@ -435,9 +483,9 @@ namespace user {
 
 						// process this plain
 						if ( t & 0x1 ) {
-							scanner(plainBase, odd, x, t);
+							scanner(plainBase, odd, x, t, limits);
 						} else {
-							scanner(plainBase, even, x, t);
+							scanner(plainBase, even, x, t, limits);
 						}
 
 						// update the plain for the next level
@@ -450,7 +498,7 @@ namespace user {
 				}
 
 				template<typename EvenOd, typename OddOp>
-				core::treeture<void> pforEach(const ZoidDependencies<dims>& deps, const EvenOd& even, const OddOp& odd) const {
+				core::treeture<void> pforEach(const ZoidDependencies<dims>& deps, const EvenOd& even, const OddOp& odd, const Size<dims>& limits) const {
 
 					struct Params {
 						Zoid zoid;
@@ -465,7 +513,7 @@ namespace user {
 						},
 						[&](const Params& params) {
 							// process final steps sequentially
-							params.zoid.forEach(even,odd);
+							params.zoid.forEach(even,odd,limits);
 						},
 						core::pick(
 							[](const Params& params, const auto& rec) {
@@ -510,7 +558,7 @@ namespace user {
 							},
 							[&](const Params& params, const auto&) {
 								// provide sequential alternative
-								params.zoid.forEach(even,odd);
+								params.zoid.forEach(even,odd,limits);
 							}
 						)
 					)(deps.toCoreDependencies(),Params{*this,deps});
@@ -518,9 +566,9 @@ namespace user {
 				}
 
 				template<typename EvenOd, typename OddOp>
-				core::treeture<void> pforEach(const EvenOd& even, const OddOp& odd) const {
+				core::treeture<void> pforEach(const EvenOd& even, const OddOp& odd, const Size<dims>& limits) const {
 					// run the pforEach with no initial dependencies
-					return pforEach(ZoidDependencies<dims>(),even,odd);
+					return pforEach(ZoidDependencies<dims>(),even,odd,limits);
 				}
 
 
@@ -783,7 +831,7 @@ namespace user {
 			public:
 
 				template<typename EvenOp, typename OddOp>
-				void runSequential(const EvenOp& even, const OddOp& odd) const {
+				void runSequential(const EvenOp& even, const OddOp& odd, const Size<Dims>& limits) const {
 					const std::size_t num_tasks = 1 << Dims;
 
 					// fill a vector with the indices of the tasks
@@ -800,13 +848,13 @@ namespace user {
 					// process zoids in obtained order
 					for(const auto& cur : layers) {
 						for(const auto& idx : order) {
-							cur[idx].forEach(even,odd);
+							cur[idx].forEach(even,odd,limits);
 						}
 					}
 				}
 
 				template<typename EvenOp, typename OddOp>
-				core::treeture<void> runParallel(const EvenOp& even, const OddOp& odd) const {
+				core::treeture<void> runParallel(const EvenOp& even, const OddOp& odd, const Size<Dims>& limits) const {
 
 					const std::size_t num_tasks = 1 << Dims;
 
@@ -823,13 +871,13 @@ namespace user {
 							if (idx == 0) {
 								// create first task
 								jobs[idx] = (last.isDone())
-										? cur[idx].pforEach(even,odd)
-										: cur[idx].pforEach(ZoidDependencies<Dims>(last),even,odd);
+										? cur[idx].pforEach(even,odd,limits)
+										: cur[idx].pforEach(ZoidDependencies<Dims>(last),even,odd,limits);
 								return;
 							}
 
 							// create this task with corresponding dependencies
-							jobs[idx] = cur[idx].pforEach(ZoidDependencies<Dims>(jobs[deps]...),even,odd);
+							jobs[idx] = cur[idx].pforEach(ZoidDependencies<Dims>(jobs[deps]...),even,odd,limits);
 
 						});
 
@@ -987,15 +1035,13 @@ namespace user {
 				// wrap update function into zoid-interface adapter
 				auto even = [&](const Coordinate<dims>& pos, time_t t){
 					coordinate_converter<Container> conv;
-					assert_eq(t%2,0);
-					auto p = conv(data::elementwiseModulo(pos,size));
+					auto p = conv(pos);
 					b[p] = update(t,p,a);
 				};
 
 				auto odd = [&](const Coordinate<dims>& pos, time_t t){
 					coordinate_converter<Container> conv;
-					assert_eq(t%2,1);
-					auto p = conv(data::elementwiseModulo(pos,size));
+					auto p = conv(pos);
 					a[p] = update(t,p,b);
 				};
 
@@ -1003,7 +1049,7 @@ namespace user {
 				auto exec_plan = ExecutionPlan<dims>::create(base,steps);
 
 				// process the execution plan
-				exec_plan.runSequential(even,odd);
+				exec_plan.runSequential(even,odd,size);
 
 
 				// make sure the result is in the a copy
@@ -1042,13 +1088,13 @@ namespace user {
 				// wrap update function into zoid-interface adapter
 				auto even = [&](const Coordinate<dims>& pos, time_t t){
 					coordinate_converter<Container> conv;
-					auto p = conv(data::elementwiseModulo(pos,size));
+					auto p = conv(pos);
 					b[p] = update(t,p,a);
 				};
 
 				auto odd = [&](const Coordinate<dims>& pos, time_t t){
 					coordinate_converter<Container> conv;
-					auto p = conv(data::elementwiseModulo(pos,size));
+					auto p = conv(pos);
 					a[p] = update(t,p,b);
 				};
 
@@ -1056,7 +1102,7 @@ namespace user {
 				auto exec_plan = ExecutionPlan<dims>::create(base,steps);
 
 				// process the execution plan
-				exec_plan.runParallel(even,odd).wait();
+				exec_plan.runParallel(even,odd,size).wait();
 
 				// make sure the result is in the a copy
 				if (steps % 2) {

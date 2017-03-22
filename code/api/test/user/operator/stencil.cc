@@ -39,7 +39,7 @@ namespace user {
 
 				// check that input arrays are up-to-date
 				if (pos > 0) EXPECT_EQ(I+time,data[pos-1]) << "Position: " << pos << " - 1 = " << (pos-1);
-				EXPECT_EQ(I+time,data[pos]);
+				EXPECT_EQ(I+time,data[pos]) << "Position: " << pos;
 				if (pos < N-1) EXPECT_EQ(I+time,data[pos+1]) << "Position: " << pos << " + 1 = " << (pos+1);;
 
 				// increase the time step of current sell
