@@ -229,14 +229,6 @@ namespace core {
 	}
 
 
-	// --- add pick wrapper support ---
-
-	template<typename F, typename ... Fs>
-	std::tuple<F,Fs...> pick(const F& f, const Fs& ... fs) {
-		return std::make_tuple(f,fs...);
-	}
-
-
 	// --- recursive definitions ---
 
 	template<typename ... Defs> struct rec_defs;
