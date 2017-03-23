@@ -434,6 +434,20 @@ namespace core {
 
 	// --- prec operator ---
 
+	namespace detail {
+
+		template<
+			unsigned i = 0,
+			typename ... Defs,
+			typename I = typename utils::type_at<i,utils::type_list<Defs...>>::type::in_type,
+			typename O = typename utils::type_at<i,utils::type_list<Defs...>>::type::out_type
+		>
+		auto prec(const rec_defs<Defs...>& defs) {
+			return detail::prec_operation<i,I,O,Defs...>{defs};
+		}
+
+	}
+
 	template<
 		unsigned i = 0,
 		typename ... Defs,
@@ -441,7 +455,7 @@ namespace core {
 		typename O = typename utils::type_at<i,utils::type_list<Defs...>>::type::out_type
 	>
 	auto prec(const rec_defs<Defs...>& defs) {
-		return detail::prec_operation<i,I,O,Defs...>{defs};
+		return detail::prec<i>(defs);
 	}
 
 
