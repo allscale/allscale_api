@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "allscale/utils/functional_utils.h"
-#include "allscale/utils/tuple_utils.h"
 #include "allscale/utils/vector_utils.h"
 
 #include "allscale/api/core/treeture.h"
@@ -13,6 +12,34 @@
 namespace allscale {
 namespace api {
 namespace core {
+
+	// ----- fun variants + utils ----------
+
+	template<class ... Types>
+	class fun_variants : public std::tuple<Types...> {
+	  public:
+		explicit fun_variants(const Types&... args) : std::tuple<Types...>(args...) { }
+	};
+
+	template<class ... Types>
+	inline fun_variants<Types...> make_fun_variants(const Types& ... elements) {
+		return fun_variants<Types...>(elements...);
+	}
+
+	template<typename T>
+	struct is_fun_variants : public std::false_type {};
+
+	template<typename ... E>
+	struct is_fun_variants<fun_variants<E...>> : public std::true_type {};
+
+	template<typename T>
+	struct is_fun_variants<const T> : public is_fun_variants<T> {};
+
+	template<typename T>
+	struct is_fun_variants<T&> : public is_fun_variants<T> {};
+
+
+
 
 	namespace detail {
 
@@ -64,7 +91,7 @@ namespace core {
 				typename ... Versions,
 				typename ... Args
 			>
-			Res call(const std::tuple<Versions...>& versions, const Args& ... args) {
+			Res call(const fun_variants<Versions...>& versions, const Args& ... args) {
 				using res_type = decltype(std::get<0>(versions)(args...));
 				result_wrapper<Res,res_type> wrap;
 				return wrap([&](){ return std::get<0>(versions)(args...); });
@@ -79,7 +106,7 @@ namespace core {
 				typename ... Versions,
 				typename ... Args
 			>
-			Res call(const std::tuple<Versions...>& versions, const Args& ... args) {
+			Res call(const fun_variants<Versions...>& versions, const Args& ... args) {
 				using res_type = decltype(std::get<sizeof...(Versions)-1>(versions)(args...));
 				result_wrapper<Res,res_type> wrap;
 				return wrap([&](){ return std::get<sizeof...(Versions)-1>(versions)(args...); });
@@ -94,8 +121,8 @@ namespace core {
 
 
 	template<typename ... Options>
-	std::tuple<Options...> pick(Options&& ... options) {
-		return std::make_tuple(std::move(options)...);
+	fun_variants<Options...> pick(Options&& ... options) {
+		return make_fun_variants(std::move(options)...);
 	}
 
 
@@ -117,18 +144,18 @@ namespace core {
 		typename ... BaseCases,
 		typename ... StepCases
 	>
-	struct fun_def<O,I,BaseCaseTest,std::tuple<BaseCases...>,std::tuple<StepCases...>> {
+	struct fun_def<O,I,BaseCaseTest,fun_variants<BaseCases...>,fun_variants<StepCases...>> {
 		typedef I in_type;
 		typedef O out_type;
 
 		BaseCaseTest bc_test;
-		std::tuple<BaseCases...> base;
-		std::tuple<StepCases...> step;
+		fun_variants<BaseCases...> base;
+		fun_variants<StepCases...> step;
 
 		fun_def(
 			const BaseCaseTest& test,
-			const std::tuple<BaseCases...>& base,
-			const std::tuple<StepCases...>& step
+			const fun_variants<BaseCases...>& base,
+			const fun_variants<StepCases...>& step
 		) : bc_test(test), base(base), step(step) {}
 
 		fun_def(const fun_def& other) = default;
@@ -199,33 +226,33 @@ namespace core {
 		typename O = typename utils::lambda_traits<First_BC>::result_type,
 		typename I = typename utils::lambda_traits<First_BC>::arg1_type
 	>
-	fun_def<O,I,BT,std::tuple<First_BC,BC...>,std::tuple<SC...>>
-	fun(const BT& a, const std::tuple<First_BC,BC...>& b, const std::tuple<SC...>& c) {
-		return fun_def<O,I,BT,std::tuple<First_BC,BC...>,std::tuple<SC...>>(a,b,c);
+	fun_def<O,I,BT,fun_variants<First_BC,BC...>,fun_variants<SC...>>
+	fun(const BT& a, const fun_variants<First_BC,BC...>& b, const fun_variants<SC...>& c) {
+		return fun_def<O,I,BT,fun_variants<First_BC,BC...>,fun_variants<SC...>>(a,b,c);
 	}
 
 	template<
 		typename BT, typename BC, typename SC,
-		typename filter = typename std::enable_if<!utils::is_tuple<BC>::value && !utils::is_tuple<SC>::value,int>::type
+		typename filter = typename std::enable_if<!is_fun_variants<BC>::value && !is_fun_variants<SC>::value,int>::type
 	>
-	auto fun(const BT& a, const BC& b, const SC& c) -> decltype(fun(a,std::make_tuple(b),std::make_tuple(c))) {
-		return fun(a,std::make_tuple(b),std::make_tuple(c));
+	auto fun(const BT& a, const BC& b, const SC& c) -> decltype(fun(a,make_fun_variants(b),make_fun_variants(c))) {
+		return fun(a,make_fun_variants(b),make_fun_variants(c));
 	}
 
 	template<
 		typename BT, typename BC, typename SC,
-		typename filter = typename std::enable_if<!utils::is_tuple<BC>::value && utils::is_tuple<SC>::value,int>::type
+		typename filter = typename std::enable_if<!is_fun_variants<BC>::value && is_fun_variants<SC>::value,int>::type
 	>
-	auto fun(const BT& a, const BC& b, const SC& c) -> decltype(fun(a,std::make_tuple(b),c)) {
-		return fun(a,std::make_tuple(b),c);
+	auto fun(const BT& a, const BC& b, const SC& c) -> decltype(fun(a,make_fun_variants(b),c)) {
+		return fun(a,make_fun_variants(b),c);
 	}
 
 	template<
 		typename BT, typename BC, typename SC,
-		typename filter = typename std::enable_if<utils::is_tuple<BC>::value && !utils::is_tuple<SC>::value,int>::type
+		typename filter = typename std::enable_if<is_fun_variants<BC>::value && !is_fun_variants<SC>::value,int>::type
 	>
-	auto fun(const BT& a, const BC& b, const SC& c) -> decltype(fun(a,b,std::make_tuple(c))) {
-		return fun(a,b,std::make_tuple(c));
+	auto fun(const BT& a, const BC& b, const SC& c) -> decltype(fun(a,b,make_fun_variants(c))) {
+		return fun(a,b,make_fun_variants(c));
 	}
 
 
