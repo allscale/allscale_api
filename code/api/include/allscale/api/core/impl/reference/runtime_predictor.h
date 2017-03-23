@@ -72,15 +72,15 @@ namespace reference {
 
 	};
 
-	CycleCount operator*(long unsigned int f, const CycleCount& count) {
+	inline CycleCount operator*(long unsigned int f, const CycleCount& count) {
 		return f * count.count();
 	}
 
-	CycleCount operator*(const CycleCount& count, long unsigned int f) {
+	inline CycleCount operator*(const CycleCount& count, long unsigned int f) {
 		return count.count() * f;
 	}
 
-	CycleCount operator/(const CycleCount& count, long unsigned int div) {
+	inline CycleCount operator/(const CycleCount& count, long unsigned int div) {
 		return count.count() / div;
 	}
 

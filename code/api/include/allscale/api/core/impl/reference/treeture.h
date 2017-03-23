@@ -84,13 +84,16 @@ namespace reference {
 
 	const bool DEBUG = false;
 
-	std::mutex g_log_mutex;
+	inline std::mutex& getLogMutex() {
+		static std::mutex m;
+		return m;
+	}
 
 	#define LOG(MSG) \
 		{  \
 			if (DEBUG) { \
 				std::thread::id this_id = std::this_thread::get_id(); \
-				std::lock_guard<std::mutex> lock(g_log_mutex); \
+				std::lock_guard<std::mutex> lock(getLogMutex()); \
 				std::cerr << "Thread " << this_id << ": " << MSG << "\n"; \
 			} \
 		}
@@ -101,7 +104,7 @@ namespace reference {
 		{  \
 			if (DEBUG_SCHEDULE) { \
 				std::thread::id this_id = std::this_thread::get_id(); \
-				std::lock_guard<std::mutex> lock(g_log_mutex); \
+				std::lock_guard<std::mutex> lock(getLogMutex()); \
 				std::cerr << "Thread " << this_id << ": " << MSG << "\n"; \
 			} \
 		}
@@ -112,7 +115,7 @@ namespace reference {
 		{  \
 			if (DEBUG_TASKS) { \
 				std::thread::id this_id = std::this_thread::get_id(); \
-				std::lock_guard<std::mutex> lock(g_log_mutex); \
+				std::lock_guard<std::mutex> lock(getLogMutex()); \
 				std::cerr << "Thread " << this_id << ": " << MSG << "\n"; \
 			} \
 		}
@@ -257,13 +260,13 @@ namespace reference {
 
 		};
 
-		Action log(EventType type, const TaskBase* task) {
+		inline Action log(EventType type, const TaskBase* task) {
 			assert_true(type != EventType::DependencyWait);
 			if (!MONITORING_ENABLED) return {};
 			return Event{type,task,TaskID()};
 		}
 
-		Action log(EventType type, const TaskID& task) {
+		inline Action log(EventType type, const TaskID& task) {
 			assert_true(type == EventType::DependencyWait);
 			if (!MONITORING_ENABLED) return {};
 			return Event{type,nullptr,task};
@@ -467,7 +470,7 @@ namespace reference {
 
 
 	// a factory for a new task family
-	TaskFamilyPtr createFamily() {
+	inline TaskFamilyPtr createFamily() {
 		static TaskFamilyManager familyManager;
 		return familyManager.getFreshFamily();
 	}
@@ -1463,7 +1466,7 @@ namespace reference {
 
 	// ------------------------- Task Reference --------------------------
 
-	task_reference::task_reference(const TaskBase& task)
+	inline task_reference::task_reference(const TaskBase& task)
 		: family(task.getTaskFamily()), path(task.getTaskPath()) {
 		assert_false(task.isOrphan()) << "Unable to reference an orphan task!";
 	}
@@ -2007,7 +2010,7 @@ namespace reference {
 		return dependencies<fixed_sized<1+sizeof...(Rest)>>(r,rest...);
 	}
 
-	dependencies<dynamic_sized> after(std::vector<task_reference>&& refs) {
+	inline dependencies<dynamic_sized> after(std::vector<task_reference>&& refs) {
 		return std::move(refs);
 	}
 
@@ -2180,7 +2183,7 @@ namespace reference {
 			 * Does not do anything on operating systems other than linux.
 			 */
 			#ifdef __linux__
-				void fixAffinity(int core) {
+				inline void fixAffinity(int core) {
 					int num_cores = std::thread::hardware_concurrency();
 					cpu_set_t mask;
 					CPU_ZERO(&mask);
@@ -2188,7 +2191,7 @@ namespace reference {
 					pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mask);
 				}
 			#else
-				void fixAffinity(int) { }
+				inline void fixAffinity(int) { }
 			#endif
 
 		}
@@ -2448,7 +2451,7 @@ namespace reference {
 
 		}
 
-		void Worker::runTask(TaskBase& task) {
+		inline void Worker::runTask(TaskBase& task) {
 
 			// the splitting of a task may provide a done substitute => skip those
 			if (task.isDone()) return;
@@ -2491,7 +2494,7 @@ namespace reference {
 			LOG_SCHEDULE("Finished task " << task);
 		}
 
-		bool Worker::splitTask(TaskBase& task) {
+		inline bool Worker::splitTask(TaskBase& task) {
 			using namespace std::chrono_literals;
 
 			// the threshold for estimated task to be split
@@ -2688,7 +2691,7 @@ namespace reference {
 	}// end namespace monitoring
 
 
-	void TaskBase::start() {
+	inline void TaskBase::start() {
 		LOG_TASKS("Starting " << *this );
 
 		// check that the given task is a new task
@@ -2701,7 +2704,7 @@ namespace reference {
 		dependencyDone();
 	}
 
-	void TaskBase::dependencyDone() {
+	inline void TaskBase::dependencyDone() {
 
 		// decrease the number of active dependencies
 		int oldValue = num_active_dependencies.fetch_sub(1);
@@ -2798,7 +2801,7 @@ namespace reference {
 } // end namespace allscale
 
 
-void __dumpRuntimeState() {
+inline void __dumpRuntimeState() {
 	std::cout << "\n ------------------------- Runtime State Dump -------------------------\n";
 	allscale::api::core::impl::reference::monitoring::ThreadState::dumpStates(std::cout);
 	allscale::api::core::impl::reference::runtime::WorkerPool::getInstance().dumpState(std::cout);
