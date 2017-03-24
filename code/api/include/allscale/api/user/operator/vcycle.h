@@ -87,12 +87,13 @@ namespace user {
 			void up() {
 				// forward call to nested
 				nested.up();
-				body.reduce(nested.getBody());
-				body.compute();
+				body.restrictFrom(nested.getBody());
+				body.computeFineToCoarse();
 			}
 
 			void down() {
-				body.prolong(nested.getBody());
+				body.prolongateTo(nested.getBody());
+				nested.getBody().computeCoarseToFine();
 				nested.down();
 			}
 
@@ -100,8 +101,8 @@ namespace user {
 				return body;
 			}
 
-			void prolong(const StageBody<Mesh,Level+1>& parentBody) {
-				body.prolong(parentBody);
+			void prolongateFrom(const StageBody<Mesh,Level+1>& parentBody) {
+				body.prolongateFrom(parentBody);
 			}
 
 			template<unsigned Lvl>
@@ -158,7 +159,7 @@ namespace user {
 
 			void up() {
 				// just compute on this level
-				body.compute();
+				body.computeFineToCoarse();
 			}
 
 			void down() {
@@ -169,8 +170,8 @@ namespace user {
 				return body;
 			}
 
-			void prolong(const StageBody<Mesh,1>& parentBody) {
-				body.prolong(parentBody);
+			void prolongateTo(const StageBody<Mesh,1>& parentBody) {
+				body.prolongateTo(parentBody);
 			}
 
 			template<unsigned Lvl>

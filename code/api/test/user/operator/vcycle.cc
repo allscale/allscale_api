@@ -1,7 +1,10 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <string>
 #include <vector>
+
+#include "allscale/utils/string_utils.h"
 
 #include "allscale/api/user/data/mesh.h"
 #include "allscale/api/user/operator/vcycle.h"
@@ -11,6 +14,73 @@ namespace api {
 namespace user {
 
 	#include "../data/bar_mesh.inl"
+
+
+	template<
+		typename Mesh,
+		unsigned Level
+	>
+	struct TestOrderStage {
+
+		template<typename NodeKind,typename ValueType>
+		using attribute = typename Mesh::template mesh_data_type<NodeKind,ValueType,Level>;
+
+		std::vector<std::string>* ops;
+
+		TestOrderStage(const Mesh&) : ops(nullptr) {}
+
+		void computeFineToCoarse() {
+			ops->push_back("C-F2C-" + std::to_string(Level));
+		}
+
+		void computeCoarseToFine() {
+			ops->push_back("C-C2F-" + std::to_string(Level));
+		}
+
+
+		void restrictFrom(const TestOrderStage<Mesh,Level-1>&) {
+			ops->push_back("R-" + std::to_string(Level-1) + "-" + std::to_string(Level));
+		}
+
+		void prolongateTo(TestOrderStage<Mesh,Level-1>&) {
+			ops->push_back("P-" + std::to_string(Level) + "-" + std::to_string(Level-1));
+		}
+
+	};
+
+	TEST(VCycle,TestOrder) {
+
+		const int N = 10;
+
+		using vcycle_type = VCycle<
+				TestOrderStage,
+				BarMesh<3,10>
+			>;
+
+		// create a sample bar, 3 layers
+		auto bar = createBarMesh<3,10>(N);
+
+		// create vcycle instance
+		vcycle_type vcycle(bar);
+
+		// set up ops buffer
+		std::vector<std::string> buffer;
+		vcycle.getStageBody<0>().ops = &buffer;
+		vcycle.getStageBody<1>().ops = &buffer;
+		vcycle.getStageBody<2>().ops = &buffer;
+
+		// run the cycle
+		vcycle.run(2);
+
+		// check the result
+		EXPECT_EQ(
+			"[C-F2C-0,R-0-1,C-F2C-1,R-1-2,C-F2C-2,P-2-1,C-C2F-1,P-1-0,C-C2F-0,"
+		     "C-F2C-0,R-0-1,C-F2C-1,R-1-2,C-F2C-2,P-2-1,C-C2F-1,P-1-0,C-C2F-0]",
+			toString(buffer)
+		);
+
+	}
+
 
 	// --- basic vcycle usage ---
 
@@ -41,14 +111,20 @@ namespace user {
 
 		}
 
-		void compute() {
+		void computeFineToCoarse() {
 			mesh.template pforAll<Vertex,Level>([&](const auto& cur) {
 				updateCounters[cur]++;
 			});
-
 		}
 
-		void reduce(const TestStage<Mesh,Level-1>& childStage) {
+		void computeCoarseToFine() {
+			mesh.template pforAll<Vertex,Level>([&](const auto& cur) {
+				updateCounters[cur]++;
+			});
+		}
+
+
+		void restrictFrom(const TestStage<Mesh,Level-1>& childStage) {
 
 			// reduction by taking average of children
 			mesh.template pforAll<Vertex,Level>([&](auto cur){
@@ -67,7 +143,7 @@ namespace user {
 
 		}
 
-		void prolong(TestStage<Mesh,Level-1>& childStage) {
+		void prolongateTo(TestStage<Mesh,Level-1>& childStage) {
 
 			// prolongation of results to children
 			mesh.template pforAll<Vertex,Level>([&](auto cur){
@@ -116,7 +192,7 @@ namespace user {
 
 		// now each element should be updated 30x
 		for(std::size_t i=0; i<bar.getNumNodes<Vertex>(); ++i) {
-			EXPECT_EQ(30,counts[data::NodeRef<Vertex>(i)]);
+			EXPECT_EQ(50,counts[data::NodeRef<Vertex>(i)]);
 		}
 
 	}
@@ -149,7 +225,7 @@ namespace user {
 
 		}
 
-		void compute() {
+		void computeFineToCoarse() {
 			mesh.template pforAll<Vertex,Level>([&](const auto& cur) {
 
 				double sum = 0;
@@ -167,7 +243,11 @@ namespace user {
 
 		}
 
-		void reduce(const ExampleTemperatureStage<Mesh,Level-1>& childStage) {
+		void computeCoarseToFine() {
+			// nothing to do
+		}
+
+		void restrictFrom(const ExampleTemperatureStage<Mesh,Level-1>& childStage) {
 
 			// reduction by taking average of children
 			mesh.template pforAll<Vertex,Level>([&](auto cur){
@@ -183,7 +263,7 @@ namespace user {
 
 		}
 
-		void prolong(ExampleTemperatureStage<Mesh,Level-1>& childStage) {
+		void prolongateTo(ExampleTemperatureStage<Mesh,Level-1>& childStage) {
 
 			// prolongation of results to children
 			mesh.template pforAll<Vertex,Level>([&](auto cur){
