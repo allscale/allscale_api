@@ -404,7 +404,7 @@ namespace reference {
 		 * Register a new output stream with the given name within the system.
 		 * The call will create the underlying file and prepare output operations.
 		 *
-		 *  NOTE: this method is not thread save!
+		 *  NOTE: this method is not thread safe!
 		 *
 		 * @param name the name of the stream to be opened -- nothing happens if already opened
 		 */
@@ -452,7 +452,7 @@ namespace reference {
 		 * Register a new memory mapped output with the given name within the system.
 		 * The call will create the underlying storage and prepare output operations.
 		 *
-		 *  NOTE: this method is not thread save!
+		 *  NOTE: this method is not thread safe!
 		 *
 		 * @param entry the storage entry to be opened -- nothing happens if already opened
 		 */
