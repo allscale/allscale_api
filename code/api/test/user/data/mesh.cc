@@ -1453,9 +1453,11 @@ namespace data {
 
 			const auto& children = mesh.template getChildren<Refine>(cur);
 
-			EXPECT_EQ(2,children.size());
-			EXPECT_EQ(left,children.front()) << "i=" << cur;
-			EXPECT_EQ(right,children.back()) << "i=" << cur;
+			EXPECT_EQ(2,children.size()) << "Invalid number of children of parent " << cur;
+			if (!children.empty()) {
+				EXPECT_EQ(left,children.front()) << "i=" << cur;
+				EXPECT_EQ(right,children.back()) << "i=" << cur;
+			}
 		}
 
 

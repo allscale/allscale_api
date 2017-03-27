@@ -148,7 +148,6 @@ namespace data {
 	template<typename Kind,unsigned Level>
 	struct NodeRef {
 
-
 		using node_type = Kind;
 		enum { level = Level };
 
@@ -156,7 +155,7 @@ namespace data {
 
 		NodeRef() = default;
 
-		constexpr explicit NodeRef(std::size_t id) : id(NodeID(id)) {}
+		constexpr explicit NodeRef(NodeID id) : id(id) {}
 
 		NodeID getOrdinal() const {
 			return id;
@@ -202,7 +201,7 @@ namespace data {
 		}
 
 		NodeRef<Kind,Level> operator[](std::size_t index) const {
-			return NodeRef<Kind,Level> { _begin.id + index };
+			return NodeRef<Kind,Level>(NodeID(_begin.id + index));
 		}
 
 		std::size_t size() const {
@@ -212,11 +211,11 @@ namespace data {
 
 		class const_iterator : public std::iterator<std::random_access_iterator_tag, NodeRef<Kind,Level>> {
 
-			std::size_t cur;
+			NodeID cur;
 
 		public:
 
-			const_iterator(std::size_t pos) : cur(pos) {};
+			const_iterator(NodeID pos) : cur(pos) {};
 
 			bool operator==(const const_iterator& other) const {
 				return cur == other.cur;
@@ -385,88 +384,57 @@ namespace data {
 		}
 
 
-		template<unsigned Level, typename ... NodeTypes>
-		struct NodeSet;
+		template<std::size_t Levels, typename ... NodeKinds>
+		class NodeSet {
 
-		template<unsigned Level, typename First, typename ... Rest>
-		struct NodeSet<Level,First,Rest...> {
+			using LevelData = utils::StaticMap<utils::keys<NodeKinds...>,std::size_t>;
 
-			std::size_t node_counter;
+			using DataStore = std::array<LevelData,Levels>;
 
-			NodeSet<Level,Rest...> nested;
+			static_assert(std::is_trivial<DataStore>::value, "The implementation assumes that this type is trivial!");
 
-			NodeSet() : node_counter(0) {}
+			DataStore data;
+
+		public:
+
+			NodeSet() {
+				for(auto& cur : data) cur = LevelData(0);
+			}
+
 			NodeSet(const NodeSet&) = default;
 			NodeSet(NodeSet&& other) = default;
 
 			NodeSet& operator=(const NodeSet&) =default;
 			NodeSet& operator=(NodeSet&&) =default;
 
-			template<typename T>
-			typename std::enable_if<std::is_same<First,T>::value,NodeSet&>::type get() {
-				return *this;
+
+			// -- observers and mutators --
+
+			template<typename NodeKind,std::size_t Level = 0>
+			NodeRef<NodeKind,Level> create() {
+				auto& node_counter = getNodeCounter<NodeKind,Level>();
+				return NodeRef<NodeKind,Level>(node_counter++);
 			}
 
-			template<typename T>
-			typename std::enable_if<std::is_same<First,T>::value,const NodeSet&>::type get() const {
-				return *this;
-			}
-
-			template<typename T>
-			auto get() -> typename std::enable_if<!std::is_same<First,T>::value,decltype(nested.template get<T>())>::type {
-				return nested.template get<T>();
-			}
-
-			template<typename T>
-			auto get() const -> typename std::enable_if<!std::is_same<First,T>::value,decltype(nested.template get<T>())>::type {
-				return nested.template get<T>();
-			}
-
-			NodeRef<First,Level> create() {
-				return NodeRef<First,Level>(node_counter++);
-			}
-
-			NodeRange<First,Level> create(unsigned num) {
-				NodeRef<First,Level> begin(node_counter);
+			template<typename NodeKind,std::size_t Level = 0>
+			NodeRange<NodeKind,Level> create(unsigned num) {
+				auto& node_counter = getNodeCounter<NodeKind,Level>();
+				NodeRef<NodeKind,Level> begin(node_counter);
 				node_counter += num;
-				NodeRef<First,Level> end(node_counter);
+				NodeRef<NodeKind,Level> end(node_counter);
 				return { begin, end };
 			}
 
+			template<typename NodeKind,std::size_t Level = 0>
 			std::size_t getNumNodes() const {
-				return node_counter;
-			}
-
-			bool operator==(const NodeSet& other) const {
-				return node_counter == other.node_counter && nested == other.nested;
-			}
-
-			template<typename Body>
-			void forAll(const Body& body) const {
-				// iterate over nodes of this kind
-				for(std::size_t i = 0; i<node_counter; i++) {
-					body(NodeRef<First,Level>(i));
-				}
-				// and on remaining kinds
-				nested.forAll(body);
-			}
-
-			template<typename Body>
-			void forAllKinds(const Body& body) const {
-				// call for this type
-				body(First(), level<Level>());
-				// and the nested types
-				nested.forAllKinds(body);
+				return getNodeCounter<NodeKind,Level>();
 			}
 
 			// -- IO support --
 
 			void store(std::ostream& out) const {
 				// store the number of nodes
-				utils::write<std::size_t>(out, node_counter);
-
-				// store the nested hierarchy
-				nested.store(out);
+				utils::write<DataStore>(out, data);
 			}
 
 			static NodeSet load(std::istream& in) {
@@ -475,10 +443,7 @@ namespace data {
 				NodeSet res;
 
 				// restore the number of nodes
-				res.node_counter = utils::read<std::size_t>(in);
-
-				// load nested
-				res.nested = NodeSet<Level,Rest...>::load(in);
+				res.data = utils::read<DataStore>(in);
 
 				// done
 				return res;
@@ -490,218 +455,219 @@ namespace data {
 				NodeSet res;
 
 				// restore the number of nodes
-				res.node_counter = buffer.consume<std::size_t>();
-
-				// load nested
-				res.nested = NodeSet<Level,Rest...>::interpret(buffer);
+				res.data = buffer.consume<DataStore>();
 
 				// done
 				return res;
+
+			}
+
+		private:
+
+			template<typename NodeKind, std::size_t Level>
+			std::size_t& getNodeCounter() {
+				return data[Level].template get<NodeKind>();
+			}
+
+			template<typename NodeKind, std::size_t Level>
+			const std::size_t& getNodeCounter() const {
+				return data[Level].template get<NodeKind>();
 			}
 		};
 
-		template<unsigned Level>
-		struct NodeSet<Level> {
 
-			NodeSet() = default;
-			NodeSet(const NodeSet&) = default;
-			NodeSet(NodeSet&&) {}
+		template<std::size_t Levels, typename ... EdgeKinds>
+		class EdgeSet {
 
-			NodeSet& operator=(NodeSet&&) =default;
+			// -- the data stored per relation --
+			class Relation {
 
-			template<typename T>
-			NodeSet& get() {
-				assert(false && "Invalid type accessed!");
-				return *this;
-			}
+				static_assert(
+					sizeof(NodeRef<int,0>) == sizeof(NodeID),
+					"For this implementation to be correct node references have to be simple node IDs."
+				);
 
-			template<typename T>
-			const NodeSet& get() const {
-				assert(false && "Invalid type accessed!");
-				return *this;
-			}
+				utils::Table<uint32_t> forward_offsets;
+				utils::Table<NodeID> forward_targets;
 
-			bool operator==(const NodeSet& /*other*/) const {
-				return true;
-			}
+				utils::Table<uint32_t> backward_offsets;
+				utils::Table<NodeID> backward_targets;
 
-			template<typename Body>
-			void forAll(const Body&) const {
-				// no more nodes
-			}
+				std::vector<std::pair<NodeID,NodeID>> edges;
 
-			template<typename Body>
-			void forAllKinds(const Body&) const {
-				// nothing to do
-			}
+			public:
 
-			// -- IO support --
+				template<typename EdgeKind, unsigned Level>
+				NodeList<typename EdgeKind::trg_node_kind,Level> getSinks(const NodeRef<typename EdgeKind::src_node_kind,Level>& src) const {
+					using List = NodeList<typename EdgeKind::trg_node_kind,Level>;
+					using TrgNodeRef = NodeRef<typename EdgeKind::trg_node_kind,Level>;
+					assert_true(isClosed()) << "Accessing non-closed edge set!";
+					if (src.id > forward_offsets.size() || forward_targets.empty()) return List{nullptr,nullptr};
+					return List{
+						reinterpret_cast<const TrgNodeRef*>(&forward_targets[forward_offsets[src.id]]),
+						reinterpret_cast<const TrgNodeRef*>(&forward_targets[forward_offsets[src.id+1]])
+					};
+				}
 
-			void store(std::ostream&) const {
-				// nothing
-			}
+				template<typename EdgeKind, unsigned Level>
+				NodeList<typename EdgeKind::src_node_kind,Level> getSources(const NodeRef<typename EdgeKind::trg_node_kind,Level>& src) const {
+					using List = NodeList<typename EdgeKind::src_node_kind,Level>;
+					using SrcNodeRef = NodeRef<typename EdgeKind::src_node_kind,Level>;
+					assert_true(isClosed()) << "Accessing non-closed edge set!";
+					if (src.id > backward_offsets.size() || backward_targets.empty()) return List{nullptr,nullptr};
+					return List{
+						reinterpret_cast<const SrcNodeRef*>(&backward_targets[backward_offsets[src.id]]),
+						reinterpret_cast<const SrcNodeRef*>(&backward_targets[backward_offsets[src.id+1]])
+					};
+				}
 
-			static NodeSet load(std::istream&) {
-				return NodeSet();
-			}
+				void addEdge(NodeID from, NodeID to) {
+					edges.push_back({from,to});
+				}
 
-			static NodeSet interpret(utils::RawBuffer&) {
-				return NodeSet();
-			}
+				bool isClosed() const {
+					return edges.empty();
+				}
 
-		};
+				void close() {
 
+					// get maximum source and target
+					std::size_t maxSourceID = 0;
+					std::size_t maxTargetID = 0;
+					for(const auto& cur : edges) {
+						maxSourceID = std::max<std::size_t>(maxSourceID,cur.first);
+						maxTargetID = std::max<std::size_t>(maxTargetID,cur.second);
+					}
 
-		template<unsigned Level, typename ... EdgeTypes>
-		struct EdgeSet;
+					// init forward / backward vectors
+					forward_offsets = utils::Table<uint32_t>(maxSourceID + 2, 0);
+					forward_targets = utils::Table<NodeID>(edges.size());
 
-		template<unsigned Level, typename First, typename ... Rest>
-		struct EdgeSet<Level,First,Rest...> {
+					backward_offsets = utils::Table<uint32_t>(maxTargetID + 2,0);
+					backward_targets = utils::Table<NodeID>(edges.size());
 
-			using Src = typename First::src_node_kind;
-			using Trg = typename First::trg_node_kind;
+					// count number of sources / sinks
+					for(const auto& cur : edges) {
+						++forward_offsets[cur.first];
+						++backward_offsets[cur.second];
+					}
 
-			utils::Table<uint32_t> forward_offsets;
-			utils::Table<NodeRef<Trg,Level>> forward_targets;
+					// compute prefix sums
+					sumPrefixes(forward_offsets);
+					sumPrefixes(backward_offsets);
 
-			utils::Table<uint32_t> backward_offsets;
-			utils::Table<NodeRef<Src,Level>> backward_targets;
+					// fill in targets
+					auto forward_pos = forward_offsets;
+					auto backward_pos = backward_offsets;
+					for(const auto& cur : edges) {
+						forward_targets[forward_pos[cur.first]++] = cur.second;
+						backward_targets[backward_pos[cur.second]++] = cur.first;
+					}
 
-			std::vector<std::pair<NodeRef<Src,Level>,NodeRef<Trg,Level>>> edges;
+					// clear edges
+					edges.clear();
 
+				}
 
-			EdgeSet<Level,Rest...> nested;
+				void store(std::ostream& out) const {
+					// only allow closed sets to be stored
+					assert_true(isClosed());
 
-			EdgeSet() = default;
-			EdgeSet(const EdgeSet&) = default;
-			EdgeSet(EdgeSet&& other)
-				: forward_offsets(std::move(other.forward_offsets)),
-				  forward_targets(std::move(other.forward_targets)),
-				  backward_offsets(std::move(other.backward_offsets)),
-				  backward_targets(std::move(other.backward_targets)),
-				  edges(std::move(other.edges)),
-				  nested(std::move(other.nested))
-			{}
+					// write forward edge data
+					forward_offsets.store(out);
+					forward_targets.store(out);
 
-			EdgeSet& operator=(EdgeSet&&) =default;
+					// write backward edge data
+					backward_offsets.store(out);
+					backward_targets.store(out);
 
-			template<typename T>
-			typename std::enable_if<std::is_same<First,T>::value,EdgeSet&>::type get() {
-				return *this;
-			}
+				}
 
-			template<typename T>
-			typename std::enable_if<std::is_same<First,T>::value,const EdgeSet&>::type get() const {
-				return *this;
-			}
+				static Relation load(std::istream& in) {
 
-			template<typename T>
-			auto get() -> typename std::enable_if<!std::is_same<First,T>::value,decltype(nested.template get<T>())>::type {
-				return nested.template get<T>();
-			}
+					Relation res;
 
-			template<typename T>
-			auto get() const -> typename std::enable_if<!std::is_same<First,T>::value,decltype(nested.template get<T>())>::type {
-				return nested.template get<T>();
-			}
+					// restore edge data
+					res.forward_offsets = utils::Table<uint32_t>::load(in);
+					res.forward_targets = utils::Table<NodeID>::load(in);
+
+					res.backward_offsets = utils::Table<uint32_t>::load(in);
+					res.backward_targets = utils::Table<NodeID>::load(in);
+
+					// done
+					return res;
+				}
+
+				static Relation interpret(utils::RawBuffer& buffer) {
+
+					Relation res;
+
+					// restore edge data
+					res.forward_offsets = utils::Table<uint32_t>::interpret(buffer);
+					res.forward_targets = utils::Table<NodeID>::interpret(buffer);
+
+					res.backward_offsets = utils::Table<uint32_t>::interpret(buffer);
+					res.backward_targets = utils::Table<NodeID>::interpret(buffer);
+
+					// done
+					return res;
+				}
+
+			};
+
+			using LevelData = utils::StaticMap<utils::keys<EdgeKinds...>,Relation>;
+
+			using EdgeData = std::array<LevelData,Levels>;
+
+			EdgeData data;
 
 		public:
 
-			void addEdge(const NodeRef<Src,Level>& src, const NodeRef<Trg,Level>& trg) {
-				edges.push_back({src,trg});
+			EdgeSet() = default;
+			EdgeSet(const EdgeSet&) = default;
+			EdgeSet(EdgeSet&& other) = default;
+
+			EdgeSet& operator=(const EdgeSet&) = delete;
+			EdgeSet& operator=(EdgeSet&&) = default;
+
+
+			template<typename EdgeKind, unsigned Level>
+			void addEdge(const NodeRef<typename EdgeKind::src_node_kind,Level>& src, const NodeRef<typename EdgeKind::trg_node_kind,Level>& trg) {
+				getEdgeRelation<EdgeKind,Level>().addEdge(src.id,trg.id);
 			}
 
-			template<typename MeshData>
-			void close(const MeshData& data) {
-
-				// init forward / backward vectors
-				forward_offsets = utils::Table<uint32_t>(data.template getNumNodes<Src,Level>() + 1, 0);
-				forward_targets = utils::Table<NodeRef<Trg,Level>>(edges.size());
-
-				// count number of sources / sinks
-				for(const auto& cur : edges) {
-					forward_offsets[cur.first.id]++;
+			void close() {
+				// for all levels
+				for(auto& level : data) {
+					// for all edge kinds
+					for(auto& rel : level) {
+						rel.close();
+					}
 				}
-
-				// compute prefix sums
-				sumPrefixes(forward_offsets);
-
-				// fill in targets
-				auto forward_pos = forward_offsets;
-				for(const auto& cur : edges) {
-					forward_targets[forward_pos[cur.first.id]++] = cur.second;
-				}
-
-				// clear edges
-				edges.clear();
-
-				// also fill in backward edges
-				restoreBackward(data.template getNumNodes<Trg,Level>() + 1);
-
-				// close nested edges
-				nested.close(data);
 			}
 
 			bool isClosed() const {
-				return edges.empty() && nested.isClosed();
-			}
-
-			NodeList<Trg,Level> getSinks(const NodeRef<Src,Level>& src) const {
-				assert_true(edges.empty()) << "Accessing non-closed edge set!";
-				if (src.id >= forward_offsets.size()-1 || forward_targets.empty()) return NodeList<Trg,Level>{nullptr,nullptr};
-				return NodeList<Trg,Level>{&forward_targets[forward_offsets[src.id]], &forward_targets[forward_offsets[src.id+1]]};
-			}
-
-			NodeList<Src,Level> getSources(const NodeRef<Trg,Level>& src) const {
-				assert_true(edges.empty()) << "Accessing non-closed edge set!";
-				if (src.id >= backward_offsets.size()-1 || backward_targets.empty()) return NodeList<Src,Level>{nullptr,nullptr};
-				return NodeList<Src,Level>{&backward_targets[backward_offsets[src.id]], &backward_targets[backward_offsets[src.id+1]]};
-			}
-
-			bool operator==(const EdgeSet& other) const {
-				return forward_offsets == other.forward_offsets &&
-						forward_targets == other.forward_targets &&
-						backward_offsets == other.backward_offsets &&
-						backward_targets == other.backward_targets &&
-						edges == other.edges && nested == other.nested;
-			}
-
-			template<typename Body>
-			void forAllEdges(const Body& body) const {
-
-				// visit all edges
-				for(const auto& cur : edges) {
-					body(First(),cur.first,cur.second);
-				}
-
-				// visit all forward edges
-				for(std::size_t i = 0 ; i < forward_offsets.size()-1; ++i) {
-					NodeRef<Src,Level> src {i};
-					for(const auto& trg : getSinks(src)) {
-						body(First(),src,trg);
+				// for all levels
+				for(const auto& level : data) {
+					// for all edge kinds
+					for(const auto& rel : level) {
+						// check this instance
+						if (!rel.isClosed()) return false;
 					}
 				}
-
+				// all are done
+				return true;
 			}
 
-			template<typename Body>
-			void forAll(const Body& body) const {
-
-				// visit all local edges
-				forAllEdges(body);
-
-				// visit links of remaining hierarchies
-				nested.forAll(body);
+			template<typename EdgeKind, unsigned Level>
+			NodeList<typename EdgeKind::trg_node_kind,Level> getSinks(const NodeRef<typename EdgeKind::src_node_kind,Level>& src) const {
+				return getEdgeRelation<EdgeKind,Level>().template getSinks<EdgeKind>(src);
 			}
 
-			template<typename Body>
-			void forAllKinds(const Body& body) const {
-				// visit all links for this type
-				body(First(), level<Level>());
-				// visit links of remaining hierarchies
-				nested.forAllKinds(body);
+			template<typename EdgeKind, unsigned Level>
+			NodeList<typename EdgeKind::src_node_kind,Level> getSources(const NodeRef<typename EdgeKind::trg_node_kind,Level>& src) const {
+				return getEdgeRelation<EdgeKind,Level>().template getSources<EdgeKind>(src);
 			}
-
 
 			// -- IO support --
 
@@ -709,31 +675,25 @@ namespace data {
 				// only allow closed sets to be stored
 				assert_true(isClosed());
 
-				// write forward edge data
-				forward_offsets.store(out);
-				forward_targets.store(out);
+				// store each relation independently
+				for(const auto& level : data) {
+					for(const auto& rel : level) {
+						rel.store(out);
+					}
+				}
 
-				// write backward edge data
-				backward_offsets.store(out);
-				backward_targets.store(out);
-
-				// store the nested hierarchy
-				nested.store(out);
 			}
 
 			static EdgeSet load(std::istream& in) {
 
 				EdgeSet res;
 
-				// restore edge data
-				res.forward_offsets = utils::Table<uint32_t>::load(in);
-				res.forward_targets = utils::Table<NodeRef<Trg,Level>>::load(in);
-
-				res.backward_offsets = utils::Table<uint32_t>::load(in);
-				res.backward_targets = utils::Table<NodeRef<Src,Level>>::load(in);
-
-				// restore nested
-				res.nested.load(in);
+				// load each relation independently
+				for(auto& level : res.data) {
+					for(auto& rel : level) {
+						rel = Relation::load(in);
+					}
+				}
 
 				// done
 				return res;
@@ -743,15 +703,12 @@ namespace data {
 
 				EdgeSet res;
 
-				// restore edge data
-				res.forward_offsets = utils::Table<uint32_t>::interpret(buffer);
-				res.forward_targets = utils::Table<NodeRef<Trg,Level>>::interpret(buffer);
-
-				res.backward_offsets = utils::Table<uint32_t>::interpret(buffer);
-				res.backward_targets = utils::Table<NodeRef<Src,Level>>::interpret(buffer);
-
-				// restore nested
-				res.nested.interpret(buffer);
+				// interpret each relation independently
+				for(auto& level : res.data) {
+					for(auto& rel : level) {
+						rel = Relation::interpret(buffer);
+					}
+				}
 
 				// done
 				return res;
@@ -759,259 +716,225 @@ namespace data {
 
 		private:
 
-			void restoreBackward(std::size_t numTargetNodes) {
-
-				// fix sizes of backward vectors
-				backward_offsets = utils::Table<uint32_t>(numTargetNodes,0);
-				backward_targets = utils::Table<NodeRef<Src,Level>>(forward_targets.size()); // the same length as forward
-
-				// count number of sources
-				forAllEdges([&](const auto&, const auto&, const auto& trg){
-					++backward_offsets[trg.id];
-				});
-
-				// compute prefix sums
-				sumPrefixes(backward_offsets);
-
-				// fill in sources
-				auto backward_pos = backward_offsets;
-				forAllEdges([&](const auto&, const auto& src, const auto& trg){
-					backward_targets[backward_pos[trg.id]++] = src;
-				});
-
-			}
-		};
-
-		template<unsigned Level>
-		struct EdgeSet<Level> {
-
-			EdgeSet() = default;
-			EdgeSet(const EdgeSet&) = default;
-			EdgeSet(EdgeSet&&) {}
-
-			EdgeSet& operator=(EdgeSet&&) =default;
-
-			template<typename T>
-			EdgeSet& get() {
-				assert(false && "Invalid type accessed!");
-				return *this;
+			template<typename EdgeKind, std::size_t Level>
+			Relation& getEdgeRelation() {
+				return data[Level].template get<EdgeKind>();
 			}
 
-			template<typename T>
-			const EdgeSet& get() const {
-				assert(false && "Invalid type accessed!");
-				return *this;
-			}
-
-			bool operator==(const EdgeSet& /*other*/) const {
-				return true;
-			}
-
-			template<typename Body>
-			void forAll(const Body&) const {
-				// nothing to do
-			}
-
-			template<typename Body>
-			void forAllKinds(const Body&) const {
-				// nothing to do
-			}
-
-			template<typename MeshData>
-			void close(const MeshData&) {
-				// nothing to do
-			}
-
-			bool isClosed() const {
-				return true;
-			}
-
-			// -- IO support --
-
-			void store(std::ostream&) const {
-				// nothing to do her
-			}
-
-			static EdgeSet load(std::istream&) {
-				return EdgeSet();
-			}
-
-			static EdgeSet interpret(utils::RawBuffer&) {
-				return EdgeSet();
+			template<typename EdgeKind, std::size_t Level>
+			const Relation& getEdgeRelation() const {
+				return data[Level].template get<EdgeKind>();
 			}
 
 		};
 
-		template<unsigned Level, typename ... HierachyTypes>
-		struct HierarchySet;
 
-		template<unsigned Level, typename First, typename ... Rest>
-		struct HierarchySet<Level,First,Rest...> {
+		template<unsigned Levels, typename ... HierachyKinds>
+		class HierarchySet {
 
-			using Src = typename First::parent_node_kind;
-			using Trg = typename First::child_node_kind;
+			class Relation {
 
-			// -- inefficient build structures --
+				// -- inefficient build structures --
 
-			std::vector<std::vector<NodeRef<Trg,Level-1>>> children;
+				std::vector<std::vector<NodeID>> children;
 
-			std::vector<NodeRef<Src,Level>> parents;
+				std::vector<NodeID> parents;
 
-			// -- efficient simulation structures --
+				// -- efficient simulation structures --
 
-			utils::Table<NodeRef<Src,Level>> parent_targets;
+				utils::Table<NodeID> parent_targets;
 
-			utils::Table<std::size_t> children_offsets;
-			utils::Table<NodeRef<Trg,Level-1>> children_targets;
+				utils::Table<std::size_t> children_offsets;
+				utils::Table<NodeID> children_targets;
 
-			// -- other hierarchies --
+			public:
 
-			HierarchySet<Level,Rest...> nested;
+				void addChild(const NodeID& parent, const NodeID& child) {
+					// a constant for an unknown parent
+					static const NodeID unknownParent = std::numeric_limits<NodeID>::max();
 
-			HierarchySet() = default;
-			HierarchySet(const HierarchySet&) = default;
-			HierarchySet(HierarchySet&&) = default;
+					assert_ne(parent,unknownParent) << "Unknown parent constant must not be used!";
 
-			HierarchySet& operator=(HierarchySet&&) =default;
-
-			template<typename T>
-			typename std::enable_if<std::is_same<First,T>::value,HierarchySet&>::type get() {
-				return *this;
-			}
-
-			template<typename T>
-			typename std::enable_if<std::is_same<First,T>::value,const HierarchySet&>::type get() const {
-				return *this;
-			}
-
-			template<typename T>
-			auto get() -> typename std::enable_if<!std::is_same<First,T>::value,decltype(nested.template get<T>())>::type {
-				return nested.template get<T>();
-			}
-
-			template<typename T>
-			auto get() const -> typename std::enable_if<!std::is_same<First,T>::value,decltype(nested.template get<T>())>::type {
-				return nested.template get<T>();
-			}
-
-			void addChild(const NodeRef<Src,Level>& parent, const NodeRef<Trg,Level-1>& child) {
-				// a constant for an unknown parent
-				static const NodeRef<Src,Level> unknownParent(std::numeric_limits<NodeID>::max());
-
-				assert_ne(parent,unknownParent) << "Unknown parent constant must not be used!";
-
-				// register child as a child of parent
-				while(parent.id >= children.size()) {
-					children.resize(std::max<std::size_t>(10, children.size() * 2));
-				}
-				auto& list = children[parent.id];
-				for(auto& cur : list) if (cur == child) return;
-				list.push_back(child);
+					// register child as a child of parent
+					if (parent >= children.size()) {
+						children.resize(parent + 1);
+					}
+					auto& list = children[parent];
+					for(auto& cur : list) if (cur == child) return;
+					list.push_back(child);
 
 
-				// register parent of child
-				while(child.id >= parents.size()) {
-					parents.resize(std::max<std::size_t>(10, parents.size() * 2),unknownParent);
-				}
-				auto& trg = parents[child.id];
-				assert_true(trg == unknownParent || trg == parent)
-					<< "Double-assignment of parent for child " << child << " and parent " << parent;
+					// register parent of child
+					if (child >= parents.size()) {
+						parents.resize(child + 1,unknownParent);
+					}
+					auto& trg = parents[child];
+					assert_true(trg == unknownParent || trg == parent)
+						<< "Double-assignment of parent for child " << child << " and parent " << parent;
 
-				// update parent
-				trg = parent;
-			}
-
-			template<typename MeshData>
-			void close(const MeshData& data) {
-				// a constant for an unknown parent
-				static const NodeRef<Src,Level> unknownParent(std::numeric_limits<NodeID>::max());
-
-				// compute total number of parent-child links
-				std::size_t numParentChildLinks = 0;
-				for(const auto& cur : children) {
-					numParentChildLinks += cur.size();
+					// update parent
+					trg = parent;
 				}
 
-				// init forward / backward vectors
-				auto numParents = data.template getNumNodes<Src,Level>();
-				children_offsets = utils::Table<std::size_t>(numParents + 1, 0);
-				children_targets = utils::Table<NodeRef<Trg,Level-1>>(numParentChildLinks);
+				bool isClosed() const {
+					return children.empty();
+				}
 
-				// init child offsets
-				std::size_t idx = 0;
-				std::size_t offset = 0;
-				for(const auto& cur : children) {
+				void close() {
+					// a constant for an unknown parent
+					static const NodeID unknownParent = std::numeric_limits<NodeID>::max();
+
+					// get maximum index of parents
+					std::size_t maxParent = 0;
+					for(const auto& cur : parents) {
+						maxParent = std::max<std::size_t>(maxParent,cur);
+					}
+
+					// compute total number of parent-child links
+					std::size_t numParentChildLinks = 0;
+					for(const auto& cur : children) {
+						numParentChildLinks += cur.size();
+					}
+
+					// init forward / backward vectors
+					children_offsets = utils::Table<std::size_t>(maxParent + 2, 0);
+					children_targets = utils::Table<NodeID>(numParentChildLinks);
+
+					// init child offsets
+					std::size_t idx = 0;
+					std::size_t offset = 0;
+					for(const auto& cur : children) {
+						children_offsets[idx] = offset;
+						offset += cur.size();
+						idx++;
+						if (idx > maxParent) break;
+					}
 					children_offsets[idx] = offset;
-					offset += cur.size();
-					idx++;
-					if (idx >= numParents) break;
-				}
-				children_offsets[idx] = offset;
 
-				// fill in targets
-				idx = 0;
-				for(const auto& cur : children) {
-					for(const auto& child : cur) {
-						children_targets[idx++] = child;
+					// fill in targets
+					idx = 0;
+					for(const auto& cur : children) {
+						for(const auto& child : cur) {
+							children_targets[idx++] = child;
+						}
+					}
+
+					// clear edges
+					children.clear();
+
+					// init parent target table
+					parent_targets = utils::Table<NodeID>(parents.size());
+					for(std::size_t i=0; i<parent_targets.size(); ++i) {
+						parent_targets[i] = (i < parents.size()) ? parents[i] : unknownParent;
+					}
+
+					// clear parents list
+					parents.clear();
+				}
+
+
+				template<typename HierarchyKind, unsigned Level>
+				NodeList<typename HierarchyKind::child_node_kind,Level-1> getChildren(const NodeRef<typename HierarchyKind::parent_node_kind,Level>& parent) const {
+					using List = NodeList<typename HierarchyKind::child_node_kind,Level-1>;
+					using ChildNodeRef = NodeRef<typename HierarchyKind::child_node_kind,Level-1>;
+					assert_true(isClosed());
+					if (parent.id >= children_offsets.size()-1 || children_targets.empty()) return List{nullptr,nullptr};
+					return List{
+						reinterpret_cast<const ChildNodeRef*>(&children_targets[children_offsets[parent.id]]),
+						reinterpret_cast<const ChildNodeRef*>(&children_targets[children_offsets[parent.id+1]])
+					};
+				}
+
+				template<typename HierarchyKind, unsigned Level>
+				NodeRef<typename HierarchyKind::parent_node_kind,Level+1> getParent(const NodeRef<typename HierarchyKind::child_node_kind,Level>& child) const {
+					using ParentNodeRef = NodeRef<typename HierarchyKind::parent_node_kind,Level+1>;
+					assert_true(isClosed());
+					assert_lt(child.id,parent_targets.size());
+					return ParentNodeRef(parent_targets[child.id]);
+				}
+
+				// -- IO support --
+
+				void store(std::ostream& out) const {
+					// only allow closed sets to be stored
+					assert_true(isClosed());
+
+					// write parents table
+					parent_targets.store(out);
+
+					// write child lists
+					children_offsets.store(out);
+					children_targets.store(out);
+				}
+
+				static Relation load(std::istream& in) {
+
+					Relation res;
+
+					// restore parents
+					res.parent_targets = utils::Table<NodeID>::load(in);
+
+					res.children_offsets = utils::Table<std::size_t>::load(in);
+					res.children_targets = utils::Table<NodeID>::load(in);
+
+					// done
+					return res;
+				}
+
+				static Relation interpret(utils::RawBuffer& buffer) {
+
+					Relation res;
+
+					// restore parents
+					res.parent_targets = utils::Table<NodeID>::interpret(buffer);
+
+					res.children_offsets = utils::Table<std::size_t>::interpret(buffer);
+					res.children_targets = utils::Table<NodeID>::interpret(buffer);
+
+					// done
+					return res;
+				}
+
+			};
+
+			using LevelData = utils::StaticMap<utils::keys<HierachyKinds...>,Relation>;
+
+			using HierarchyData = std::array<LevelData,Levels-1>;
+
+			HierarchyData data;
+
+		public:
+
+			template<typename HierarchyKind, unsigned Level>
+			void addChild(const NodeRef<typename HierarchyKind::parent_node_kind,Level>& parent, const NodeRef<typename HierarchyKind::child_node_kind,Level-1>& child) {
+				getRelation<HierarchyKind,Level-1>().addChild(parent.id,child.id);
+			}
+
+			void close() {
+				for(auto& level : data) {
+					for(auto& rel : level) {
+						rel.close();
 					}
 				}
-
-				// clear edges
-				children.clear();
-
-				// init parent target table
-				parent_targets = utils::Table<NodeRef<Src,Level>>(data.template getNumNodes<Trg,Level-1>());
-				for(std::size_t i=0; i<parent_targets.size(); ++i) {
-					parent_targets[i] = (i < parents.size()) ? parents[i] : unknownParent;
-				}
-
-				// clear parents list
-				parents.clear();
-
-				// close nested edges
-				nested.close(data);
 			}
 
 			bool isClosed() const {
-				return children.empty();
-			}
-
-			NodeList<Trg,Level-1> getChildren(const NodeRef<Src,Level>& parent) const {
-				assert_true(isClosed());
-				if (parent.id >= children_offsets.size()-1 || children_targets.empty()) return NodeList<Trg,Level-1>{nullptr,nullptr};
-				return NodeList<Trg,Level-1>{&children_targets[children_offsets[parent.id]], &children_targets[children_offsets[parent.id+1]]};
-			}
-
-			const NodeRef<Src,Level>& getParent(const NodeRef<Trg,Level-1>& child) const {
-				assert_true(isClosed());
-				assert_lt(child.id,parent_targets.size());
-				return parent_targets[child.id];
-			}
-
-			bool operator==(const HierarchySet& other) const {
-				return children == other.children && nested == other.nested;
-			}
-
-			template<typename Body>
-			void forAll(const Body& body) const {
-				// visit all links for this type
-				std::size_t counter = 0;
-				for(const auto& cur : children) {
-					NodeRef<Src,Level> src {counter++};
-					for(const auto& trg : cur) {
-						body(First(),src,trg);
+				for(const auto& level : data) {
+					for(const auto& rel : level) {
+						if (!rel.isClosed()) return false;
 					}
 				}
-				// visit links of remaining hierarchies
-				nested.forAll(body);
+				return true;
 			}
 
-			template<typename Body>
-			void forAllKinds(const Body& body) const {
-				// visit all links for this type
-				body(First(), level<Level>());
-				// visit links of remaining hierarchies
-				nested.forAllKinds(body);
+			template<typename HierarchyKind, unsigned Level>
+			NodeList<typename HierarchyKind::child_node_kind,Level-1> getChildren(const NodeRef<typename HierarchyKind::parent_node_kind,Level>& parent) const {
+				return getRelation<HierarchyKind,Level-1>().template getChildren<HierarchyKind>(parent);
+			}
+
+			template<typename HierarchyKind, unsigned Level>
+			NodeRef<typename HierarchyKind::parent_node_kind,Level+1> getParent(const NodeRef<typename HierarchyKind::child_node_kind,Level>& child) const {
+				return getRelation<HierarchyKind,Level>().template getParent<HierarchyKind>(child);
 			}
 
 
@@ -1021,29 +944,25 @@ namespace data {
 				// only allow closed sets to be stored
 				assert_true(isClosed());
 
-				// write parents table
-				parent_targets.store(out);
+				// store each relation independently
+				for(const auto& level : data) {
+					for(const auto& rel : level) {
+						rel.store(out);
+					}
+				}
 
-				// write child lists
-				children_offsets.store(out);
-				children_targets.store(out);
-
-				// store the nested hierarchy
-				nested.store(out);
 			}
 
 			static HierarchySet load(std::istream& in) {
 
 				HierarchySet res;
 
-				// restore parents
-				res.parent_targets = utils::Table<NodeRef<Src,Level>>::load(in);
-
-				res.children_offsets = utils::Table<std::size_t>::load(in);
-				res.children_targets = utils::Table<NodeRef<Trg,Level-1>>::load(in);
-
-				// restore nested
-				res.nested.load(in);
+				// load each relation independently
+				for(auto& level : res.data) {
+					for(auto& rel : level) {
+						rel = Relation::load(in);
+					}
+				}
 
 				// done
 				return res;
@@ -1053,342 +972,95 @@ namespace data {
 
 				HierarchySet res;
 
-				// restore parents
-				res.parent_targets = utils::Table<NodeRef<Src,Level>>::interpret(buffer);
-
-				res.children_offsets = utils::Table<std::size_t>::interpret(buffer);
-				res.children_targets = utils::Table<NodeRef<Trg,Level-1>>::interpret(buffer);
-
-				// restore nested
-				res.nested.interpret(buffer);
+				// interpret each relation independently
+				for(auto& level : res.data) {
+					for(auto& rel : level) {
+						rel = Relation::interpret(buffer);
+					}
+				}
 
 				// done
 				return res;
 			}
 
-		};
+		private:
 
-		template<unsigned Level>
-		struct HierarchySet<Level> {
-
-			HierarchySet() = default;
-			HierarchySet(const HierarchySet&) = default;
-			HierarchySet(HierarchySet&&) {}
-
-			HierarchySet& operator=(HierarchySet&&) =default;
-
-			template<typename T>
-			HierarchySet& get() {
-				assert(false && "Invalid type accessed!");
-				return *this;
+			template<typename HierarchyKind, std::size_t Level>
+			Relation& getRelation() {
+				return data[Level].template get<HierarchyKind>();
 			}
 
-			template<typename T>
-			const HierarchySet& get() const {
-				assert(false && "Invalid type accessed!");
-				return *this;
-			}
-
-			bool operator==(const HierarchySet& /*other*/) const {
-				return true;
-			}
-
-			template<typename MeshData>
-			void close(const MeshData&) {
-				// done
-			}
-
-			bool isClosed() const {
-				return true;
-			}
-
-			template<typename Body>
-			void forAll(const Body&) const {
-				// nothing to do
-			}
-
-			template<typename Body>
-			void forAllKinds(const Body&) const {
-				// nothing to do
-			}
-
-			// -- IO support --
-
-			void store(std::ostream&) const {
-				// nothing to do
-			}
-
-			static HierarchySet load(std::istream&) {
-				return HierarchySet();
-			}
-
-			static HierarchySet interpret(utils::RawBuffer&) {
-				return HierarchySet();
+			template<typename HierarchyKind, std::size_t Level>
+			const Relation& getRelation() const {
+				return data[Level].template get<HierarchyKind>();
 			}
 
 		};
 
-		template<
-			unsigned NumLevels,
-			typename Nodes,
-			typename Edges,
-			typename Hierarchies
-		>
-		struct Levels;
 
-		template<
-			unsigned Level,
-			typename ... Nodes,
-			typename ... Edges,
-			typename ... Hierarchies
-		>
-		struct Levels<
-				Level,
-				nodes<Nodes...>,
-				edges<Edges...>,
-				hierarchies<Hierarchies...>
-			> {
+		// -- utilities for enumerating level/kind combinations --
 
-			template<unsigned Lvl>
-			using LevelData = Levels<Lvl,data::nodes<Nodes...>,data::edges<Edges...>,data::hierarchies<Hierarchies...>>;
+		template<typename ... Kinds>
+		struct KindEnumerator;
 
-			// the data of the lower levels
-			LevelData<Level-1> nested;
-
-			// the set of nodes on this level
-			NodeSet<Level,Nodes...> nodes;
-
-			// the set of edges on this level
-			EdgeSet<Level,Edges...> edges;
-
-			// the set of hierarchies connecting this level to the sub-level
-			HierarchySet<Level,Hierarchies...> hierarchies;
-
-			Levels() = default;
-			Levels(const Levels&) = default;
-			Levels(Levels&& other)
-				: nested(std::move(other.nested)),
-				  nodes(std::move(other.nodes)),
-				  edges(std::move(other.edges)),
-				  hierarchies(std::move(other.hierarchies))
-			{}
-
-			Levels(LevelData<Level-1>&& nested, NodeSet<Level,Nodes...>&& nodes, EdgeSet<Level,Edges...>&& edges, HierarchySet<Level,Hierarchies...>&& hierarchies)
-				: nested(std::move(nested)),
-				  nodes(std::move(nodes)),
-				  edges(std::move(edges)),
-				  hierarchies(std::move(hierarchies))
-			{}
-
-			Levels& operator= (Levels&& l) = default;
-
-			template<unsigned Lvl>
-			typename std::enable_if<Lvl == Level, LevelData<Lvl>&>::type
-			getLevel() {
-				return *this;
-			}
-
-			template<unsigned Lvl>
-			typename std::enable_if<Lvl != Level, LevelData<Lvl>&>::type
-			getLevel() {
-				return nested.template getLevel<Lvl>();
-			}
-
-			template<unsigned Lvl>
-			typename std::enable_if<Lvl == Level, const LevelData<Lvl>&>::type
-			getLevel() const {
-				return *this;
-			}
-
-			template<unsigned Lvl>
-			typename std::enable_if<Lvl != Level, const LevelData<Lvl>&>::type
-			getLevel() const {
-				return nested.template getLevel<Lvl>();
-			}
-
-			bool operator==(const Levels& other) const {
-				return nodes == other.nodes && edges == other.edges && nested == other.nested && hierarchies == other.hierarchies;
-			}
-
+		template<typename First, typename ... Rest>
+		struct KindEnumerator<First,Rest...> {
 			template<typename Body>
-			void forAllNodes(const Body& body) const {
-				nodes.forAll(body);
-				nested.forAllNodes(body);
+			void operator()(const Body& body) const {
+				body(First());
+				KindEnumerator<Rest...>()(body);
 			}
-
-			template<typename Body>
-			void forAllNodeKinds(const Body& body) const {
-				nodes.forAllKinds(body);
-				nested.forAllNodeKinds(body);
-			}
-
-			template<typename Body>
-			void forAllEdges(const Body& body) const {
-				edges.forAll(body);
-				nested.forAllEdges(body);
-			}
-
-			template<typename Body>
-			void forAllEdgeKinds(const Body& body) const {
-				edges.forAllKinds(body);
-				nested.forAllEdgeKinds(body);
-			}
-
-			template<typename Body>
-			void forAllHierarchies(const Body& body) const {
-				hierarchies.forAll(body);
-				nested.forAllHierarchies(body);
-			}
-
-			template<typename Body>
-			void forAllHierarchyKinds(const Body& body) const {
-				hierarchies.forAllKinds(body);
-				nested.forAllHierarchyKinds(body);
-			}
-
-			template<typename MeshData>
-			void close(const MeshData& data) {
-				nested.close(data);
-				edges.close(data);
-				hierarchies.close(data);
-			}
-
-			bool isClosed() const {
-				return nested.isClosed() && edges.isClosed() && hierarchies.isClosed();
-			}
-
-			// -- IO support --
-
-			void store(std::ostream& out) const {
-				nested.store(out);
-				nodes.store(out);
-				edges.store(out);
-				hierarchies.store(out);
-			}
-
-			static Levels load(std::istream& in) {
-				Levels res;
-				res.nested      = LevelData<Level-1>::load(in);
-				res.nodes       = NodeSet<Level,Nodes...>::load(in);
-				res.edges       = EdgeSet<Level,Edges...>::load(in);
-				res.hierarchies = HierarchySet<Level,Hierarchies...>::load(in);
-				return res;
-			}
-
-			static Levels interpret(utils::RawBuffer& buffer) {
-				Levels res;
-				res.nested      = LevelData<Level-1>::interpret(buffer);
-				res.nodes       = NodeSet<Level,Nodes...>::interpret(buffer);
-				res.edges       = EdgeSet<Level,Edges...>::interpret(buffer);
-				res.hierarchies = HierarchySet<Level,Hierarchies...>::interpret(buffer);
-				return res;
-			}
-
 		};
 
-		template<
-			typename ... Nodes,
-			typename ... Edges,
-			typename ... Hierarchies
-		>
-		struct Levels<0,nodes<Nodes...>,edges<Edges...>,hierarchies<Hierarchies...>> {
-
-			template<unsigned Lvl>
-			using LevelData = Levels<Lvl,data::nodes<Nodes...>,data::edges<Edges...>,data::hierarchies<Hierarchies...>>;
-
-			// the set of nodes on this level
-			NodeSet<0,Nodes...> nodes;
-
-			// the set of edges on this level
-			EdgeSet<0,Edges...> edges;
-
-			Levels() = default;
-			Levels(const Levels&) = default;
-			Levels(Levels&& other)
-				: nodes(std::move(other.nodes)),
-				  edges(std::move(other.edges))
-			{}
-
-			Levels& operator= (Levels&& l) = default;
-
-			template<unsigned Lvl>
-			typename std::enable_if<Lvl == 0, LevelData<Lvl>&>::type
-			getLevel() {
-				return *this;
-			}
-
-			template<unsigned Lvl>
-			typename std::enable_if<Lvl == 0, const LevelData<Lvl>&>::type
-			getLevel() const {
-				return *this;
-			}
-
-			bool operator==(const Levels& other) const {
-				return nodes == other.nodes && edges == other.edges;
-			}
-
+		template<>
+		struct KindEnumerator<> {
 			template<typename Body>
-			void forAllNodes(const Body& body) const {
-				nodes.forAll(body);
-			}
-
-			template<typename Body>
-			void forAllNodeKinds(const Body& body) const {
-				nodes.forAllKinds(body);
-			}
-
-			template<typename Body>
-			void forAllEdges(const Body& body) const {
-				edges.forAll(body);
-			}
-
-			template<typename Body>
-			void forAllEdgeKinds(const Body& body) const {
-				edges.forAllKinds(body);
-			}
-
-			template<typename Body>
-			void forAllHierarchies(const Body&) const {
-				// nothing to do here
-			}
-
-			template<typename Body>
-			void forAllHierarchyKinds(const Body&) const {
-				// nothing to do here
-			}
-
-			template<typename MeshData>
-			void close(const MeshData& data) {
-				edges.close(data);
-			}
-
-			bool isClosed() const {
-				return edges.isClosed();
-			}
-
-			// -- IO support --
-
-			void store(std::ostream& out) const {
-				nodes.store(out);
-				edges.store(out);
-			}
-
-			static Levels load(std::istream& in) {
-				Levels res;
-				res.nodes = NodeSet<0,Nodes...>::load(in);
-				res.edges = EdgeSet<0,Edges...>::load(in);
-				return res;
-			}
-
-			static Levels interpret(utils::RawBuffer& buffer) {
-				Levels res;
-				res.nodes = NodeSet<0,Nodes...>::interpret(buffer);
-				res.edges = EdgeSet<0,Edges...>::interpret(buffer);
-				return res;
-			}
-
+			void operator()(const Body&) const {}
 		};
 
+
+		template<std::size_t Level>
+		struct LevelEnumerator {
+			template<typename Body>
+			void operator()(const Body& body) const {
+				body(level<Level>());
+				LevelEnumerator<Level-1>()(body);
+			}
+		};
+
+		template<>
+		struct LevelEnumerator<0> {
+			template<typename Body>
+			void operator()(const Body& body) const {
+				body(level<0>());
+			}
+		};
+
+		template<std::size_t Level>
+		struct HierarchyLevelEnumerator {
+			template<typename Body>
+			void operator()(const Body& body) const {
+				body(level<Level>());
+				HierarchyLevelEnumerator<Level-1>()(body);
+			}
+		};
+
+		template<>
+		struct HierarchyLevelEnumerator<1> {
+			template<typename Body>
+			void operator()(const Body& body) const {
+				body(level<1>());
+			}
+		};
+
+		template<>
+		struct HierarchyLevelEnumerator<0> {
+			template<typename Body>
+			void operator()(const Body&) const {}
+		};
+
+
+		// -- mesh topology store --
 
 		template<
 			typename Nodes,
@@ -1406,108 +1078,90 @@ namespace data {
 		>
 		struct MeshTopologyData<nodes<Nodes...>,edges<Edges...>,hierarchies<Hierarchies...>,Levels> {
 
-			using data_store = detail::Levels<Levels-1,nodes<Nodes...>,edges<Edges...>,hierarchies<Hierarchies...>>;
+			using NodeSetType = NodeSet<Levels,Nodes...>;
+			using EdgeSetType = EdgeSet<Levels,Edges...>;
+			using HierarchySetType = HierarchySet<Levels,Hierarchies...>;
 
-			// all the topological data of all the nodes, edges and hierarchy relations on all levels
-			data_store data;
+			// the topological data of all the nodes, edges and hierarchy relations on all levels
+			NodeSetType nodeSets;
+			EdgeSetType edgeSets;
+			HierarchySetType hierarchySets;
 
 			MeshTopologyData() = default;
 			MeshTopologyData(const MeshTopologyData&) = default;
-			MeshTopologyData(MeshTopologyData&& other) : data(std::move(other.data)) {}
-			MeshTopologyData(data_store&& data) : data(std::move(data)) {}
+			MeshTopologyData(MeshTopologyData&& other) = default;
 
 			MeshTopologyData& operator= (MeshTopologyData&& m) = default;
 
-			template<unsigned Level>
-			detail::NodeSet<Level,Nodes...>& getNodes() {
-				return data.template getLevel<Level>().nodes;
-			}
-
-			template<unsigned Level>
-			const detail::NodeSet<Level,Nodes...>& getNodes() const {
-				return data.template getLevel<Level>().nodes;
-			}
-
-			template<unsigned Level>
-			detail::EdgeSet<Level,Edges...>& getEdges() {
-				return data.template getLevel<Level>().edges;
-			}
-
-			template<unsigned Level>
-			const detail::EdgeSet<Level,Edges...>& getEdges() const {
-				return data.template getLevel<Level>().edges;
-			}
-
-			template<unsigned Level>
-			detail::HierarchySet<Level,Hierarchies...>& getHierarchies() {
-				return data.template getLevel<Level>().hierarchies;
-			}
-
-			template<unsigned Level>
-			const detail::HierarchySet<Level,Hierarchies...>& getHierarchies() const {
-				return data.template getLevel<Level>().hierarchies;
-			}
-
-			template<typename Body>
-			void forAllNodes(const Body& body) const {
-				data.forAllNodes(body);
-			}
-
 			template<typename Body>
 			void forAllNodeKinds(const Body& body) const {
-				data.forAllNodeKinds(body);
-			}
-
-			template<typename Body>
-			void forAllEdges(const Body& body) const {
-				data.forAllEdges(body);
+				LevelEnumerator<Levels-1> forAllLevels;
+				KindEnumerator<Nodes...> forAllKinds;
+				forAllLevels([&](const auto& level){
+					forAllKinds([&](const auto& kind){
+						body(kind,level);
+					});
+				});
 			}
 
 			template<typename Body>
 			void forAllEdgeKinds(const Body& body) const {
-				data.forAllEdgeKinds(body);
-			}
-
-			template<typename Body>
-			void forAllHierarchies(const Body& body) const {
-				data.forAllHierarchies(body);
+				LevelEnumerator<Levels-1> forAllLevels;
+				KindEnumerator<Edges...> forAllKinds;
+				forAllLevels([&](const auto& level){
+					forAllKinds([&](const auto& kind){
+						body(kind,level);
+					});
+				});
 			}
 
 			template<typename Body>
 			void forAllHierarchyKinds(const Body& body) const {
-				data.forAllHierarchyKinds(body);
+				HierarchyLevelEnumerator<Levels-1> forAllLevels;
+				KindEnumerator<Hierarchies...> forAllKinds;
+				forAllLevels([&](const auto& level){
+					forAllKinds([&](const auto& kind){
+						body(kind,level);
+					});
+				});
 			}
 
 			template<typename Kind,unsigned Level = 0>
 			std::size_t getNumNodes() const {
-				return getNodes<Level>().template get<Kind>().getNumNodes();
-			}
-
-			bool operator==(const MeshTopologyData& other) const {
-				return data == other.data;
+				return nodeSets.template getNumNodes<Kind,Level>();
 			}
 
 			void close() {
-				data.close(*this);
+				edgeSets.close();
+				hierarchySets.close();
 			}
 
 			bool isClosed() const {
-				return data.isClosed();
+				return edgeSets.isClosed() && hierarchySets.isClosed();
 			}
 
 			// -- IO support --
 
 			void store(std::ostream& out) const {
-				assert_true(isClosed());
-				data.store(out);
+				nodeSets.store(out);
+				edgeSets.store(out);
+				hierarchySets.store(out);
 			}
 
 			static MeshTopologyData load(std::istream& in) {
-				return MeshTopologyData(data_store::load(in));
+				MeshTopologyData res;
+				res.nodeSets = NodeSetType::load(in);
+				res.edgeSets = EdgeSetType::load(in);
+				res.hierarchySets = HierarchySetType::load(in);
+				return std::move(res);
 			}
 
 			static MeshTopologyData interpret(utils::RawBuffer& buffer) {
-				return MeshTopologyData(data_store::interpret(buffer));
+				MeshTopologyData res;
+				res.nodeSets = NodeSetType::interpret(buffer);
+				res.edgeSets = EdgeSetType::interpret(buffer);
+				res.hierarchySets = HierarchySetType::interpret(buffer);
+				return std::move(res);
 			}
 
 		};
@@ -2564,7 +2218,7 @@ namespace data {
 								SubTreeRef::root(),
 								NodeRange<NodeKind, lvl::value>(
 									NodeRef<NodeKind, lvl::value>{ 0 },
-									NodeRef<NodeKind, lvl::value>{ num_nodes }
+									NodeRef<NodeKind, lvl::value>{ NodeID(num_nodes) }
 								)
 						);
 
@@ -2951,7 +2605,7 @@ namespace data {
 			typename B = typename EdgeKind::trg_node_kind
 		>
 		NodeList<B,Level> getSinks(const NodeRef<A,Level>& a) const {
-			return data.template getEdges<Level>().template get<EdgeKind>().getSinks(a);
+			return data.edgeSets.template getSinks<EdgeKind>(a);
 		}
 
 		template<
@@ -2961,7 +2615,7 @@ namespace data {
 			typename A = typename EdgeKind::src_node_kind
 		>
 		NodeList<A,Level> getSources(const NodeRef<B,Level>& b) const {
-			return data.template getEdges<Level>().template get<EdgeKind>().getSources(b);
+			return data.edgeSets.template getSources<EdgeKind>(b);
 		}
 
 		template<
@@ -2970,7 +2624,7 @@ namespace data {
 			typename B = typename Hierarchy::child_node_kind
 		>
 		NodeList<B,Level-1> getChildren(const NodeRef<A,Level>& a) const {
-			return data.template getHierarchies<Level>().template get<Hierarchy>().getChildren(a);
+			return data.hierarchySets.template getChildren<Hierarchy,Level>(a);
 		}
 
 		template<
@@ -2979,7 +2633,7 @@ namespace data {
 			typename B = typename Hierarchy::parent_node_kind
 		>
 		NodeRef<B,Level+1> getParent(const NodeRef<A,Level>& a) const {
-			return data.template getHierarchies<Level+1>().template get<Hierarchy>().getParent(a);
+			return data.hierarchySets.template getParent<Hierarchy,Level>(a);
 		}
 
 		/**
@@ -3145,14 +2799,14 @@ namespace data {
 		NodeRef<Kind,Level> create() {
 			// TODO: check that Kind is a valid node kind
 			static_assert(Level < Levels, "Trying to create a node on invalid level.");
-			return data.template getNodes<Level>().template get<Kind>().create();
+			return data.nodeSets.template create<Kind,Level>();
 		}
 
 		template<typename Kind,unsigned Level = 0>
 		NodeRange<Kind,Level> create(unsigned num) {
 			// TODO: check that Kind is a valid node kind
 			static_assert(Level < Levels, "Trying to create a node on invalid level.");
-			return data.template getNodes<Level>().template get<Kind>().create(num);
+			return data.nodeSets.template create<Kind,Level>(num);
 		}
 
 		template<typename EdgeKind, typename NodeKindA, typename NodeKindB, unsigned Level>
@@ -3161,7 +2815,7 @@ namespace data {
 			static_assert(Level < Levels, "Trying to create an edge on invalid level.");
 			static_assert(std::is_same<NodeKindA,typename EdgeKind::src_node_kind>::value, "Invalid source node type");
 			static_assert(std::is_same<NodeKindB,typename EdgeKind::trg_node_kind>::value, "Invalid target node type");
-			return data.template getEdges<Level>().template get<EdgeKind>().addEdge(a,b);
+			return data.edgeSets.template addEdge<EdgeKind,Level>(a,b);
 		}
 
 		template<typename HierarchyKind, typename NodeKindA, typename NodeKindB, unsigned LevelA, unsigned LevelB>
@@ -3171,7 +2825,7 @@ namespace data {
 			static_assert(LevelA < Levels, "Trying to create a hierarchical edge to an invalid level.");
 			static_assert(std::is_same<NodeKindA,typename HierarchyKind::parent_node_kind>::value, "Invalid source node type");
 			static_assert(std::is_same<NodeKindB,typename HierarchyKind::child_node_kind>::value, "Invalid target node type");
-			return data.template getHierarchies<LevelA>().template get<HierarchyKind>().addChild(parent,child);
+			return data.hierarchySets.template addChild<HierarchyKind,LevelA>(parent,child);
 		}
 
 		// -- build mesh --
