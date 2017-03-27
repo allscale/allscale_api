@@ -14,7 +14,7 @@ namespace utils {
 
 	TEST(StaticMap,Size) {
 
-		EXPECT_EQ(1,sizeof(StaticMap<keys<>,int>));
+		EXPECT_LE(sizeof(StaticMap<keys<>,int>),4);
 		EXPECT_EQ(sizeof(int)*1,sizeof(StaticMap<keys<A>,int>));
 		EXPECT_EQ(sizeof(int)*2,sizeof(StaticMap<keys<A,B>,int>));
 		EXPECT_EQ(sizeof(int)*3,sizeof(StaticMap<keys<A,B,C>,int>));
