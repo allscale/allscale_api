@@ -2,6 +2,8 @@
 
 #include <type_traits>
 
+#include "allscale/utils/type_list.h"
+
 namespace allscale {
 namespace utils {
 
@@ -47,116 +49,39 @@ namespace utils {
 	};
 
 
-	template<typename First, typename ... Rest, typename Value>
-	class StaticMap<keys<First,Rest...>,Value> {
+	template<typename ... Keys, typename Value>
+	class StaticMap<keys<Keys...>,Value> {
 
-		using nested_type = StaticMap<keys<Rest...>,Value>;
+		using key_list = type_list<Keys...>;
 
-		Value value;
-
-		nested_type nested;
+		std::array<Value,key_list::length> values;
 
 	public:
-
-		template<typename Key>
-		typename std::enable_if<std::is_same<First,Key>::value, Value>::type& get() {
-			return value;
-		}
-
-		template<typename Key>
-		const typename std::enable_if<std::is_same<First,Key>::value, Value>::type& get() const {
-			return value;
-		}
-
-		template<typename Key>
-		typename std::enable_if<!(std::is_same<First,Key>::value), Value>::type& get() {
-			return nested.template get<Key>();
-		}
-
-		template<typename Key>
-		const typename std::enable_if<!(std::is_same<First,Key>::value), Value>::type& get() const {
-			return nested.template get<Key>();
-		}
-
-		template<typename Body>
-		void forEach(const Body& body) const {
-			body(value);
-			nested.forEach(body);
-		}
-
-		template<typename Body>
-		void forEach(const Body& body) {
-			body(value);
-			nested.forEach(body);
-		}
-	};
-
-	template<typename Key, typename Value>
-	class StaticMap<keys<Key>,Value> {
-
-		Value value;
-
-	public:
-
-		template<typename CurKey>
-		typename std::enable_if<std::is_same<CurKey,Key>::value, Value>::type& get() {
-			return value;
-		}
-
-		template<typename CurKey>
-		const typename std::enable_if<std::is_same<CurKey,Key>::value, Value>::type& get() const {
-			return value;
-		}
-
-		template<typename CurKey>
-		typename std::enable_if<!(std::is_same<CurKey,Key>::value), Value>::type& get() {
-			static_assert(key_utils::invalid_key<CurKey>::value,"Invalid key!");
-		}
-
-		template<typename CurKey>
-		const typename std::enable_if<!(std::is_same<CurKey,Key>::value), Value>::type& get() const {
-			static_assert(key_utils::invalid_key<CurKey>::value,"Invalid key!");
-		}
-
-		template<typename Body>
-		void forEach(const Body& body) const {
-			body(value);
-		}
-
-		template<typename Body>
-		void forEach(const Body& body) {
-			body(value);
-		}
-
-	};
-
-	template<typename Value>
-	class StaticMap<keys<>,Value> {
-
-
-	public:
-
-		// contains nothing!
 
 		template<typename Key>
 		Value& get() {
-			static_assert(key_utils::invalid_key<Key>::value,"Invalid key!");
+			return values[type_index<Key,key_list>::value];
 		}
 
 		template<typename Key>
 		const Value& get() const {
-			static_assert(key_utils::invalid_key<Key>::value,"Invalid key!");
+			return values[type_index<Key,key_list>::value];
 		}
 
 		template<typename Body>
-		void forEach(const Body&) const {
-			// nothing to do
+		void forEach(const Body& body) {
+			for(auto& cur : values) {
+				body(cur);
+			}
 		}
 
 		template<typename Body>
-		void forEach(const Body&) {
-			// nothing to do
+		void forEach(const Body& body) const {
+			for(const auto& cur : values) {
+				body(cur);
+			}
 		}
+
 	};
 
 } // end namespace utils

@@ -5,20 +5,22 @@
 namespace allscale {
 namespace utils {
 
-	TEST(StaticMap,Basic) {
+	struct A {};
+	struct B {};
+	struct C {};
 
-		struct A {};
-		struct B {};
-		struct C {};
-
-		using Keys = keys<A,B,C>;
+	TEST(StaticMap,Size) {
 
 		EXPECT_EQ(1,sizeof(StaticMap<keys<>,int>));
 		EXPECT_EQ(sizeof(int)*1,sizeof(StaticMap<keys<A>,int>));
 		EXPECT_EQ(sizeof(int)*2,sizeof(StaticMap<keys<A,B>,int>));
 		EXPECT_EQ(sizeof(int)*3,sizeof(StaticMap<keys<A,B,C>,int>));
 
-		StaticMap<Keys,int> map;
+	}
+
+	TEST(StaticMap,Basic) {
+
+		StaticMap<keys<A,B,C>,int> map;
 
 		EXPECT_EQ(sizeof(int)*3,sizeof(map));
 
