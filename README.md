@@ -1,48 +1,84 @@
 # AllScale API
+
 The AllScale API comprising the AllScale Core API and AllScale User API.
 
 The AllScale User API comprises an extendable set of parallel primitives and data constructs to support the effective implementation of efficient HPC applications.
 
 The AllScale Core API defining the interface between the AllScale User API and the underlying implemenations, including the AllScale Compiler and Runtime environment itself.
 
+## Quickstart
 
-## Requirements
 This project requires C++14 features as offered by e.g. GCC >= 4.9 (GCC 5.2.1 is used for development and testing).
+Furthermore CMake 3.2 (or later) is required for the build and testing process.
+Simply execute the following commands to build the project and run all tests.
 
-For the build process, `cmake` (Version >=2.6) is required.
+    $ mkdir build
+    $ cd build
+    $ cmake ../code
+    $ make -j8
+    $ ctest -j8
 
+## Advanced Options
 
+### Configuration
 
-## Getting the Sources
-Change to a working directory on your system and clone the repository using
-```
-git clone git@github.com:allscale/allscale_api.git
-```
-The command creates a sub-directory `allscale_api`.
+Following options can be supplied to CMake
 
-## Build and Run
-Change to your local `allscale_api` directory and create a debug build as follows:
-```
-mkdir build_debug
-cd build_debug
-. ../createDebug.sh
-make -j8
-```
-The script `createDebug.sh` utilizes cmake to create a build environment. It uses `g++` as its default compiler and may be customized for other infastructures.
+| Option              | Values          |
+| ------------------- | --------------- |
+| -DCMAKE_BUILD_TYPE  | Release / Debug |
+| -DBUILD_SHARED_LIBS | ON / OFF        |
+| -DBUILD_TESTS       | ON / OFF        |
+| -DBUILD_DOCS        | ON / OFF        |
+| -DUSE_ASSERT        | ON / OFF        |
+| -DUSE_VALGRIND      | ON / OFF        |
+| -DENABLE_PROFILING  | ON / OFF        |
 
-To run the test cases and demos within the project, run 
-```
-make test ARGS=-j8
-```
-within the build directory or execute the individual unit tests `ut_*` for targeting specific test suites or demos.
-
-To build and run a release build, run the commands
-```
-mkdir build_release
-cd build_release
-. ../createRelease.sh
-make -j8
-```
-within your local `allscale_api` directory.
+The files `cmake/build_settings.cmake` and `code/CMakeLists.txt` state their
+default value.
 
 
+### Building / Testing
+
+    $ mkdir build
+    $ cd build
+    $ cmake ../code
+    $ make -j8
+    $ ctest -j8
+
+## Development
+
+### Executable Bit
+
+When working on Windows via SMB share, consider setting following Git setting.
+
+    $ git config core.filemode false
+
+### Licensor
+
+A script, together with a Git hook, is provided to automatically add a license
+header to each source file upon commit. See `scripts/license`.
+
+### Eclipse Project
+
+    $ cmake -G "Eclipse CDT4 - Unix Makefiles" /path/to/project
+
+### Visual Studio Solution
+
+    $ cmake -G "Visual Studio 14 Win64" -DBUILD_SHARED_LIBS=OFF Z:\path\to\project
+
+Add path for third-party libraries when needed.
+
+## Troubleshooting
+
+### Getting GCC 5 / CMake 3.2 / Valgrind (for Testing)
+
+The dependency installer can setup these required tools for you. Its README
+(`scripts/dependencies/README.md`) holds the details.
+
+It is preferred to use the operating system's package manager, if applicable.
+
+### No Source Folder in Eclipse Project
+
+Make sure your build folder is located outside the source folder. Eclipse is
+not capable of dealing with such a setup correctly.
