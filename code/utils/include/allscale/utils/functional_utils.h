@@ -2,51 +2,11 @@
 
 #include <type_traits>
 
+#include "allscale/utils/type_list.h"
+
 namespace allscale {
 namespace utils {
 
-
-	// -------------------- Type List traits ----------------------------
-
-	template <typename ... Ts>
-	struct type_list;
-
-	template<>
-	struct type_list<> {
-		enum { empty = true };
-		enum { length = 0 };
-	};
-
-	template<typename H, typename ... R>
-	struct type_list<H,R...> {
-		enum { empty = true };
-		enum { length = type_list<R...>::length + 1 };
-		typedef H head;
-		typedef type_list<R...> rest;
-	};
-
-
-	template <typename ... Ts>
-	struct size_of;
-
-	template <typename ... Ts>
-	struct size_of<type_list<Ts...>> {
-		enum { value = sizeof...(Ts) };
-	};
-
-
-	template<unsigned pos, typename L>
-	struct type_at;
-
-	template<typename H, typename ...R>
-	struct type_at<0, type_list<H,R...>> {
-		typedef H type;
-	};
-
-	template<unsigned pos, typename H, typename ...R>
-	struct type_at<pos, type_list<H,R...>> {
-		typedef typename type_at<pos-1, type_list<R...>>::type type;
-	};
 
 	// -------------------- Function Traits for Lambdas ----------------------------
 
