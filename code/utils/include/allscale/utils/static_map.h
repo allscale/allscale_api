@@ -58,6 +58,21 @@ namespace utils {
 
 	public:
 
+		// -- accessors and mutators --
+
+		StaticMap(const Value& value) {
+			for(auto& cur : values) cur = value;
+		}
+
+		StaticMap() = default;
+		StaticMap(const StaticMap&) = default;
+		StaticMap(StaticMap&&) = default;
+
+		StaticMap& operator=(const StaticMap&) = default;
+		StaticMap& operator=(StaticMap&&) = default;
+
+		// -- accessors and mutators --
+
 		template<typename Key>
 		Value& get() {
 			return values[type_index<Key,key_list>::value];
@@ -66,6 +81,22 @@ namespace utils {
 		template<typename Key>
 		const Value& get() const {
 			return values[type_index<Key,key_list>::value];
+		}
+
+		auto begin() {
+			return values.begin();
+		}
+
+		auto begin() const {
+			return values.begin();
+		}
+
+		auto end() {
+			return values.end();
+		}
+
+		auto end() const {
+			return values.end();
 		}
 
 		template<typename Body>

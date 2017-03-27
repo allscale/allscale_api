@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 
 #include "allscale/utils/static_map.h"
+#include "allscale/utils/string_utils.h"
+
+#include "allscale/utils/printer/vectors.h"
 
 namespace allscale {
 namespace utils {
@@ -38,6 +41,36 @@ namespace utils {
 
 		EXPECT_NE(&map.get<A>(),&map.get<B>());
 
+	}
+
+	TEST(StaticMap,Constructor) {
+
+		StaticMap<keys<A,B,C>,int> map(12);
+
+		EXPECT_EQ(sizeof(int)*3,sizeof(map));
+
+		EXPECT_EQ(12,map.get<A>());
+		EXPECT_EQ(12,map.get<B>());
+		EXPECT_EQ(12,map.get<C>());
+
+	}
+
+	TEST(StaticMap,Iterators) {
+
+		StaticMap<keys<A,B,C>,int> map(12);
+
+		EXPECT_EQ(sizeof(int)*3,sizeof(map));
+
+		auto& valA = map.get<A>();
+		auto& valB = map.get<B>();
+		auto& valC = map.get<C>();
+
+		valA = 12;
+		valB = 14;
+		valC = 16;
+
+		std::vector<int> res(map.begin(),map.end());
+		EXPECT_EQ("[12,14,16]",toString(res));
 	}
 
 } // end namespace utils
