@@ -453,20 +453,6 @@ namespace core {
 
 	// --- prec operator ---
 
-	namespace detail {
-
-		template<
-			unsigned i = 0,
-			typename ... Defs,
-			typename I = typename utils::type_at<i,utils::type_list<Defs...>>::type::in_type,
-			typename O = typename utils::type_at<i,utils::type_list<Defs...>>::type::out_type
-		>
-		auto prec(const rec_defs<Defs...>& defs) {
-			return detail::prec_operation<i,I,O,Defs...>{defs};
-		}
-
-	}
-
 	template<
 		unsigned i = 0,
 		typename ... Defs,
@@ -474,9 +460,8 @@ namespace core {
 		typename O = typename utils::type_at<i,utils::type_list<Defs...>>::type::out_type
 	>
 	auto prec(const rec_defs<Defs...>& defs) {
-		return detail::prec<i>(defs);
+		return detail::prec_operation<i,I,O,Defs...>{defs};
 	}
-
 
 	template<
 		unsigned i = 0,
@@ -493,7 +478,7 @@ namespace core {
 		typename dummy = typename std::enable_if<!detail::is_fun_def<BT>::value,int>::type
 	>
 	auto prec(const BT& t, const BC& b, const SC& s) {
-		return prec<0>(fun(t,b,s));
+		return prec<0>(group(fun(t,b,s)));
 	}
 
 } // end namespace core
