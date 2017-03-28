@@ -502,7 +502,7 @@ namespace data {
 					using List = NodeList<typename EdgeKind::trg_node_kind,Level>;
 					using TrgNodeRef = NodeRef<typename EdgeKind::trg_node_kind,Level>;
 					assert_true(isClosed()) << "Accessing non-closed edge set!";
-					if (src.id > forward_offsets.size() || forward_targets.empty()) return List{nullptr,nullptr};
+					if (src.id+1 >= forward_offsets.size() || forward_targets.empty()) return List{nullptr,nullptr};
 					return List{
 						reinterpret_cast<const TrgNodeRef*>(&forward_targets[forward_offsets[src.id]]),
 						reinterpret_cast<const TrgNodeRef*>(&forward_targets[forward_offsets[src.id+1]])
@@ -514,7 +514,7 @@ namespace data {
 					using List = NodeList<typename EdgeKind::src_node_kind,Level>;
 					using SrcNodeRef = NodeRef<typename EdgeKind::src_node_kind,Level>;
 					assert_true(isClosed()) << "Accessing non-closed edge set!";
-					if (src.id > backward_offsets.size() || backward_targets.empty()) return List{nullptr,nullptr};
+					if (src.id+1 >= backward_offsets.size() || backward_targets.empty()) return List{nullptr,nullptr};
 					return List{
 						reinterpret_cast<const SrcNodeRef*>(&backward_targets[backward_offsets[src.id]]),
 						reinterpret_cast<const SrcNodeRef*>(&backward_targets[backward_offsets[src.id+1]])
@@ -2582,30 +2582,20 @@ namespace data {
 			unsigned Level,
 			typename B = typename EdgeKind::trg_node_kind
 		>
-		NodeRef<B,Level> getNeighbor(const NodeRef<A,Level>& a) const {
-			const auto& set = getNeighbors<EdgeKind>(a);
-			assert_eq(set.size(),1);
-			return set.front();
-		}
-
-		template<
-			typename EdgeKind,
-			typename A,
-			unsigned Level,
-			typename B = typename EdgeKind::trg_node_kind
-		>
-		NodeList<B,Level> getNeighbors(const NodeRef<A,Level>& a) const {
-			return getSinks<EdgeKind,A,Level,B>(a);
-		}
-
-		template<
-			typename EdgeKind,
-			typename A,
-			unsigned Level,
-			typename B = typename EdgeKind::trg_node_kind
-		>
 		NodeList<B,Level> getSinks(const NodeRef<A,Level>& a) const {
 			return data.edgeSets.template getSinks<EdgeKind>(a);
+		}
+
+		template<
+			typename EdgeKind,
+			typename A,
+			unsigned Level,
+			typename B = typename EdgeKind::trg_node_kind
+		>
+		NodeRef<B,Level> getSink(const NodeRef<A,Level>& a) const {
+			const auto& list = getSinks<EdgeKind>(a);
+			assert_eq(list.size(),1);
+			return list.front();
 		}
 
 		template<
@@ -2619,13 +2609,64 @@ namespace data {
 		}
 
 		template<
-			typename Hierarchy,
-			typename A, unsigned Level,
-			typename B = typename Hierarchy::child_node_kind
+			typename EdgeKind,
+			typename B,
+			unsigned Level,
+			typename A = typename EdgeKind::src_node_kind
 		>
-		NodeList<B,Level-1> getChildren(const NodeRef<A,Level>& a) const {
-			return data.hierarchySets.template getChildren<Hierarchy,Level>(a);
+		NodeRef<A,Level> getSource(const NodeRef<B,Level>& b) const {
+			const auto& list = getSources<EdgeKind>(b);
+			assert_eq(list.size(),1);
+			return list.front();
 		}
+
+		// -- overloading of getNeighbor convenience functions (aliases of getSink / getSource ) --
+
+		template<
+			typename EdgeKind,
+			typename A,
+			unsigned Level,
+			typename B = typename EdgeKind::trg_node_kind
+		>
+		std::enable_if_t<std::is_same<A,typename EdgeKind::src_node_kind>::value,NodeRef<B,Level>>
+		getNeighbor(const NodeRef<A,Level>& a) const {
+			return getSink<EdgeKind>(a);
+		}
+
+		template<
+			typename EdgeKind,
+			typename A,
+			unsigned Level,
+			typename B = typename EdgeKind::trg_node_kind
+		>
+		std::enable_if_t<std::is_same<A,typename EdgeKind::src_node_kind>::value,NodeList<B,Level>>
+		getNeighbors(const NodeRef<A,Level>& a) const {
+			return getSinks<EdgeKind>(a);
+		}
+
+		template<
+			typename EdgeKind,
+			typename A,
+			unsigned Level,
+			typename B = typename EdgeKind::src_node_kind
+		>
+		std::enable_if_t<std::is_same<A,typename EdgeKind::trg_node_kind>::value,NodeRef<B,Level>>
+		getNeighbor(const NodeRef<A,Level>& a) const {
+			return getSource<EdgeKind>(a);
+		}
+
+		template<
+			typename EdgeKind,
+			typename A,
+			unsigned Level,
+			typename B = typename EdgeKind::src_node_kind
+		>
+		std::enable_if_t<std::is_same<A,typename EdgeKind::trg_node_kind>::value,NodeList<B,Level>>
+		getNeighbors(const NodeRef<A,Level>& a) const {
+			return getSources<EdgeKind>(a);
+		}
+
+		// -- parent / children relation --
 
 		template<
 			typename Hierarchy,
@@ -2634,6 +2675,15 @@ namespace data {
 		>
 		NodeRef<B,Level+1> getParent(const NodeRef<A,Level>& a) const {
 			return data.hierarchySets.template getParent<Hierarchy,Level>(a);
+		}
+
+		template<
+			typename Hierarchy,
+			typename A, unsigned Level,
+			typename B = typename Hierarchy::child_node_kind
+		>
+		NodeList<B,Level-1> getChildren(const NodeRef<A,Level>& a) const {
+			return data.hierarchySets.template getChildren<Hierarchy,Level>(a);
 		}
 
 		/**

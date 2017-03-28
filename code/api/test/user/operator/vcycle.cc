@@ -229,7 +229,7 @@ namespace user {
 			mesh.template pforAll<Vertex,Level>([&](const auto& cur) {
 
 				double sum = 0;
-				auto neighbors = mesh.template getNeighbors<Edge>(cur);
+				auto neighbors = mesh.template getSinks<Edge>(cur);
 
 				for(const auto& x : neighbors) {
 					sum += temperature[x];

@@ -1420,7 +1420,7 @@ namespace data {
 			NodeRef<Vertex,0> left(i-1);
 			NodeRef<Vertex,0> right(i+1);
 
-			const auto& neighbors = mesh.template getNeighbors<Edge>(cur);
+			const auto& neighbors = mesh.template getSinks<Edge>(cur);
 
 			EXPECT_EQ(2,neighbors.size());
 			EXPECT_EQ(left,neighbors.front()) << "i=" << cur;
@@ -1432,7 +1432,7 @@ namespace data {
 			NodeRef<Vertex,1> left(i-1);
 			NodeRef<Vertex,1> right(i+1);
 
-			const auto& neighbors = mesh.template getNeighbors<Edge>(cur);
+			const auto& neighbors = mesh.template getSinks<Edge>(cur);
 
 			EXPECT_EQ(2,neighbors.size());
 			EXPECT_EQ(left,neighbors.front()) << "i=" << cur;
@@ -1609,6 +1609,23 @@ namespace data {
 
 		// test edges
 		EXPECT_EQ(a, m.getNeighbor<BoundaryFace2Cell>(bl));
+		EXPECT_EQ(bl, m.getNeighbor<BoundaryFace2Cell>(a));
+
+		EXPECT_EQ(a, m.getSink<BoundaryFace2Cell>(bl));
+		EXPECT_EQ(bl, m.getSource<BoundaryFace2Cell>(a));
+
+		EXPECT_EQ(2, m.getNeighbors<Face2Cell>(f).size());
+		EXPECT_EQ(2, m.getSinks<Face2Cell>(f).size());
+
+		EXPECT_EQ(f, m.getNeighbor<Face2Cell>(a));
+		EXPECT_EQ(f, m.getSource<Face2Cell>(a));
+
+		EXPECT_EQ(b, m.getNeighbor<BoundaryFace2Cell>(br));
+		EXPECT_EQ(br, m.getNeighbor<BoundaryFace2Cell>(b));
+
+		EXPECT_EQ(b, m.getSink<BoundaryFace2Cell>(br));
+		EXPECT_EQ(br, m.getSource<BoundaryFace2Cell>(b));
+
 
 		// check node sets
 		EXPECT_EQ(2,m.getNumNodes<Cell>());
@@ -1619,16 +1636,11 @@ namespace data {
 		EXPECT_EQ(1, (m.createNodeData<Face,double>().size()));
 		EXPECT_EQ(2, (m.createNodeData<BoundaryFace,double>().size()));
 
-/*
 		// check forAll and pforAll support
 		std::atomic<int> counter(0);
-		m.forAll<Cell>([&](auto) { counter++; });
-		EXPECT_EQ(2,counter);
-
-		counter.store(0);
 		m.pforAll<Cell>([&](auto) { counter++; });
 		EXPECT_EQ(2,counter);
-*/
+
 	}
 
 
@@ -1690,19 +1702,36 @@ namespace data {
 		auto m = mb.build();
 
 		// check relations per level
-		EXPECT_EQ(1, m.getNeighbors<Cell2Cell>(l0a).size());
-		EXPECT_EQ(2, m.getNeighbors<Cell2Cell>(l0b).size());
-		EXPECT_EQ(2, m.getNeighbors<Cell2Cell>(l0c).size());
-		EXPECT_EQ(1, m.getNeighbors<Cell2Cell>(l0d).size());
+		EXPECT_EQ(1, m.getSinks<Cell2Cell>(l0a).size());
+		EXPECT_EQ(2, m.getSinks<Cell2Cell>(l0b).size());
+		EXPECT_EQ(2, m.getSinks<Cell2Cell>(l0c).size());
+		EXPECT_EQ(1, m.getSinks<Cell2Cell>(l0d).size());
 
-		EXPECT_EQ(l0b, m.getNeighbor<Cell2Cell>(l0a));
-		EXPECT_EQ(l0c, m.getNeighbor<Cell2Cell>(l0d));
+		EXPECT_EQ(l0b, m.getSink<Cell2Cell>(l0a));
+		EXPECT_EQ(l0c, m.getSink<Cell2Cell>(l0d));
 
-		EXPECT_EQ(1, m.getNeighbors<Cell2Cell>(l1a).size());
-		EXPECT_EQ(1, m.getNeighbors<Cell2Cell>(l1b).size());
+		EXPECT_EQ(1, m.getSinks<Cell2Cell>(l1a).size());
+		EXPECT_EQ(1, m.getSinks<Cell2Cell>(l1b).size());
 
-		EXPECT_EQ(l1b, m.getNeighbor<Cell2Cell>(l1a));
-		EXPECT_EQ(l1a, m.getNeighbor<Cell2Cell>(l1b));
+		EXPECT_EQ(l1b, m.getSink<Cell2Cell>(l1a));
+		EXPECT_EQ(l1a, m.getSink<Cell2Cell>(l1b));
+
+
+		// check reverse look-ups
+		EXPECT_EQ(1, m.getSources<Cell2Cell>(l0a).size());
+		EXPECT_EQ(2, m.getSources<Cell2Cell>(l0b).size());
+		EXPECT_EQ(2, m.getSources<Cell2Cell>(l0c).size());
+		EXPECT_EQ(1, m.getSources<Cell2Cell>(l0d).size());
+
+		EXPECT_EQ(l0b, m.getSource<Cell2Cell>(l0a));
+		EXPECT_EQ(l0c, m.getSource<Cell2Cell>(l0d));
+
+		EXPECT_EQ(1, m.getSources<Cell2Cell>(l1a).size());
+		EXPECT_EQ(1, m.getSources<Cell2Cell>(l1b).size());
+
+		EXPECT_EQ(l1b, m.getSource<Cell2Cell>(l1a));
+		EXPECT_EQ(l1a, m.getSource<Cell2Cell>(l1b));
+
 
 		// check parent/child relations
 		EXPECT_EQ(2, m.getChildren<Cell2Child>(l1a).size());
