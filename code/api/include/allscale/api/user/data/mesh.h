@@ -134,48 +134,91 @@ namespace data {
 	class MeshBuilder;
 
 
+	// -- mesh attributes --
+
+	/**
+	 * The base type for mesh property kinds.
+	 */
+	template<typename NodeKind, typename ValueType>
+	struct mesh_property {
+		using node_kind = NodeKind;
+		using value_type = ValueType;
+	};
+
+	/**
+	 * A container for a collection of mesh properties. A mesh property is
+	 * a value associated to a certain kind of node on each level of a mesh.
+	 * The MeshProperties container allows multiple properties to be managed
+	 * within a single, consistent entity.
+	 *
+	 * To create an instance, the factory function "createMeshProperties" of
+	 * the Mesh structure has to be utilized.
+	 */
+	template<unsigned Levels, typename PartitionTree, typename ... Properties>
+	class MeshProperties;
+
+
 
 	// --------------------------------------------------------------------
 	//							  Definitions
 	// --------------------------------------------------------------------
 
+	// The type used for indexing nodes in meshes
+	using node_index_t = uint32_t;
+
 	// The type used for identifying nodes within meshes.
-	using NodeID = uint32_t;
+	struct NodeID {
+
+		node_index_t id;
+
+		NodeID() = default;
+
+		constexpr explicit NodeID(node_index_t id) : id(id) {}
+
+		operator node_index_t() const {
+			return id;
+		}
+
+		node_index_t getOrdinal() const {
+			return id;
+		}
+
+		bool operator==(const NodeID& other) const {
+			return id == other.id;
+		}
+
+		bool operator!=(const NodeID& other) const {
+			return id != other.id;
+		}
+
+		bool operator<(const NodeID& other) const {
+			return id < other.id;
+		}
+
+		friend std::ostream& operator<<(std::ostream& out, const NodeID& ref) {
+			return out << "n" << ref.id;
+		}
+
+	};
 
 	/**
 	 * The type used for addressing nodes within meshes.
 	 */
 	template<typename Kind,unsigned Level>
-	struct NodeRef {
+	struct NodeRef : public NodeID {
 
-		using node_type = Kind;
+		using node_kind = Kind;
+
 		enum { level = Level };
-
-		NodeID id;
 
 		NodeRef() = default;
 
-		constexpr explicit NodeRef(NodeID id) : id(id) {}
+		constexpr explicit NodeRef(node_index_t id)
+			: NodeID(id) {}
 
-		NodeID getOrdinal() const {
-			return id;
-		}
+		constexpr explicit NodeRef(NodeID id)
+			: NodeID(id) {}
 
-		bool operator==(const NodeRef& other) const {
-			return id == other.id;
-		}
-
-		bool operator!=(const NodeRef& other) const {
-			return id != other.id;
-		}
-
-		bool operator<(const NodeRef& other) const {
-			return id < other.id;
-		}
-
-		friend std::ostream& operator<<(std::ostream& out, const NodeRef& ref) {
-			return out << "n" << ref.id;
-		}
 	};
 
 
@@ -211,7 +254,7 @@ namespace data {
 
 		class const_iterator : public std::iterator<std::random_access_iterator_tag, NodeRef<Kind,Level>> {
 
-			NodeID cur;
+			node_index_t cur;
 
 		public:
 
@@ -307,11 +350,11 @@ namespace data {
 		};
 
 		const_iterator begin() const {
-			return const_iterator(_begin.id);
+			return const_iterator(_begin);
 		}
 
 		const_iterator end() const {
-			return const_iterator(_end.id);
+			return const_iterator(_end);
 		}
 
 		template<typename Body>
@@ -633,7 +676,7 @@ namespace data {
 
 			template<typename EdgeKind, unsigned Level>
 			void addEdge(const NodeRef<typename EdgeKind::src_node_kind,Level>& src, const NodeRef<typename EdgeKind::trg_node_kind,Level>& trg) {
-				getEdgeRelation<EdgeKind,Level>().addEdge(src.id,trg.id);
+				getEdgeRelation<EdgeKind,Level>().addEdge(src,trg);
 			}
 
 			void close() {
@@ -751,7 +794,7 @@ namespace data {
 
 				void addChild(const NodeID& parent, const NodeID& child) {
 					// a constant for an unknown parent
-					static const NodeID unknownParent = std::numeric_limits<NodeID>::max();
+					static const NodeID unknownParent(std::numeric_limits<node_index_t>::max());
 
 					assert_ne(parent,unknownParent) << "Unknown parent constant must not be used!";
 
@@ -782,7 +825,7 @@ namespace data {
 
 				void close() {
 					// a constant for an unknown parent
-					static const NodeID unknownParent = std::numeric_limits<NodeID>::max();
+					static const NodeID unknownParent(std::numeric_limits<node_index_t>::max());
 
 					// get maximum index of parents
 					std::size_t maxParent = 0;
@@ -907,7 +950,7 @@ namespace data {
 
 			template<typename HierarchyKind, unsigned Level>
 			void addChild(const NodeRef<typename HierarchyKind::parent_node_kind,Level>& parent, const NodeRef<typename HierarchyKind::child_node_kind,Level-1>& child) {
-				getRelation<HierarchyKind,Level-1>().addChild(parent.id,child.id);
+				getRelation<HierarchyKind,Level-1>().addChild(parent,child);
 			}
 
 			void close() {
@@ -2056,8 +2099,8 @@ namespace data {
 			template<typename Kind, unsigned Level = 0>
 			void setNodeRange(const SubTreeRef& ref, const NodeRange<Kind,Level>& range) {
 				auto& locRange = getNode(ref).data[Level].nodeRanges.template get<Kind>();
-				locRange.begin = range.getBegin().id;
-				locRange.end = range.getEnd().id;
+				locRange.begin = range.getBegin();
+				locRange.end = range.getEnd();
 			}
 
 			template<typename EdgeKind, unsigned Level = 0>
@@ -2745,6 +2788,11 @@ namespace data {
 			return MeshData<NodeKind,T,Level,partition_tree_type>(partitionTree,detail::SubMeshRef::root());
 		}
 
+		template<typename ... Properties>
+		MeshProperties<Levels,partition_tree_type,Properties...> createProperties() const {
+			return MeshProperties<Levels,partition_tree_type,Properties...>(*this);
+		}
+
 
 		// -- load / store for files --
 
@@ -2915,6 +2963,155 @@ namespace data {
 
 	};
 
+
+	// -- Mesh Property Collections --------------------------------------
+
+
+	// TODO: reduce the template instantiations complexity of this code.
+
+	namespace detail {
+
+		template<typename PartitionTree, unsigned Level, typename ... Properties>
+		class MeshPropertiesData {
+
+			using property_list = utils::type_list<Properties...>;
+
+			template<typename Property>
+			using mesh_data_type = MeshData<typename Property::node_kind,typename Property::value_type,Level,PartitionTree>;
+
+			using data_t = std::tuple<mesh_data_type<Properties>...>;
+
+			data_t data;
+
+		public:
+
+			template<typename Mesh>
+			MeshPropertiesData(const Mesh& mesh)
+				: data(mesh.template createNodeData<typename Properties::node_kind,typename Properties::value_type,Level>()...) {}
+
+			template<typename Property>
+			mesh_data_type<Property>& get() {
+				return std::get<utils::type_index<Property,property_list>::value>(data);
+			}
+
+			template<typename Property>
+			const mesh_data_type<Property>& get() const {
+				return std::get<utils::type_index<Property,property_list>::value>(data);
+			}
+
+		};
+
+		template<typename PartitionTree, unsigned Level, typename ... Properties>
+		class MeshPropertiesLevels {
+
+			template<unsigned Lvl>
+			using level_data = MeshPropertiesData<PartitionTree,Lvl,Properties...>;
+
+			level_data<Level> data;
+
+			MeshPropertiesLevels<PartitionTree,Level-1,Properties...> nested;
+
+		public:
+
+			template<typename Mesh>
+			MeshPropertiesLevels(const Mesh& mesh)
+				: data(mesh), nested(mesh) {}
+
+			template<unsigned Lvl>
+			std::enable_if_t<Lvl==Level,level_data<Level>>&
+			get() {
+				return data;
+			}
+
+			template<unsigned Lvl>
+			const std::enable_if_t<Lvl==Level,level_data<Level>>&
+			get() const {
+				return data;
+			}
+
+			template<unsigned Lvl>
+			std::enable_if_t<Lvl!=Level,level_data<Lvl>>&
+			get() {
+				return nested.template get<Lvl>();
+			}
+
+			template<unsigned Lvl>
+			const std::enable_if_t<Lvl!=Level,level_data<Lvl>>&
+			get() const {
+				return nested.template get<Lvl>();
+			}
+
+		};
+
+
+		template<typename PartitionTree, typename ... Properties>
+		class MeshPropertiesLevels<PartitionTree,0,Properties...> {
+
+			using level_data = MeshPropertiesData<PartitionTree,0,Properties...>;
+
+			level_data data;
+
+		public:
+
+			template<typename Mesh>
+			MeshPropertiesLevels(const Mesh& mesh)
+				: data(mesh) {}
+
+			template<unsigned Lvl>
+			std::enable_if_t<Lvl==0,level_data>&
+			get() {
+				return data;
+			}
+
+			template<unsigned Lvl>
+			const std::enable_if_t<Lvl==0,level_data>&
+			get() const {
+				return data;
+			}
+
+		};
+
+	}
+
+
+	template<unsigned Levels, typename PartitionTree, typename ... Properties>
+	class MeshProperties {
+
+		template<typename N,typename E,typename H,unsigned L,unsigned P>
+		friend class Mesh;
+
+		using DataStore = detail::MeshPropertiesLevels<PartitionTree,Levels-1,Properties...>;
+
+		DataStore data;
+
+		template<typename Mesh>
+		MeshProperties(const Mesh& mesh) : data(mesh) {}
+
+	public:
+
+		template<typename Property, unsigned Level = 0>
+		MeshData<typename Property::node_kind,typename Property::value_type,Level,PartitionTree>&
+		get() {
+			return data.template get<Level>().template get<Property>();
+		}
+
+		template<typename Property, unsigned Level = 0>
+		const MeshData<typename Property::node_kind,typename Property::value_type,Level,PartitionTree>&
+		get() const {
+			return data.template get<Level>().template get<Property>();
+		}
+
+		template<typename Property, unsigned Level = 0>
+		typename Property::value_type& get(const NodeRef<typename Property::node_kind,Level>& node) {
+			return get<Property,Level>()[node];
+		}
+
+		template<typename Property, unsigned Level = 0>
+		const typename Property::value_type& get(const NodeRef<typename Property::node_kind,Level>& node) const {
+			return get<Property,Level>()[node];
+		}
+
+	};
 
 } // end namespace data
 } // end namespace user

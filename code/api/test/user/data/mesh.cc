@@ -209,52 +209,40 @@ namespace data {
 
 		fragment fC(shared,newPartC);
 
-		std::cout << "PartA:     " << partA << "\n";
-		std::cout << "newPartC:  " << newPartC << "\n";
-		std::cout << "intersect: " << region::intersect(newPartC,partA) << "\n";
+//		std::cout << "PartA:     " << partA << "\n";
+//		std::cout << "newPartC:  " << newPartC << "\n";
+//		std::cout << "intersect: " << region::intersect(newPartC,partA) << "\n";
 
 		// move data from A and B to C
 		fC.insert(fA,region::intersect(newPartC,partA));
 		fC.insert(fB,region::intersect(newPartC,partB));
 
-//		Region newPartA = Region(size, {0,0}, {250,750});
-//		Region newPartB = Region(size, {250,0}, {500,750});
-//		Region newPartC = Region(size, {0,750}, {500,1000});
-//		EXPECT_EQ(full,Region::merge(newPartA,newPartB,newPartC));
-//
-//		Fragment fC(shared,newPartC);
-//
-//
-//		// shrink A and B
-//		fA.resize(newPartA);
-//		fB.resize(newPartB);
-//
-//		for(int t = 10; t<20; t++) {
-//
-//			auto a = fA.mask();
-//			for(unsigned i=0; i<250; i++) {
-//				for(unsigned j=0; j<750; j++) {
-//					EXPECT_EQ((i*j*(t-1)),(a[{i,j}]));
-//					a[{i,j}] = i * j * t;
-//				}
-//			}
-//
-//			auto b = fB.mask();
-//			for(unsigned i=250; i<500; i++) {
-//				for(unsigned j=0; j<750; j++) {
-//					EXPECT_EQ((i*j*(t-1)),(b[{i,j}]));
-//					b[{i,j}] = i * j * t;
-//				}
-//			}
-//
-//			auto c = fC.mask();
-//			for(unsigned i=0; i<500; i++) {
-//				for(unsigned j=750; j<1000; j++) {
-//					EXPECT_EQ((i*j*(t-1)),(c[{i,j}]));
-//					c[{i,j}] = i * j * t;
-//				}
-//			}
-//		}
+
+		// shrink A and B
+		fA.resize(newPartA);
+		fB.resize(newPartB);
+
+		for(int t = 10; t<20; t++) {
+
+			auto a = fA.mask();
+			newPartA.scan<Vertex,0>(shared,[&](const NodeRef<Vertex,0>& node) {
+				EXPECT_EQ(t,a[node]);
+				a[node]++;
+			});
+
+			auto b = fB.mask();
+			newPartB.scan<Vertex,0>(shared,[&](const NodeRef<Vertex,0>& node) {
+				EXPECT_EQ(t,b[node]);
+				b[node]++;
+			});
+
+			auto c = fC.mask();
+			newPartC.scan<Vertex,0>(shared,[&](const NodeRef<Vertex,0>& node) {
+				EXPECT_EQ(t,c[node]);
+				c[node]++;
+			});
+
+		}
 
 	}
 
@@ -1745,7 +1733,55 @@ namespace data {
 
 	}
 
+
+	TEST(MeshProperties,Basic) {
+
+		struct PropertyA : public mesh_property<Vertex,int> {};
+		struct PropertyB : public mesh_property<Vertex,int> {};
+
+		auto bar = createBarMesh<2,2>(50);
+
+		auto props = bar.createProperties<PropertyA,PropertyB>();
+
+
+		auto& propA0 = props.get<PropertyA,0>();
+		auto& propA1 = props.get<PropertyA,1>();
+
+		auto& propB0 = props.get<PropertyB,0>();
+		auto& propB1 = props.get<PropertyB,1>();
+
+
+		// check that they are different
+		EXPECT_NE((void*)&propA0,(void*)&propA1);
+		EXPECT_NE((void*)&propB0,(void*)&propB1);
+
+		// test-usage of properties
+
+		bar.pforAll<Vertex,0>([&](const auto& cur){
+			propA0[cur] = 12;
+			propB0[cur] = 18;
+		});
+
+		bar.pforAll<Vertex,1>([&](const auto& cur){
+			propA1[cur] = 14;
+			propB1[cur] = 16;
+		});
+
+
+		bar.pforAll<Vertex,0>([&](const auto& cur){
+			EXPECT_EQ(12,propA0[cur]);
+			EXPECT_EQ(18,propB0[cur]);
+		});
+
+		bar.pforAll<Vertex,1>([&](const auto& cur){
+			EXPECT_EQ(14,propA1[cur]);
+			EXPECT_EQ(16,propB1[cur]);
+		});
+
+	}
+
 } // end namespace data
 } // end namespace user
 } // end namespace api
 } // end namespace allscale
+
