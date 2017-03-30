@@ -3,6 +3,8 @@ if(MSVC)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Gm")
 	# enable debug information(required for /Gm)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zi")
+	# increase number of sections in *.obj file
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
 	# disable optimizations(compilation speed)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Od")
 	# disable some warnings

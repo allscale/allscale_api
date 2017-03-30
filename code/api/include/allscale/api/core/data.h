@@ -27,16 +27,16 @@ namespace core {
 			utils::is_serializable<R>::value &&
 
 			// there has to be an emptiness check
-			std::is_same<decltype(std::declval<const R&>().empty()),bool>::value &&
+			std::is_same<decltype((bool (R::*)(void) const)(&R::empty)), bool (R::*)(void) const>::value &&
 
 			// there has to be an union operation
-			std::is_same<decltype(R::merge(std::declval<const R&>(),std::declval<const R&>())),R>::value &&
+			std::is_same<decltype((R (*)(const R&, const R&))(&R::merge)), R(*)(const R&, const R&)>::value &&
 
 			// there has to be an intersection operation
-			std::is_same<decltype(R::intersect(std::declval<const R&>(),std::declval<const R&>())),R>::value &&
+			std::is_same<decltype((R(*)(const R&, const R&))(&R::intersect)), R(*)(const R&, const R&)>::value &&
 
 			// there has to be a set difference operation
-			std::is_same<decltype(R::difference(std::declval<const R&>(),std::declval<const R&>())),R>::value,
+			std::is_same<decltype((R(*)(const R&, const R&))(&R::difference)), R(*)(const R&, const R&)>::value,
 
 		void>::type> : public std::true_type {};
 
@@ -65,27 +65,21 @@ namespace core {
 		std::is_destructible<F>::value &&
 
 		// the region covered by the fragment has to be obtainable
-		//std::is_same<decltype(std::declval<const F&>().getCoveredRegion()), const typename F::region_type&>::value &&
 		std::is_same<decltype((void (F::*)(utils::Archive&) const)(&F::getCoveredRegion)), void (F::*)(utils::Archive&) const>::value &&
 
 		// there has to be a resize operator
-		//std::is_same<decltype(std::declval<F&>().resize(std::declval<const typename F::region_type&>())), void>::value &&
 		std::is_same<decltype((void (F::*)(const typename F::region_type&))(&F::resize)), void (F::*)(const typename F::region_type&)>::value &&
 
 		// there is an insert operator
-		//std::is_same<decltype(std::declval<F&>().insert(std::declval<const F&>(), std::declval<const typename F::region_type&>())), void>::value &&
 		std::is_same<decltype((void (F::*)(const F&, const typename F::region_type&))(&F::insert)), void (F::*)(const F&, const typename F::region_type&)>::value &&
 
 		// there is a save operator
-		//std::is_same<decltype(std::declval<const F&>().save(std::declval<utils::Archive&>(), std::declval<const typename F::region_type&>())), void>::value &&
 		std::is_same<decltype((void (F::*)(utils::Archive&, const typename F::region_type&) const)(&F::save)), void (F::*)(utils::Archive&, const typename F::region_type&) const>::value &&
 
 		// there is a load operator
-		//sstd::is_same<decltype(std::declval<F&>().load(std::declval<utils::Archive&>())), void>::value &&
 		std::is_same<decltype((void (F::*)(utils::Archive&))(&F::load)), void (F::*)(utils::Archive&)>::value &&
 
 		// can be concerted into a facade
-		//std::is_same<decltype(std::declval<F&>().mask()), typename F::facade_type>::value,
 		std::is_same<decltype((typename F::facade_type (F::*)(void))(&F::mask)), typename F::facade_type(F::*)(void)>::value,
 
 		void>::type> : public std::true_type{};
@@ -98,23 +92,38 @@ namespace core {
 	//									SharedData
 	// ---------------------------------------------------------------------------------
 
-	template<typename S, typename _ = void>
-	struct is_shared_data : public std::false_type {};
+	template<typename S, typename T = void>
+	struct is_shared_data { };
 
 	template<typename S>
-	struct is_shared_data<S,typename std::enable_if<
+	struct is_shared_data<S> {
 
-			// fragments need to be destructible
-			std::is_destructible<S>::value &&
+	private:
 
-			// there is a save operator
-			std::is_same<decltype((void (S::*)(utils::Archive&) const)(&S::save)),void (S::*)(utils::Archive&) const>::value &&
+		template<typename T>
+		static constexpr auto check(T*)
+			-> 
+			typename std::conditional<
+					// needs to be destructible
+					std::is_destructible<S>::value &&
+					// there must be a static load fuction
+					std::is_same<decltype(T::load(std::declval<utils::Archive&>())), T>::value &&
+					// there must be a save member function
+					std::is_same<decltype(std::declval<const T&>().save(std::declval<utils::Archive&>())),void>::value,
+				std::true_type,
+				std::false_type
+			>::type;
 
-			// there is a static load operator
-			std::is_same<decltype((S(*)(utils::Archive&))(&S::load)),S (*)(utils::Archive&)>::value,
+		template<typename>
+		static constexpr std::false_type check(...);
 
-		void>::type> : public std::true_type {};
+		typedef decltype(check<S>(0)) type;
 
+	public:
+		
+		enum { value = type::value };
+
+	};
 
 
 

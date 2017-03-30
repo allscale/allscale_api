@@ -12,6 +12,8 @@
 #include "allscale/api/user/operator/async.h"
 #include "allscale/api/user/operator/internal/operation_reference.h"
 
+#include "allscale/utils/bitmanipulation.h"
+
 namespace allscale {
 namespace api {
 namespace user {
@@ -98,7 +100,7 @@ namespace user {
 					for(int t=0; t<steps; t++) {
 
 						// loop based sequential implementation
-						detail::forEach(iter_type(0),a.size(),[x,y,t,update](const iter_type& i){
+						user::detail::forEach(iter_type(0),a.size(),[x,y,t,update](const iter_type& i){
 							(*y)[i] = update(t,i,*x);
 						});
 
@@ -173,7 +175,7 @@ namespace user {
 
 					using iter_type = decltype(a.size());
 
-					detail::loop_reference<iter_type> ref;
+					user::detail::loop_reference<iter_type> ref;
 
 					for(int t=0; t<steps; t++) {
 
@@ -778,7 +780,7 @@ namespace user {
 				template<typename Body>
 				void visit(const Body& body,std::size_t numBits) {
 					task_dependency_enumerator<Dims,taskIdx-1>().visit(body,numBits);
-					if (__builtin_popcount(taskIdx)==numBits) {
+					if (utils::countOnes(taskIdx)==numBits) {
 						task_dependency_extractor<taskIdx,Dims-1>()(body,taskIdx);
 					}
 				}
@@ -971,7 +973,7 @@ namespace user {
 			private:
 
 				static std::size_t getNumBitsSet(std::size_t mask) {
-					return __builtin_popcount(mask);
+					return utils::countOnes(mask);
 				}
 
 			};

@@ -2,9 +2,11 @@
 
 #include <vector>
 
-#include "allscale/utils/string_utils.h"
 #include "allscale/api/user/operator/stencil.h"
 #include "allscale/api/user/data/grid.h"
+
+#include "allscale/utils/string_utils.h"
+#include "allscale/utils/bitmanipulation.h"
 
 namespace allscale {
 namespace api {
@@ -35,7 +37,7 @@ namespace user {
 			for(int& x : data) x = I;
 
 			// run the stencil
-			stencil<Impl>(data, T, [](int time, int pos, const std::vector<int>& data){
+			stencil<Impl>(data, T, [=](int time, int pos, const std::vector<int>& data){
 
 				// check that input arrays are up-to-date
 				if (pos > 0) EXPECT_EQ(I+time,data[pos-1]) << "Position: " << pos << " - 1 = " << (pos-1);
@@ -71,7 +73,7 @@ namespace user {
 			});
 
 			// run the stencil
-			stencil<Impl>(data, T, [](int time, const data::GridPoint<1>& pos, const data::Grid<int,1>& data){
+			stencil<Impl>(data, T, [=](int time, const data::GridPoint<1>& pos, const data::Grid<int,1>& data){
 
 				// check that input arrays are up-to-date
 				for(int dx = -1; dx <= 1; ++dx) {
@@ -110,7 +112,7 @@ namespace user {
 			});
 
 			// run the stencil
-			stencil<Impl>(data, T, [](int time, const data::GridPoint<2>& pos, const data::Grid<int,2>& data){
+			stencil<Impl>(data, T, [=](int time, const data::GridPoint<2>& pos, const data::Grid<int,2>& data){
 
 				// check that input arrays are up-to-date
 				for(int dx = -1; dx <= 1; ++dx) {
@@ -153,7 +155,7 @@ namespace user {
 			});
 
 			// run the stencil
-			stencil<Impl>(data, T, [](int time, const data::GridPoint<3>& pos, const data::Grid<int,3>& data){
+			stencil<Impl>(data, T, [=](int time, const data::GridPoint<3>& pos, const data::Grid<int,3>& data){
 
 				// check that input arrays are up-to-date
 				for(int dx = -1; dx <= 1; ++dx) {
@@ -199,7 +201,7 @@ namespace user {
 			});
 
 			// run the stencil
-			stencil<Impl>(data, T, [](int time, const data::GridPoint<4>& pos, const data::Grid<int,4>& data){
+			stencil<Impl>(data, T, [=](int time, const data::GridPoint<4>& pos, const data::Grid<int,4>& data){
 
 				// check that input arrays are up-to-date
 				for(int dx = -1; dx <= 1; ++dx) {
@@ -247,7 +249,7 @@ namespace user {
 			});
 
 			// run the stencil
-			stencil<Impl>(data, T, [](int time, const data::GridPoint<5>& pos, const data::Grid<int,5>& data){
+			stencil<Impl>(data, T, [=](int time, const data::GridPoint<5>& pos, const data::Grid<int,5>& data){
 
 				// check that input arrays are up-to-date
 				for(int dx = -1; dx <= 1; ++dx) {
@@ -295,7 +297,7 @@ namespace user {
 			for(int& x : data) x = 0;
 
 			// run the stencil
-			stencil(data, T, [](int time, int pos, const std::vector<int>& data){
+			stencil(data, T, [=](int time, int pos, const std::vector<int>& data){
 
 				// check that input arrays are up-to-date
 				if (pos > 0) EXPECT_EQ(time,data[pos-1]);
@@ -333,7 +335,7 @@ namespace user {
 			});
 
 			// run the stencil
-			stencil<Impl>(data, T, [](int time, const data::GridPoint<2>& pos, const data::Grid<int,2>& data){
+			stencil<Impl>(data, T, [=](int time, const data::GridPoint<2>& pos, const data::Grid<int,2>& data){
 
 				// check that input arrays are up-to-date
 				for(int dx = -1; dx <= 1; ++dx) {
@@ -432,14 +434,14 @@ namespace user {
 			if (debug) std::cout << idx << " depends on " << std::array<std::size_t,sizeof...(deps)>({{deps...}}) << "\n";
 
 			// expect number of dependencies to be equivalent to number of bits in index
-			EXPECT_EQ(__builtin_popcount(idx),sizeof...(deps));
+			EXPECT_EQ(utils::countOnes(idx),sizeof...(deps));
 
 			// expect that each dependency is only 1 bit off
 			for(const auto& cur : std::array<std::size_t,sizeof...(deps)>({{ deps ... }})) {
 				// check that idx is a super-set of bits
 				EXPECT_EQ(cur, idx & cur) << idx;
 				// check that there is one bit different
-				EXPECT_EQ(1,__builtin_popcount(cur ^ idx));
+				EXPECT_EQ(1,utils::countOnes(cur ^ idx));
 			}
 
 		};
