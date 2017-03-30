@@ -8,6 +8,9 @@
 
 #include "allscale/utils/string_utils.h"
 
+#include "allscale/api/core/io.h"
+#include "allscale/utils/serializer.h"
+
 namespace allscale {
 namespace api {
 namespace user {
@@ -577,6 +580,60 @@ namespace user {
 		EXPECT_EQ("[[2,4],[3,5])",toString(limit.shrink(2)));
 		EXPECT_EQ("[[3,5],[3,5])",toString(limit.shrink(3)));
 		EXPECT_EQ("[[4,6],[4,6])",toString(limit.shrink(4)));
+
+	}
+
+	TEST(Pfor, ParallelTextFile) {
+
+		unsigned N = 1000;
+		core::FileIOManager& manager = core::FileIOManager::getInstance();
+
+		// generate output data
+		core::Entry text = manager.createEntry("text.txt", core::Mode::Text);
+		auto out = manager.openOutputStream(text);
+		std::vector<int> toBeWritten;
+		for(unsigned i = 0; i < N; ++i) {
+			toBeWritten.push_back(i);
+		}
+
+		// write file
+		user::pfor(toBeWritten, [&](auto c) {
+			EXPECT_TRUE(out.atomic([c](auto& out) {
+				out << c << " ";
+			}));
+		});
+
+		manager.close(out);
+
+		// read file
+		auto in = manager.openInputStream(text);
+		std::set<int> readFromFile;
+		int x;
+		for(unsigned i = 0; i < N; ++i) {
+			EXPECT_TRUE(in >> x);
+
+			readFromFile.insert(x);
+		}
+
+		// check data read from file
+		for(int val : toBeWritten) {
+			readFromFile.erase(val);
+		}
+		EXPECT_TRUE(readFromFile.empty());
+		
+		// nevermore
+		EXPECT_FALSE(in >> x);
+
+		manager.close(in);
+
+		// check existence of file
+		EXPECT_TRUE(manager.exists(text));
+
+		// delete the file
+	 	manager.remove(text);
+
+		// check existence of file
+		EXPECT_FALSE(manager.exists(text));
 
 	}
 
