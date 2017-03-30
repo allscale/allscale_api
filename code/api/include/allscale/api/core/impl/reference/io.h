@@ -9,7 +9,7 @@
 
 #ifdef _MSC_VER
 	// includes
-	#include <io.h>	
+	#include <io.h>
 	// marcos for function identifiers
 	#define CLOSE_WRAPPER _close
 	#define LSEEK_WRAPPER _lseek
@@ -153,7 +153,7 @@ namespace reference {
 
 		static InputStream& load(utils::Archive&) {
 			assert_not_implemented();
-			return *static_cast<InputStream*>(nullptr);
+			exit(1); // prevent return warning
 		}
 
 		void store(utils::Archive&) const {
@@ -225,7 +225,7 @@ namespace reference {
 
 		static OutputStream& load(utils::Archive&) {
 			assert_not_implemented();
-			return *static_cast<OutputStream*>(nullptr);
+			exit(1); // prevent return warning
 		}
 
 		void store(utils::Archive&) const {
@@ -278,7 +278,7 @@ namespace reference {
 
 		static MemoryMappedInput load(utils::Archive&) {
 			assert_not_implemented();
-			return *static_cast<MemoryMappedInput*>(nullptr);
+			exit(1); // prevent return warning
 		}
 
 		void store(utils::Archive&) const {
@@ -305,7 +305,7 @@ namespace reference {
 
 		static MemoryMappedOutput load(utils::Archive&) {
 			assert_not_implemented();
-			return *static_cast<MemoryMappedOutput*>(nullptr);
+			exit(1); // prevent return warning
 		}
 
 		void store(utils::Archive&) const {
@@ -1018,7 +1018,7 @@ namespace reference {
 			char buffer[2000];
 			std::cout << strerror_r(errno,buffer,2000);
 #endif
-			// fail with message if mapping failed 
+			// fail with message if mapping failed
 			// or if mapped address checking was requested on MSVC platforms
 			assert_fail() << "Failed to map file into address space!";
 			return false;
