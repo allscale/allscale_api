@@ -117,49 +117,12 @@ namespace core {
 			return impl::reference::after();
 		}
 
+		operator impl::reference::dependencies<impl::reference::dynamic_sized>() const {
+			return impl::reference::after(std::vector<task_reference>());
+		}
+
 	};
 
-
-//	/**
-//	 * A class aggregating task dependencies.
-//	 */
-//	template<typename DependencyList>
-//	class dependencies {
-//
-//		DependencyList deps;
-//
-//	public:
-//
-//		dependencies() {}
-//
-//		dependencies(const impl::reference::task_reference& dep) {
-//			par_deps.add(dep);
-//		}
-//
-//		dependencies(dependencies&& other) = default;
-//
-//		dependencies& operator=(dependencies&& other) = default;
-//
-//
-//		// -- implicit and explicit converters --
-//
-//		operator impl::sequential::dependencies() const {
-//			return impl::sequential::dependencies();
-//		}
-//
-//		impl::sequential::dependencies toSequentialDependencies() const {
-//			return *this;
-//		}
-//
-//		operator RefDependencies&&() && {
-//			return std::move(par_deps);
-//		}
-//
-//		RefDependencies&& toReferenceDependencies() && {
-//			return std::move(par_deps);
-//		}
-//
-//	};
 
 	// -- no dependencies --
 
@@ -171,7 +134,7 @@ namespace core {
 	// -- sequential --
 
 	template<typename ... Rest>
-	auto after(const impl::sequential::task_reference& first, Rest ... rest) {
+	auto after(const impl::sequential::task_reference& first, const Rest& ... rest) {
 		return impl::sequential::after(first, rest...);
 	}
 
@@ -179,7 +142,7 @@ namespace core {
 	// -- reference --
 
 	template<typename ... Rest>
-	auto after(const impl::reference::task_reference& first, Rest ... rest) {
+	auto after(const impl::reference::task_reference& first, const Rest& ... rest) {
 		return impl::reference::after(first, rest...);
 	}
 

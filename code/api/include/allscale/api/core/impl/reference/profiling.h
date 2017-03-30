@@ -347,14 +347,14 @@ namespace reference {
 
 	};
 
-	std::string getLogFileNameForWorker(int id) {
+	inline std::string getLogFileNameForWorker(int id) {
 		// create the filename
 		char filename[17];
 		snprintf(filename,17,"profile_log.%04d", id);
 		return filename;
 	}
 
-	static int& getCurrentWorkerID() {
+	static inline int& getCurrentWorkerID() {
 		static thread_local int workerID;
 		return workerID;
 	}
@@ -374,12 +374,12 @@ namespace reference {
 			}
 		};
 
-		ProfileLog& getProfileLog() {
+		inline ProfileLog& getProfileLog() {
 			static thread_local ProfileLogHandler logHandler;
 			return logHandler.log;
 		}
 
-		void logProfilerEventInternal(const ProfileLogEntry& entry) {
+		inline void logProfilerEventInternal(const ProfileLogEntry& entry) {
 			getProfileLog() << entry;
 		}
 

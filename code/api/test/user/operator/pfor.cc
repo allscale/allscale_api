@@ -146,8 +146,8 @@ namespace user {
 		using Point = std::array<int,3>;
 		using Grid = std::array<std::array<std::array<int,N>,N>,N>;
 
-		Point zero = {0,0,0};
-		Point full = {N,N,N};
+		Point zero = {{0,0,0}};
+		Point full = {{N,N,N}};
 
 		// create data
 		Grid* data = new Grid();
@@ -550,8 +550,8 @@ namespace user {
 
 		using range = detail::range<std::array<int,2>>;
 
-		range limit({0,2},{5,7});
-		range a({1,4},{2,5});
+		range limit({{0,2}},{{5,7}});
+		range a({{1,4}},{{2,5}});
 
 		EXPECT_EQ("[[0,2],[5,7])",toString(limit));
 		EXPECT_EQ("[[1,4],[2,5])",toString(a));

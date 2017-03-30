@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "allscale/utils/assert.h"
 #include "allscale/utils/printer/arrays.h"
 
@@ -235,7 +237,7 @@ namespace sequential {
 		return after(rest...);
 	}
 
-	dependencies after(const std::vector<task_reference>&) {
+	inline dependencies after(const std::vector<task_reference>&) {
 		return {};		// if it is a task_reference, it is computed
 	}
 
@@ -267,7 +269,7 @@ namespace sequential {
 	}
 
 
-	auto sequential() {
+	inline auto sequential() {
 		return done();
 	}
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "allscale/api/core/prec.h"
 #include "allscale/api/core/treeture.h"
 #include "allscale/api/user/operator/internal/operation_reference.h"
 

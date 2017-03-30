@@ -90,7 +90,7 @@ script:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]] && [ $CC == clang ]; then export CC=clang-$COMPILER_VERSION; export CXX=clang++-$COMPILER_VERSION; fi
   - mkdir build
   - cd build
-  - cmake ../ -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+  - cmake ../code -DCMAKE_BUILD_TYPE=$BUILD_TYPE
   - make -j2 
   # limiting number of workers as suggested in https://docs.travis-ci.com/user/languages/cpp/#OpenMP-projects
   - NUM_WORKERS=3 make test ARGS=-j2

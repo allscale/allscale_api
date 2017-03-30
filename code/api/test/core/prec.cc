@@ -13,6 +13,14 @@ namespace allscale {
 namespace api {
 namespace core {
 
+	TEST(FunVariants, Basic) {
+		auto x = make_fun_variants([](int i) { return i; });
+		auto y = make_fun_variants([](int i) { return i + 1; }, [](int i) { return i + 2; });
+
+		EXPECT_TRUE(is_fun_variants<decltype(x)>::value);
+		EXPECT_TRUE(is_fun_variants<decltype(y)>::value);
+	}
+
 	TEST(RecOps, IsFunDef) {
 
 		auto a = [](){return false;};
