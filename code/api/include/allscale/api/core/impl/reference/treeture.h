@@ -2184,11 +2184,15 @@ namespace reference {
 			 */
 			#ifdef __linux__
 				inline void fixAffinity(int core) {
-					int num_cores = std::thread::hardware_concurrency();
-					cpu_set_t mask;
-					CPU_ZERO(&mask);
-					CPU_SET(core % num_cores, &mask);
-					pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mask);
+					// fix affinity if user does not object
+					bool useAffinity = (std::getenv("NO_AFFINITY") == nullptr) ? true : false;
+					if(useAffinity) {
+						int num_cores = std::thread::hardware_concurrency();
+						cpu_set_t mask;
+						CPU_ZERO(&mask);
+						CPU_SET(core % num_cores, &mask);
+						pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mask);
+					}
 				}
 			#else
 				inline void fixAffinity(int) { }
