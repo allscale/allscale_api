@@ -186,13 +186,13 @@ namespace user {
 
 		// counters should all be initially 0
 		for(std::size_t i=0; i<bar.getNumNodes<Vertex>(); ++i) {
-			EXPECT_EQ(0,counts[data::NodeRef<Vertex>(i)]);
+			EXPECT_EQ(0,counts[data::NodeRef<Vertex>((data::node_index_t)i)]);
 		}
 		vcycle.run(10);
 
 		// now each element should be updated 30x
 		for(std::size_t i=0; i<bar.getNumNodes<Vertex>(); ++i) {
-			EXPECT_EQ(50,counts[data::NodeRef<Vertex>(i)]);
+			EXPECT_EQ(50,counts[data::NodeRef<Vertex>((data::node_index_t)i)]);
 		}
 
 	}
