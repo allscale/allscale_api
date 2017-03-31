@@ -304,7 +304,8 @@ namespace user {
 			return *iter;
 		}
 
-		int access(int a) {
+		template<typename T>
+		typename std::enable_if<std::is_integral<T>::value,T>::type access(T a) {
 			return a;
 		}
 

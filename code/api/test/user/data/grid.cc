@@ -742,13 +742,17 @@ namespace data {
 		// lower half
 		Region partB(size, {250,0},{500,1000});
 
-		// check that the coordinates are coorect
+		// check that the coordinates are correct
 		Region full = Region::merge(partA,partB);
 		EXPECT_EQ("{[[0,0] - [500,1000]]}",toString(full));
 
 		// create fragments
 		Fragment fA(shared,partA);
 		Fragment fB(shared,partB);
+
+		// initialize
+		fA.mask().forEach([](auto& p) { p = 0; });
+		fB.mask().forEach([](auto& p) { p = 0; });
 
 		// fill the data set
 		for(int t = 1; t<10; t++) {
