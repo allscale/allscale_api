@@ -49,7 +49,7 @@ namespace user {
 	class stencil_reference;
 
 	template<typename Impl = implementation::fine_grained_iterative, typename Container, typename Update>
-	stencil_reference<Impl> stencil(Container& res, int steps, const Update& update);
+	stencil_reference<Impl> stencil(Container& res, std::size_t steps, const Update& update);
 
 
 
@@ -70,7 +70,7 @@ namespace user {
 
 
 	template<typename Impl, typename Container, typename Update>
-	stencil_reference<Impl> stencil(Container& a, int steps, const Update& update) {
+	stencil_reference<Impl> stencil(Container& a, std::size_t steps, const Update& update) {
 
 		// forward everything to the implementation
 		return Impl().process(a,steps,update);
@@ -84,7 +84,7 @@ namespace user {
 		struct sequential_iterative {
 
 			template<typename Container, typename Update>
-			stencil_reference<sequential_iterative> process(Container& a, int steps, const Update& update) {
+			stencil_reference<sequential_iterative> process(Container& a, std::size_t steps, const Update& update) {
 
 				// return handle to asynchronous execution
 				return async([&a,steps,update]{
@@ -97,7 +97,7 @@ namespace user {
 
 					using iter_type = decltype(a.size());
 
-					for(int t=0; t<steps; t++) {
+					for(std::size_t t=0; t<steps; t++) {
 
 						// loop based sequential implementation
 						user::detail::forEach(iter_type(0),a.size(),[x,y,t,update](const iter_type& i){
@@ -123,7 +123,7 @@ namespace user {
 		struct coarse_grained_iterative {
 
 			template<typename Container, typename Update>
-			stencil_reference<coarse_grained_iterative> process(Container& a, int steps, const Update& update) {
+			stencil_reference<coarse_grained_iterative> process(Container& a, std::size_t steps, const Update& update) {
 
 				// return handle to asynchronous execution
 				return async([&a,steps,update]{
@@ -136,7 +136,7 @@ namespace user {
 
 					using iter_type = decltype(a.size());
 
-					for(int t=0; t<steps; t++) {
+					for(std::size_t t=0; t<steps; t++) {
 
 						// loop based parallel implementation with blocking synchronization
 						pfor(iter_type(0),a.size(),[x,y,t,update](const iter_type& i){
@@ -162,7 +162,7 @@ namespace user {
 		struct fine_grained_iterative {
 
 			template<typename Container, typename Update>
-			stencil_reference<fine_grained_iterative> process(Container& a, int steps, const Update& update) {
+			stencil_reference<fine_grained_iterative> process(Container& a, std::size_t steps, const Update& update) {
 
 				// return handle to asynchronous execution
 				return async([&a,steps,update]{
@@ -177,7 +177,7 @@ namespace user {
 
 					user::detail::loop_reference<iter_type> ref;
 
-					for(int t=0; t<steps; t++) {
+					for(std::size_t t=0; t<steps; t++) {
 
 						// loop based parallel implementation with fine grained dependencies
 						ref = pfor(iter_type(0),a.size(),[x,y,t,update](const iter_type& i){
@@ -780,7 +780,7 @@ namespace user {
 				template<typename Body>
 				void visit(const Body& body,std::size_t numBits) {
 					task_dependency_enumerator<Dims,taskIdx-1>().visit(body,numBits);
-					if (utils::countOnes(taskIdx)==numBits) {
+					if ((std::size_t)(utils::countOnes(taskIdx))==numBits) {
 						task_dependency_extractor<taskIdx,Dims-1>()(body,taskIdx);
 					}
 				}
@@ -892,7 +892,7 @@ namespace user {
 
 				}
 
-				static ExecutionPlan create(const Base<Dims>& base, int steps) {
+				static ExecutionPlan create(const Base<Dims>& base, std::size_t steps) {
 
 					// get size of structure
 					auto size = base.extend();
@@ -1016,7 +1016,7 @@ namespace user {
 		struct sequential_recursive {
 
 			template<typename Container, typename Update>
-			stencil_reference<sequential_recursive> process(Container& a, int steps, const Update& update) {
+			stencil_reference<sequential_recursive> process(Container& a, std::size_t steps, const Update& update) {
 
 				using namespace detail;
 
@@ -1068,7 +1068,7 @@ namespace user {
 		struct parallel_recursive {
 
 			template<typename Container, typename Update>
-			stencil_reference<parallel_recursive> process(Container& a, int steps, const Update& update) {
+			stencil_reference<parallel_recursive> process(Container& a, std::size_t steps, const Update& update) {
 
 				using namespace detail;
 

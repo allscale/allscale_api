@@ -26,11 +26,11 @@ namespace user {
 
 		using Impl = TypeParam;
 
-		const int N = 1000;
+		const std::size_t N = 1000;
 		const int I = 10;
 
 		// test for an even and an odd number of time steps
-		for(int T : { 40 , 41 , (int)(2.5 * N) }) {
+		for(std::size_t T : { (std::size_t)40 , (std::size_t)41 , (std::size_t)(2.5 * N) }) {
 
 			// initialize the data buffer
 			std::vector<int> data(N);
@@ -42,14 +42,14 @@ namespace user {
 				// check that input arrays are up-to-date
 				if (pos > 0) EXPECT_EQ(I+time,data[pos-1]) << "Position: " << pos << " - 1 = " << (pos-1);
 				EXPECT_EQ(I+time,data[pos]) << "Position: " << pos;
-				if (pos < (std::size_t)N-1) EXPECT_EQ(I+time,data[pos+1]) << "Position: " << pos << " + 1 = " << (pos+1);;
+				if (pos < N-1) EXPECT_EQ(I+time,data[pos+1]) << "Position: " << pos << " + 1 = " << (pos+1);;
 
 				// increase the time step of current sell
 				return data[pos] + 1;
 			});
 
 			// check final state
-			for(int i = 0; i<N; i++) {
+			for(std::size_t i = 0; i<N; i++) {
 				EXPECT_EQ(I+T,data[i]) << "Position " << i;
 			}
 
