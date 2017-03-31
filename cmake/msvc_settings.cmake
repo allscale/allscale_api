@@ -32,6 +32,10 @@ if(MSVC)
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /DNDEBUG")
 	endif()
 
+	# disable checked iterators
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_ITERATOR_DEBUG_LEVEL=0")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D_ITERATOR_DEBUG_LEVEL=0")
+
 	# properly configure how to link the MSVC runtime library, static <-> shared and debug <-> release
 	if(BUILD_SHARED_LIBS)
 		message(STATUS "MSVC: using dynamically-linked runtime")
