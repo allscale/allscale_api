@@ -457,9 +457,11 @@ namespace reference {
 			// TODO: replace this by a re-use based solution
 
 			// gradually drain old family references
+			/*
 			if (families.size() > 20000) {
 				families.erase(families.begin(),families.begin() + families.size()/2);
 			}
+			*/
 
 			// create a new family
 			families.push_back(std::make_unique<TaskFamily>());
