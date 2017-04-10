@@ -637,6 +637,124 @@ namespace user {
 
 	}
 
+	TEST(Pfor,After) {
+
+		const int N = 10;
+
+		int* A = new int[N];
+		int* B = new int[N];
+
+		// start with an initialization
+		auto ref = pfor(0,N,[A,B](int i){
+			A[i] = 0;
+			B[i] = -1;
+		});
+
+		int counter = 0;
+
+		// run the time loop
+	    for(int t=0; t<T; ++t) {
+	        ref = pfor(1,N-1,[A,B,t](int i) {
+
+	        	if (i != 1)  EXPECT_EQ(t,A[i-1]);
+	        	EXPECT_EQ(t,A[i]);
+	        	if (i != N-2) EXPECT_EQ(t,A[i+1]);
+
+	        	EXPECT_EQ(t-1,B[i]);
+
+	        	B[i]=t+1;
+
+	        },neighborhood_sync(ref));
+
+	        // plug in after
+	        if (t % 2 == 0) {
+	        	ref = after(ref,N/2,[&]{
+	        		EXPECT_EQ(t+1,B[N/2]);
+	        		counter++;
+	        	});
+	        }
+
+	        std::swap(A,B);
+	    }
+
+	    // check the final state
+	    pfor(1,N-1,[A](int i){
+	    	EXPECT_EQ(T,A[i]);
+	    },neighborhood_sync(ref));
+
+	    EXPECT_EQ(counter,T/2);
+
+	    delete [] A;
+	    delete [] B;
+
+	}
+
+
+	TEST(Pfor,After2D) {
+
+		const int N = 10;
+
+		using Point = data::Vector<int,2>;
+
+		Point size = {N,N};
+		Point center = {N/2,N/2};
+
+		std::array<std::array<int,N>,N> bufferA;
+		std::array<std::array<int,N>,N> bufferB;
+
+		auto* A = &bufferA;
+		auto* B = &bufferB;
+
+		// start with an initialization
+		auto ref = pfor(size,[A,B](const Point& p){
+			(*A)[p.x][p.y] = 0;
+			(*B)[p.x][p.y] = -1;
+		});
+
+		int counter = 0;
+
+		// run the time loop
+	    for(int t=0; t<T; ++t) {
+	        ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,t](const Point& p) {
+
+	        	if (p.x != 1   && p.y != 1  )  EXPECT_EQ(t,(*A)[p.x-1][p.y-1]);
+	        	if (              p.y != 1  )  EXPECT_EQ(t,(*A)[p.x  ][p.y-1]);
+	        	if (p.x != N-2 && p.y != 1  )  EXPECT_EQ(t,(*A)[p.x+1][p.y-1]);
+
+	        	if (p.x != N-2 && p.y != 1  )  EXPECT_EQ(t,(*A)[p.x+1][p.y-1]);
+	        	if (p.x != N-2              )  EXPECT_EQ(t,(*A)[p.x+1][p.y  ]);
+	        	if (p.x != N-2 && p.y != N-2)  EXPECT_EQ(t,(*A)[p.x+1][p.y+1]);
+
+	        	if (p.y != 1  )  EXPECT_EQ(t,(*A)[p.x][p.y-1]);
+	        	if (p.y != N-2)  EXPECT_EQ(t,(*A)[p.x][p.y+1]);
+
+	        	EXPECT_EQ(t,(*A)[p.x][p.y]);
+	        	EXPECT_EQ(t-1,(*B)[p.x][p.y]);
+
+	        	(*B)[p.x][p.y]=t+1;
+
+	        },neighborhood_sync(ref));
+
+	        // plug in after
+	        if (t % 2 == 0) {
+	        	ref = after(ref,center,[&,B,t]{
+	        		EXPECT_EQ(t+1,(*B)[center.x][center.y]);
+	        		counter++;
+	        	});
+	        }
+
+	        std::swap(A,B);
+	    }
+
+	    // check the final state
+	    pfor(Point{1,1},Point{N-1,N-1},[A](const Point& p){
+	    	EXPECT_EQ(T,(*A)[p.x][p.y]);
+	    },neighborhood_sync(ref));
+
+	    EXPECT_EQ(counter,T/2);
+
+	}
+
 } // end namespace user
 } // end namespace api
 } // end namespace allscale

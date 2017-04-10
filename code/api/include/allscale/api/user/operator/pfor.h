@@ -100,6 +100,28 @@ namespace user {
 
 
 	// ---------------------------------------------------------------------------------------------
+	//									The after Utility
+	// ---------------------------------------------------------------------------------------------
+
+	/**
+	 * A generic utility for inserting a single action into a single a chain of dependencies. The given action will be triggered
+	 * once the corresponding iteration in the given loop reference has been completed. The resulting loop reference can be utilized
+	 * by consecutive operations to synchronize on the completion of the concatenation of the given loop reference and inserted action.
+	 *
+	 * @tparam Iter the type of iterator the preceding loop operated on
+	 * @tparam Point the iterator value of the point this action shell be associated to
+	 * @tparam Action the type of action to be performed
+	 *
+	 * @param loop preceding loop
+	 * @param point the point to which this event shell be associated to
+	 * @param action the action to be performed
+	 * @return a customized loop reference to sync upon the concatenation of this
+	 */
+	template<typename Iter, typename Point, typename Action>
+	detail::loop_reference<Iter> after(const detail::loop_reference<Iter>& loop, const Point& point, const Action& action);
+
+
+	// ---------------------------------------------------------------------------------------------
 	//									adapters for the pfor operator
 	// ---------------------------------------------------------------------------------------------
 
@@ -296,6 +318,18 @@ namespace user {
 			return b_begin >= b_end || (a_begin <= b_begin && b_end <= a_end);
 		}
 
+		template<typename Iter, typename Point>
+		bool covers(const Iter& begin, const Iter& end, const Point& p) {
+			return begin <= p && p < end;
+		}
+
+		template<typename Iter, typename Point,size_t dims>
+		bool covers(const data::Vector<Iter,dims>& begin, const data::Vector<Iter,dims>& end, const data::Vector<Point,dims>& point) {
+			for(size_t i=0; i<dims; ++i) {
+				if (point[i] < begin[i] || end[i] <= point[i]) return false;
+			}
+			return true;
+		}
 
 		// -- iterator access utility --
 
@@ -454,6 +488,11 @@ namespace user {
 
 			bool covers(const range<Iter>& r) const {
 				return detail::covers(_begin,_end,r._begin,r._end);
+			}
+
+			template<typename Point>
+			bool covers(const Point& p) const {
+				return detail::covers(_begin,_end,p);
 			}
 
 			range grow(const range<Iter>& limit, int steps = 1) const {
@@ -821,6 +860,55 @@ namespace user {
 		}
 
 	};
+
+
+
+
+	template<typename Iter, typename Point, typename Action>
+	detail::loop_reference<Iter> after(const detail::loop_reference<Iter>& loop, const Point& point, const Action& action) {
+
+		// get the full range
+		auto r = loop.getRange();
+
+		struct rangeHelper {
+			detail::range<Iter> range;
+			one_on_one_dependency<Iter> dependencies;
+		};
+
+		// get the initial dependency
+		auto dependency = one_on_one(loop);
+
+		// trigger parallel processing
+		return { r, core::prec(
+			[point](const rangeHelper& rg) {
+				// check whether the point of action is covered by the current range
+				return !rg.range.covers(point);
+			},
+			[action,point](const rangeHelper& rg) {
+				// trigger the action if the current range covers the point
+				if (rg.range.covers(point)) action();
+
+			},
+			core::pick(
+				[](const rangeHelper& rg, const auto& nested) {
+					// in the step case we split the range and process sub-ranges recursively
+					auto fragments = rg.range.split();
+					auto& left = fragments.first;
+					auto& right = fragments.second;
+					auto dep = rg.dependencies.split(left,right);
+					return parallel(
+						nested(dep.left.toCoreDependencies(), rangeHelper{left, dep.left} ),
+						nested(dep.right.toCoreDependencies(), rangeHelper{right,dep.right})
+					);
+				},
+				[action,point](const rangeHelper& rg, const auto&) {
+					// trigger the action if the current range covers the point
+					if (rg.range.covers(point)) action();
+				}
+			)
+		)(dependency.toCoreDependencies(),rangeHelper{r,dependency}) };
+	}
+
 
 } // end namespace user
 } // end namespace api
