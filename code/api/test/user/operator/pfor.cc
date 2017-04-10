@@ -668,7 +668,7 @@ namespace user {
 
 	        // plug in after
 	        if (t % 2 == 0) {
-	        	ref = after(ref,N/2,[&]{
+	        	ref = after(ref,N/2,[A,B,t,&counter]{
 	        		EXPECT_EQ(t+1,B[N/2]);
 	        		counter++;
 	        	});
@@ -752,6 +752,46 @@ namespace user {
 	    },neighborhood_sync(ref));
 
 	    EXPECT_EQ(counter,T/2);
+
+	}
+
+
+	TEST(Pfor,LazyLoopTest) {
+
+		// check whether loops are really processed asynchronously
+
+		const int N = 10;
+		const int T = 5;
+		const int X = N/2;
+
+		int counter = 0;
+
+		// start with an initialization
+		auto ref = pfor(0,N,[&](int i){
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+			if (i==X) counter++;
+		});
+
+		// run the time loop
+	    for(int t=0; t<T; ++t) {
+	        ref = pfor(1,N-1,[&](int i) {
+	        	if (i==X) counter++;
+	        },neighborhood_sync(ref));
+	    }
+
+	    // check the final state
+	    ref = pfor(1,N-1,[&](int i){
+	    	if (i==X) counter++;
+	    },neighborhood_sync(ref));
+
+	    // should not be done by now
+	    EXPECT_EQ(0,counter);
+
+	    // now wait for ref
+	    ref.wait();
+
+	    // now all the steps should be done
+	    EXPECT_EQ(T+2,counter);
 
 	}
 

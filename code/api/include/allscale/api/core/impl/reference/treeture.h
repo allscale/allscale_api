@@ -504,6 +504,21 @@ namespace reference {
 
 		task_reference(const TaskBase& task);
 
+		task_reference(const task_reference&) = default;
+
+		task_reference(task_reference&& other) : family(other.family), path(other.path) {
+			other.family = nullptr;
+		}
+
+		task_reference& operator=(const task_reference& other) = default;
+
+		task_reference& operator=(task_reference&& other) {
+			family = other.family;
+			path = other.path;
+			other.family = nullptr;
+			return *this;
+		}
+
 		bool isDone() const {
 			return (!family || family->isComplete(path));
 		}

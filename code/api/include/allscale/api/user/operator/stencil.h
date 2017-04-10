@@ -188,14 +188,14 @@ namespace user {
 						std::swap(x,y);
 					}
 
+					// wait for the task completion
+					ref.wait();
+
 					// make sure result is in a
 					if (x != &a) {
 						// move final data to the original container
 						std::swap(a,b);
 					}
-
-					// wait for the task completion
-					ref.wait();
 
 				});
 
