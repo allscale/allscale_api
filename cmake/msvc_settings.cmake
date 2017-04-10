@@ -3,6 +3,8 @@ if(MSVC)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Gm")
 	# enable debug information(required for /Gm)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zi")
+	# increase number of sections in *.obj file
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
 	# disable optimizations(compilation speed)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Od")
 	# disable some warnings
@@ -29,6 +31,10 @@ if(MSVC)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DNDEBUG")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /DNDEBUG")
 	endif()
+
+	# disable checked iterators
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_ITERATOR_DEBUG_LEVEL=0")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D_ITERATOR_DEBUG_LEVEL=0")
 
 	# properly configure how to link the MSVC runtime library, static <-> shared and debug <-> release
 	if(BUILD_SHARED_LIBS)

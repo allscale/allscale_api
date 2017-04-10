@@ -36,6 +36,16 @@ namespace core {
 		EXPECT_TRUE((is_fragment<user::MapFragment<int,int>>::value));
 	}
 
+	TEST(SharedData, IsSharedData) {
+
+		// some negative tests
+		EXPECT_FALSE(is_shared_data<int>::value);
+
+		// some positive test
+		EXPECT_TRUE(is_shared_data<no_shared_data>::value);
+
+	}
+
 } // end namespace core
 } // end namespace api
 } // end namespace allscale

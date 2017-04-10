@@ -2,8 +2,6 @@
 
 #include <type_traits>
 
-#include "allscale/utils/compatibility.h"
-
 namespace allscale {
 namespace utils {
 
@@ -97,15 +95,9 @@ namespace utils {
 
 	template <typename T>
 	struct is_serializable<T, typename std::enable_if<
-			std::is_same<decltype(serializer<T>::load(DECL_VAL_REF(Archive))),T>::value &&
-			std::is_same<decltype(serializer<T>::store(DECL_VAL_REF(Archive), DECL_VAL_REF(const T))),void>::value,
+			std::is_same<decltype((T(*)(Archive&))(&serializer<T>::load)), T(*)(Archive&)>::value &&
+			std::is_same<decltype((void(*)(Archive&, const T&))(&serializer<T>::store)), void(*)(Archive&, const T&)>::value,
 		void>::type> : public std::true_type {};
-
-	template <typename T>
-	struct is_serializable<const T, typename std::enable_if<
-			is_serializable<T>::value,
-		void>::type> : public std::true_type {};
-
 
 	template<typename T>
 	typename std::enable_if<is_serializable<T>::value,void>::type

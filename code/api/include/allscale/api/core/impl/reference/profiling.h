@@ -51,7 +51,7 @@ namespace reference {
 		TaskID task;
 
 		ProfileLogEntry(uint64_t time, Kind kind)
-			: time(time), kind(kind) {}
+			: time(time), kind(kind), task() {}
 
 		ProfileLogEntry(uint64_t time, Kind kind, TaskID task)
 			: time(time), kind(kind), task(task) {}

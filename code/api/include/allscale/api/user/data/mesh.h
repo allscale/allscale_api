@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iterator>
 #include <ostream>
+#include <tuple>
 
 #include <bitset>
 #include <cstring>
@@ -244,7 +245,7 @@ namespace data {
 		}
 
 		NodeRef<Kind,Level> operator[](std::size_t index) const {
-			return NodeRef<Kind,Level>(NodeID(_begin.id + index));
+			return NodeRef<Kind,Level>(NodeID(_begin.id + (node_index_t)index));
 		}
 
 		std::size_t size() const {
@@ -460,11 +461,11 @@ namespace data {
 			}
 
 			template<typename NodeKind,std::size_t Level = 0>
-			NodeRange<NodeKind,Level> create(unsigned num) {
+			NodeRange<NodeKind,Level> create(std::size_t num) {
 				auto& node_counter = getNodeCounter<NodeKind,Level>();
-				NodeRef<NodeKind,Level> begin(node_counter);
+				NodeRef<NodeKind,Level> begin((node_index_t)node_counter);
 				node_counter += num;
-				NodeRef<NodeKind,Level> end(node_counter);
+				NodeRef<NodeKind,Level> end((node_index_t)node_counter);
 				return { begin, end };
 			}
 
@@ -2261,7 +2262,7 @@ namespace data {
 								SubTreeRef::root(),
 								NodeRange<NodeKind, lvl::value>(
 									NodeRef<NodeKind, lvl::value>{ 0 },
-									NodeRef<NodeKind, lvl::value>{ NodeID(num_nodes) }
+									NodeRef<NodeKind, lvl::value>{ NodeID((node_index_t)num_nodes) }
 								)
 						);
 

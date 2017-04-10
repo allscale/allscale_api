@@ -1539,7 +1539,7 @@ namespace data {
 
 		// check that all elements are now 0
 		for(std::size_t i=0; i<bar.getNumNodes<Vertex>(); ++i) {
-			EXPECT_EQ(0,visitCounters[NodeRef<Vertex>(i)]);
+			EXPECT_EQ(0,visitCounters[NodeRef<Vertex>((node_index_t)i)]);
 		}
 
 		// increment all of those
@@ -1548,7 +1548,7 @@ namespace data {
 		});
 
 		for(std::size_t i=0; i<bar.getNumNodes<Vertex>(); ++i) {
-			EXPECT_EQ(1,visitCounters[NodeRef<Vertex>(i)]);
+			EXPECT_EQ(1,visitCounters[NodeRef<Vertex>((node_index_t)i)]);
 		}
 
 	}

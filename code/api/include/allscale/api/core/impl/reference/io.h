@@ -9,7 +9,7 @@
 
 #ifdef _MSC_VER
 	// includes
-	#include <io.h>	
+	#include <io.h>
 	// marcos for function identifiers
 	#define CLOSE_WRAPPER _close
 	#define LSEEK_WRAPPER _lseek
@@ -153,7 +153,7 @@ namespace reference {
 
 		static InputStream& load(utils::Archive&) {
 			assert_not_implemented();
-			return *static_cast<InputStream*>(nullptr);
+			exit(1); // prevent return warning
 		}
 
 		void store(utils::Archive&) const {
@@ -225,7 +225,7 @@ namespace reference {
 
 		static OutputStream& load(utils::Archive&) {
 			assert_not_implemented();
-			return *static_cast<OutputStream*>(nullptr);
+			exit(1); // prevent return warning
 		}
 
 		void store(utils::Archive&) const {
@@ -278,7 +278,7 @@ namespace reference {
 
 		static MemoryMappedInput load(utils::Archive&) {
 			assert_not_implemented();
-			return *static_cast<MemoryMappedInput*>(nullptr);
+			exit(1); // prevent return warning
 		}
 
 		void store(utils::Archive&) const {
@@ -305,7 +305,7 @@ namespace reference {
 
 		static MemoryMappedOutput load(utils::Archive&) {
 			assert_not_implemented();
-			return *static_cast<MemoryMappedOutput*>(nullptr);
+			exit(1); // prevent return warning
 		}
 
 		void store(utils::Archive&) const {
@@ -482,7 +482,7 @@ namespace reference {
 		 * @return a stream to append data to
 		 */
 		InputStream& getInputStream(Entry entry) {
-			assert(inputStreams.find(entry) != inputStreams.end());
+			assert_true(inputStreams.find(entry) != inputStreams.end());
 			return inputStreams.find(entry)->second;
 		}
 
@@ -495,7 +495,7 @@ namespace reference {
 		 * @return a stream to append data to
 		 */
 		OutputStream& getOutputStream(Entry entry) {
-			assert(outputStreams.find(entry) != outputStreams.end());
+			assert_true(outputStreams.find(entry) != outputStreams.end());
 			return outputStreams.find(entry)->second;
 		}
 
@@ -508,7 +508,7 @@ namespace reference {
 		 * @return a requested memory mapped input
 		 */
 		MemoryMappedInput getMemoryMappedInput(Entry entry) {
-			assert(memoryMappedInputs.find(entry) != memoryMappedInputs.end());
+			assert_true(memoryMappedInputs.find(entry) != memoryMappedInputs.end());
 			return memoryMappedInputs.find(entry)->second;
 		}
 
@@ -521,7 +521,7 @@ namespace reference {
 		 * @return a requested memory mapped output
 		 */
 		MemoryMappedOutput getMemoryMappedOutput(Entry entry) {
-			assert(memoryMappedOutputs.find(entry) != memoryMappedOutputs.end());
+			assert_true(memoryMappedOutputs.find(entry) != memoryMappedOutputs.end());
 			return memoryMappedOutputs.find(entry)->second;
 		}
 
@@ -700,7 +700,7 @@ namespace reference {
 			// search for entry
 			auto pos = buffers.find(entry);
 			if (pos == buffers.end()) {
-				assert(false && "Unable to create input stream to unknown entity!");
+				assert_fail() << "Unable to create input stream to unknown entity!";
 				return nullptr;
 			}
 
@@ -720,7 +720,7 @@ namespace reference {
 			// search for entry
 			auto pos = buffers.find(entry);
 			if (pos == buffers.end()) {
-				assert(false && "Unable to create output stream to unknown entity!");
+				assert_fail() << "Unable to create output stream to unknown entity!";
 				return nullptr;
 			}
 
@@ -827,7 +827,7 @@ namespace reference {
 
 			// check valid entry id
 			if (entry.id >= files.size()) {
-				assert(false && "Unable to create output stream to unknown entity!");
+				assert_fail() << "Unable to create input stream to unknown entity!";
 				return nullptr;
 			}
 
@@ -842,7 +842,7 @@ namespace reference {
 
 			// check valid entry id
 			if (entry.id >= files.size()) {
-				assert(false && "Unable to create output stream to unknown entity!");
+				assert_fail() << "Unable to create output stream to unknown entity!";
 				return nullptr;
 			}
 
@@ -948,8 +948,7 @@ namespace reference {
 
 			// check valid entry id
 			if (entry.id >= files.size()) {
-				assert_fail()
-					<< "Unknown file entry: " << entry.id;
+				assert_fail() << "Unknown file entry: " << entry.id;
 				return files[0];
 			}
 
@@ -969,8 +968,7 @@ namespace reference {
 			// write a byte at the end
 			char data = 0;
 			auto res = WRITE_WRAPPER(fd,&data,1);
-			assert_eq(1,res)
-				<< "Could not write byte at end of file.";
+			assert_eq(1,res) << "Could not write byte at end of file.";
 			if (res != 1) return 0;
 
 			// move cursor back to start
@@ -1002,8 +1000,7 @@ namespace reference {
 			// get size of file
 			struct stat fileStat;
 			auto succ = stat(file.name.c_str(),&fileStat);
-			assert_eq(0,succ)
-				<< "Unable to obtain size of input file: " << file.name;
+			assert_eq(0,succ) << "Unable to obtain size of input file: " << file.name;
 
 			if (succ != 0) return 0;
 
@@ -1018,7 +1015,7 @@ namespace reference {
 			char buffer[2000];
 			std::cout << strerror_r(errno,buffer,2000);
 #endif
-			// fail with message if mapping failed 
+			// fail with message if mapping failed
 			// or if mapped address checking was requested on MSVC platforms
 			assert_fail() << "Failed to map file into address space!";
 			return false;
@@ -1030,7 +1027,7 @@ namespace reference {
 
 			// check valid entry id
 			if (entry.id >= files.size()) {
-				assert(false && "Unable to close memory mapped input to unknown entity!");
+				assert_fail() << "Unable to close memory mapped input to unknown entity!";
 				return;
 			}
 
@@ -1060,8 +1057,7 @@ namespace reference {
 
 			// close the file descriptor
 			succ = ::CLOSE_WRAPPER(file.fd);
-			assert_eq(0, succ)
-				<< "Unable to close file " << file.name;
+			assert_eq(0, succ) << "Unable to close file " << file.name;
 
 			// reset the file descriptor
 			file.fd = 0;

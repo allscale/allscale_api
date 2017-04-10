@@ -457,9 +457,11 @@ namespace reference {
 			// TODO: replace this by a re-use based solution
 
 			// gradually drain old family references
+			/*
 			if (families.size() > 20000) {
 				families.erase(families.begin(),families.begin() + families.size()/2);
 			}
+			*/
 
 			// create a new family
 			families.push_back(std::make_unique<TaskFamily>());
@@ -609,7 +611,7 @@ namespace reference {
 		}
 
 		const task_reference* end() const {
-			return &(list[Size]);
+			return begin()+Size;
 		}
 
 	};
@@ -2184,11 +2186,14 @@ namespace reference {
 			 */
 			#ifdef __linux__
 				inline void fixAffinity(int core) {
-					int num_cores = std::thread::hardware_concurrency();
-					cpu_set_t mask;
-					CPU_ZERO(&mask);
-					CPU_SET(core % num_cores, &mask);
-					pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mask);
+					// fix affinity if user does not object
+					if(std::getenv("NO_AFFINITY") == nullptr) {
+						int num_cores = std::thread::hardware_concurrency();
+						cpu_set_t mask;
+						CPU_ZERO(&mask);
+						CPU_SET(core % num_cores, &mask);
+						pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &mask);
+					}
 				}
 			#else
 				inline void fixAffinity(int) { }

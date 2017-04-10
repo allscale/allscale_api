@@ -12,6 +12,8 @@
 #include "allscale/api/user/operator/async.h"
 #include "allscale/api/user/operator/internal/operation_reference.h"
 
+#include "allscale/utils/bitmanipulation.h"
+
 namespace allscale {
 namespace api {
 namespace user {
@@ -47,7 +49,7 @@ namespace user {
 	class stencil_reference;
 
 	template<typename Impl = implementation::fine_grained_iterative, typename Container, typename Update>
-	stencil_reference<Impl> stencil(Container& res, int steps, const Update& update);
+	stencil_reference<Impl> stencil(Container& res, std::size_t steps, const Update& update);
 
 
 
@@ -68,7 +70,7 @@ namespace user {
 
 
 	template<typename Impl, typename Container, typename Update>
-	stencil_reference<Impl> stencil(Container& a, int steps, const Update& update) {
+	stencil_reference<Impl> stencil(Container& a, std::size_t steps, const Update& update) {
 
 		// forward everything to the implementation
 		return Impl().process(a,steps,update);
@@ -82,7 +84,7 @@ namespace user {
 		struct sequential_iterative {
 
 			template<typename Container, typename Update>
-			stencil_reference<sequential_iterative> process(Container& a, int steps, const Update& update) {
+			stencil_reference<sequential_iterative> process(Container& a, std::size_t steps, const Update& update) {
 
 				// return handle to asynchronous execution
 				return async([&a,steps,update]{
@@ -95,10 +97,10 @@ namespace user {
 
 					using iter_type = decltype(a.size());
 
-					for(int t=0; t<steps; t++) {
+					for(std::size_t t=0; t<steps; t++) {
 
 						// loop based sequential implementation
-						detail::forEach(iter_type(0),a.size(),[x,y,t,update](const iter_type& i){
+						user::detail::forEach(iter_type(0),a.size(),[x,y,t,update](const iter_type& i){
 							(*y)[i] = update(t,i,*x);
 						});
 
@@ -121,7 +123,7 @@ namespace user {
 		struct coarse_grained_iterative {
 
 			template<typename Container, typename Update>
-			stencil_reference<coarse_grained_iterative> process(Container& a, int steps, const Update& update) {
+			stencil_reference<coarse_grained_iterative> process(Container& a, std::size_t steps, const Update& update) {
 
 				// return handle to asynchronous execution
 				return async([&a,steps,update]{
@@ -134,7 +136,7 @@ namespace user {
 
 					using iter_type = decltype(a.size());
 
-					for(int t=0; t<steps; t++) {
+					for(std::size_t t=0; t<steps; t++) {
 
 						// loop based parallel implementation with blocking synchronization
 						pfor(iter_type(0),a.size(),[x,y,t,update](const iter_type& i){
@@ -160,7 +162,7 @@ namespace user {
 		struct fine_grained_iterative {
 
 			template<typename Container, typename Update>
-			stencil_reference<fine_grained_iterative> process(Container& a, int steps, const Update& update) {
+			stencil_reference<fine_grained_iterative> process(Container& a, std::size_t steps, const Update& update) {
 
 				// return handle to asynchronous execution
 				return async([&a,steps,update]{
@@ -173,9 +175,9 @@ namespace user {
 
 					using iter_type = decltype(a.size());
 
-					detail::loop_reference<iter_type> ref;
+					user::detail::loop_reference<iter_type> ref;
 
-					for(int t=0; t<steps; t++) {
+					for(std::size_t t=0; t<steps; t++) {
 
 						// loop based parallel implementation with fine grained dependencies
 						ref = pfor(iter_type(0),a.size(),[x,y,t,update](const iter_type& i){
@@ -319,7 +321,7 @@ namespace user {
 				plain_scanner<dim-1> nested;
 
 				template<std::size_t full_dim, typename Lambda>
-				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, int t, const Coordinate<full_dim>& size) const {
+				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, std::size_t t, const Coordinate<full_dim>& size) const {
 					constexpr const auto idx = full_dim - dim - 1;
 
 					// compute boundaries
@@ -354,7 +356,7 @@ namespace user {
 			struct plain_scanner<0> {
 
 				template<std::size_t full_dim, typename Lambda>
-				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, int t, const Coordinate<full_dim>& size) const {
+				void operator()(const Base<full_dim>& base, const Lambda& lambda, Coordinate<full_dim>& pos, std::size_t t, const Coordinate<full_dim>& size) const {
 					constexpr const auto idx = full_dim - 1;
 
 					// compute boundaries
@@ -575,8 +577,8 @@ namespace user {
 				/**
 				 * The height of this zoid in temporal direction.
 				 */
-				int getHeight() const {
-					return t_end-t_begin;
+				std::size_t getHeight() const {
+					return std::size_t(t_end-t_begin);
 				}
 
 				/**
@@ -615,8 +617,8 @@ namespace user {
 				 * Computes the width of the shadow projected of this zoid on
 				 * the given space dimension.
 				 */
-				int getWidth(int dim) const {
-					int res = base.getWidth(dim);
+				std::size_t getWidth(std::size_t dim) const {
+					std::size_t res = base.getWidth(dim);
 					if (slopes[dim] < 0) res += 2*getHeight();
 					return res;
 				}
@@ -635,7 +637,7 @@ namespace user {
 				/**
 				 * Tests whether it can be split along the given space dimension.
 				 */
-				bool isSplitable(int dim) const {
+				bool isSplitable(std::size_t dim) const {
 					return getWidth(dim) > 4*getHeight();
 				}
 
@@ -682,10 +684,10 @@ namespace user {
 					assert_true(isSpaceSplitable());
 
 					// find longest dimension
-					int max_dim = 0;
-					int max_width = 0;
+					std::size_t max_dim = 0;
+					std::size_t max_width = 0;
 					for(std::size_t i=0; i<dims; i++) {
-						int width = getWidth(i);
+						std::size_t width = getWidth(i);
 						if (width>max_width) {
 							max_width = width;
 							max_dim = i;
@@ -778,7 +780,7 @@ namespace user {
 				template<typename Body>
 				void visit(const Body& body,std::size_t numBits) {
 					task_dependency_enumerator<Dims,taskIdx-1>().visit(body,numBits);
-					if (__builtin_popcount(taskIdx)==numBits) {
+					if ((std::size_t)(utils::countOnes(taskIdx))==numBits) {
 						task_dependency_extractor<taskIdx,Dims-1>()(body,taskIdx);
 					}
 				}
@@ -890,7 +892,7 @@ namespace user {
 
 				}
 
-				static ExecutionPlan create(const Base<Dims>& base, int steps) {
+				static ExecutionPlan create(const Base<Dims>& base, std::size_t steps) {
 
 					// get size of structure
 					auto size = base.extend();
@@ -920,7 +922,7 @@ namespace user {
 					ExecutionPlan plan;
 
 					// process time layer by layer
-					for(int t0=0; t0<steps; t0+=height) {
+					for(std::size_t t0=0; t0<steps; t0+=height) {
 
 						// get the top of the current layer
 						auto t1 = std::min<std::size_t>(t0+height,steps);
@@ -938,7 +940,7 @@ namespace user {
 
 							// move base to center on field, edge, or corner
 							for(size_t j=0; j<Dims; j++) {
-								if (i & (1<<j)) {
+								if (i & ((size_t)(1)<<j)) {
 									slopes[j] = -1;
 									curBase.boundaries[j] = splits[j].right;
 								} else {
@@ -950,7 +952,7 @@ namespace user {
 							// count the number of ones -- this determines the execution order
 							int num_ones = 0;
 							for(size_t j=0; j<Dims; j++) {
-								if (i & (1<<j)) num_ones++;
+								if (i & ((size_t)(1)<<j)) num_ones++;
 							}
 
 							// add to execution plan
@@ -971,7 +973,7 @@ namespace user {
 			private:
 
 				static std::size_t getNumBitsSet(std::size_t mask) {
-					return __builtin_popcount(mask);
+					return utils::countOnes((unsigned)mask);
 				}
 
 			};
@@ -1014,7 +1016,7 @@ namespace user {
 		struct sequential_recursive {
 
 			template<typename Container, typename Update>
-			stencil_reference<sequential_recursive> process(Container& a, int steps, const Update& update) {
+			stencil_reference<sequential_recursive> process(Container& a, std::size_t steps, const Update& update) {
 
 				using namespace detail;
 
@@ -1066,7 +1068,7 @@ namespace user {
 		struct parallel_recursive {
 
 			template<typename Container, typename Update>
-			stencil_reference<parallel_recursive> process(Container& a, int steps, const Update& update) {
+			stencil_reference<parallel_recursive> process(Container& a, std::size_t steps, const Update& update) {
 
 				using namespace detail;
 

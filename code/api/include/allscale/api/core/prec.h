@@ -281,8 +281,8 @@ namespace core {
 				rec_defs<Defs...> defs;
 
 				auto operator()(impl::sequential::dependencies&& deps, const I& in) const {
-					return impl::sequential::make_lazy_unreleased_treeture([=](){
-						return defs.template sequentialCall<i,O,I>(deps,in);
+					return impl::sequential::make_lazy_unreleased_treeture([=]() mutable {
+						return defs.template sequentialCall<i,O,I>(std::move(deps),in);
 					});
 				}
 
