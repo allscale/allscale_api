@@ -100,6 +100,45 @@ namespace user {
 
 
 	// ---------------------------------------------------------------------------------------------
+	//									pfor Operators with Boundaries
+	// ---------------------------------------------------------------------------------------------
+
+	/**
+	 * The generic version of all parallel loops with synchronization dependencies.
+	 *
+	 * @tparam Iter the type of the iterator to pass over
+	 * @tparam InnerBody the type of the inner body operation, thus the operation to be applied on each element in the given range that is not on the surface
+	 * @tparam BoundaryBody the type of the boundary body operation, thus the operation to be applied on each element in the given range that is on the surface
+	 * @tparam Dependency the type of the dependencies to be enforced
+	 *
+	 * @param r the range to iterate over
+	 * @param innerBody the operation to be applied on each element of the given range that is not on the surface
+	 * @param boundaryBody the operation to be applied on each element of the given range that is on the surface
+	 * @param dependency the dependencies to be obeyed when scheduling the iterations of this parallel loop
+	 *
+	 * @return a reference to the iterations of the processed parallel loop to be utilized for forming dependencies
+	 */
+	template<typename Iter, typename InnerBody, typename BoundaryBody, typename Dependency>
+	detail::loop_reference<Iter> pforWithBoundary(const detail::range<Iter>& r, const InnerBody& innerBody, const BoundaryBody& boundaryBody, const Dependency& dependency);
+
+	/**
+	 * The generic version of all parallel loops without synchronization dependencies.
+	 *
+	 * @tparam Iter the type of the iterator to pass over
+	 * @tparam InnerBody the type of the inner body operation, thus the operation to be applied on each element in the given range that is not on the surface
+	 * @tparam BoundaryBody the type of the boundary body operation, thus the operation to be applied on each element in the given range that is on the surface
+	 *
+	 * @param r the range to iterate over
+	 * @param innerBody the operation to be applied on each element of the given range that is not on the surface
+	 * @param boundaryBody the operation to be applied on each element of the given range that is on the surface
+	 *
+	 * @return a reference to the iterations of the processed parallel loop to be utilized for forming dependencies
+	 */
+	template<typename Iter, typename InnerBody, typename BoundaryBody>
+	detail::loop_reference<Iter> pforWithBoundary(const detail::range<Iter>& r, const InnerBody& innerBody, const BoundaryBody& boundaryBody, const no_dependencies& = no_dependencies());
+
+
+	// ---------------------------------------------------------------------------------------------
 	//									The after Utility
 	// ---------------------------------------------------------------------------------------------
 
@@ -135,6 +174,16 @@ namespace user {
 		return pfor(detail::range<std::array<Iter,dims>>(a,b),body,dependency);
 	}
 
+	template<typename Iter, size_t dims, typename InnerBody, typename BoundaryBody>
+	detail::loop_reference<std::array<Iter,dims>> pforWithBoundary(const std::array<Iter,dims>& a, const std::array<Iter,dims>& b, const InnerBody& innerBody, const BoundaryBody& boundaryBody) {
+		return pforWithBoundary(detail::range<std::array<Iter,dims>>(a,b),innerBody,boundaryBody);
+	}
+
+	template<typename Iter, size_t dims, typename InnerBody, typename BoundaryBody, typename Dependency>
+	detail::loop_reference<std::array<Iter,dims>> pforWithBoundary(const std::array<Iter,dims>& a, const std::array<Iter,dims>& b, const InnerBody& innerBody, const BoundaryBody& boundaryBody, const Dependency& dependency) {
+		return pforWithBoundary(detail::range<std::array<Iter,dims>>(a,b),innerBody,boundaryBody,dependency);
+	}
+
 	/**
 	 * A parallel for-each implementation iterating over the given range of elements.
 	 */
@@ -146,6 +195,16 @@ namespace user {
 	template<typename Iter, typename Body>
 	detail::loop_reference<Iter> pfor(const Iter& a, const Iter& b, const Body& body) {
 		return pfor(a,b,body,no_dependencies());
+	}
+
+	template<typename Iter, typename InnerBody, typename BoundaryBody>
+	detail::loop_reference<Iter> pforWithBoundary(const Iter& a, const Iter& b, const InnerBody& innerBody, const BoundaryBody& boundaryBody) {
+		return pforWithBoundary(detail::range<Iter>(a,b),innerBody,boundaryBody);
+	}
+
+	template<typename Iter, typename InnerBody, typename BoundaryBody, typename Dependency>
+	detail::loop_reference<Iter> pforWithBoundary(const Iter& a, const Iter& b, const InnerBody& innerBody, const BoundaryBody& boundaryBody, const Dependency& dependency) {
+		return pforWithBoundary(detail::range<Iter>(a,b),innerBody,boundaryBody,dependency);
 	}
 
 	// ---- container support ----
@@ -346,6 +405,58 @@ namespace user {
 
 		// -- scan utility --
 
+		template<typename Iter, typename InnerOp, typename BoundaryOp>
+		void forEach(const Iter& fullBegin, const Iter& fullEnd, const Iter& a, const Iter& b, const InnerOp& inner, const BoundaryOp& boundary) {
+
+			// cut off empty loop
+			if (a == b) return;
+
+			// get inner range
+			Iter innerBegin = a;
+			Iter innerEnd = b;
+
+			// check for boundaries
+			if (fullBegin == a) {
+				boundary(access(a));
+				innerBegin++;
+			}
+
+			// reduce inner range if b is the end
+			if (fullEnd == b) {
+				innerEnd--;
+			}
+
+			// process inner part
+			for(auto it = innerBegin; it != innerEnd; ++it) {
+				inner(access(it));
+			}
+
+			// process left boundary
+			if(fullEnd == b) {
+				boundary(access(b-1));
+			}
+		}
+
+
+		template<typename Iter, typename InnerOp, typename BoundaryOp>
+		void forEach(const Iter& a, const Iter& b, const InnerOp& inner, const BoundaryOp& boundary) {
+
+			// cut off empty loop
+			if (a == b) return;
+
+			// process left boundary
+			boundary(access(a));
+			if (a + 1 == b) return;
+
+			// process inner part
+			for(auto it = a+1; it != b-1; ++it) {
+				inner(access(it));
+			}
+
+			// process left boundary
+			boundary(access(b-1));
+		}
+
 		template<typename Iter, typename Op>
 		void forEach(const Iter& a, const Iter& b, const Op& op) {
 			for(auto it = a; it != b; ++it) {
@@ -363,6 +474,73 @@ namespace user {
 					nested(begin, end, cur, op);
 				}
 			}
+			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Inner, typename Boundary>
+			void operator()(const Compound<Iter,dims>& begin, const Compound<Iter,dims>& end, Compound<Iter,dims>& cur, const Inner& inner, const Boundary& boundary) {
+				auto& i = cur[dims-idx];
+
+				// extract range
+				const auto& a = begin[dims-idx];
+				const auto& b = end[dims-idx];
+
+				// check empty range
+				if (a==b) return;
+
+				// handle left boundary
+				i = a; nested(begin,end,cur,boundary);
+
+				// check whether this has been all
+				if (a + 1 == b) return;
+
+				// process inner part
+				for(i = a+1; i!=b-1; ++i) {
+					nested(begin,end,cur,inner,boundary);
+				}
+
+				// handle right boundary
+				i = b-1;
+				nested(begin,end,cur,boundary);
+			}
+
+			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Inner, typename Boundary>
+			void operator()(const Compound<Iter,dims>& fullBegin, const Compound<Iter,dims>& fullEnd, const Compound<Iter,dims>& begin, const Compound<Iter,dims>& end, Compound<Iter,dims>& cur, const Inner& inner, const Boundary& boundary) {
+				auto& i = cur[dims-idx];
+
+				// extract range
+				const auto& fa = fullBegin[dims-idx];
+				const auto& fb = fullEnd[dims-idx];
+
+				const auto& a = begin[dims-idx];
+				const auto& b = end[dims-idx];
+
+				// check empty range
+				if (a==b) return;
+
+				// get inner range
+				auto ia = a;
+				auto ib = b;
+
+				// handle left boundary
+				if (fa == ia) {
+					i = ia;
+					nested(begin,end,cur,boundary);
+					ia++;
+				}
+
+				if (fb == b) {
+					ib--;
+				}
+
+				// process inner part
+				for(i = ia; i!=ib; ++i) {
+					nested(fullBegin,fullEnd,begin,end,cur,inner,boundary);
+				}
+
+				// handle right boundary
+				if (fb == b) {
+					i = b-1;
+					nested(begin,end,cur,boundary);
+				}
+			}
 		};
 
 		template<>
@@ -371,7 +549,35 @@ namespace user {
 			void operator()(const Compound<Iter,dims>&, const Compound<Iter,dims>&, Compound<Iter,dims>& cur, const Op& op) {
 				op(cur);
 			}
+			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Inner, typename Boundary>
+			void operator()(const Compound<Iter,dims>&, const Compound<Iter,dims>&, Compound<Iter,dims>& cur, const Inner& inner, const Boundary&) {
+				inner(cur);
+			}
+			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Inner, typename Boundary>
+			void operator()(const Compound<Iter,dims>&, const Compound<Iter,dims>&, const Compound<Iter,dims>&, const Compound<Iter,dims>&, Compound<Iter,dims>& cur, const Inner& inner, const Boundary&) {
+				inner(cur);
+			}
 		};
+
+		template<typename Iter, size_t dims, typename InnerOp, typename BoundaryOp>
+		void forEach(const std::array<Iter,dims>& fullBegin, const std::array<Iter,dims>& fullEnd, const std::array<Iter,dims>& begin, const std::array<Iter,dims>& end, const InnerOp& inner, const BoundaryOp& boundary) {
+
+			// the current position
+			std::array<Iter,dims> cur;
+
+			// scan range
+			detail::scanner<dims>()(fullBegin, fullEnd, begin, end, cur, inner, boundary);
+		}
+
+		template<typename Iter, size_t dims, typename InnerOp, typename BoundaryOp>
+		void forEach(const std::array<Iter,dims>& begin, const std::array<Iter,dims>& end, const InnerOp& inner, const BoundaryOp& boundary) {
+
+			// the current position
+			std::array<Iter,dims> cur;
+
+			// scan range
+			detail::scanner<dims>()(begin, end, cur, inner, boundary);
+		}
 
 		template<typename Iter, size_t dims, typename Op>
 		void forEach(const std::array<Iter,dims>& begin, const std::array<Iter,dims>& end, const Op& op) {
@@ -382,6 +588,27 @@ namespace user {
 			// scan range
 			detail::scanner<dims>()(begin, end, cur, op);
 		}
+
+		template<typename Elem, size_t dims, typename InnerOp, typename BoundaryOp>
+		void forEach(const data::Vector<Elem,dims>& fullBegin, const data::Vector<Elem,dims>& fullEnd, const data::Vector<Elem,dims>& begin, const data::Vector<Elem,dims>& end, const InnerOp& inner, const BoundaryOp& boundary) {
+
+			// the current position
+			data::Vector<Elem,dims> cur;
+
+			// scan range
+			detail::scanner<dims>()(fullBegin, fullEnd, begin, end, cur, inner, boundary);
+		}
+
+		template<typename Elem, size_t dims, typename InnerOp, typename BoundaryOp>
+		void forEach(const data::Vector<Elem,dims>& begin, const data::Vector<Elem,dims>& end, const InnerOp& inner, const BoundaryOp& boundary) {
+
+			// the current position
+			data::Vector<Elem,dims> cur;
+
+			// scan range
+			detail::scanner<dims>()(begin, end, cur, inner, boundary);
+		}
+
 
 		template<typename Elem, size_t dims, typename Op>
 		void forEach(const data::Vector<Elem,dims>& begin, const data::Vector<Elem,dims>& end, const Op& op) {
@@ -513,6 +740,11 @@ namespace user {
 			template<typename Op>
 			void forEach(const Op& op) const {
 				detail::forEach(_begin,_end,op);
+			}
+
+			template<typename InnerOp, typename BoundaryOp>
+			void forEachWithBoundary(const range& full, const InnerOp& inner, const BoundaryOp& boundary) const {
+				detail::forEach(full._begin,full._end,_begin,_end,inner,boundary);
 			}
 
 			friend std::ostream& operator<<(std::ostream& out, const range& r) {
@@ -860,6 +1092,84 @@ namespace user {
 		}
 
 	};
+
+
+	template<typename Iter, typename InnerBody, typename BoundaryBody, typename Dependency>
+	detail::loop_reference<Iter> pforWithBoundary(const detail::range<Iter>& r, const InnerBody& innerBody, const BoundaryBody& boundaryBody, const Dependency& dependency) {
+
+		struct rangeHelper {
+			detail::range<Iter> range;
+			Dependency dependencies;
+		};
+
+		// keep a copy of the full range
+		auto full = r;
+
+		// trigger parallel processing
+		return { r, core::prec(
+			[](const rangeHelper& rg) {
+				// if there is only one element left, we reached the base case
+				return rg.range.size() <= 1;
+			},
+			[innerBody,boundaryBody,full](const rangeHelper& rg) {
+				// apply the body operation to every element in the remaining range
+				rg.range.forEachWithBoundary(full,innerBody,boundaryBody);
+			},
+			core::pick(
+				[](const rangeHelper& rg, const auto& nested) {
+					// in the step case we split the range and process sub-ranges recursively
+					auto fragments = rg.range.split();
+					auto& left = fragments.first;
+					auto& right = fragments.second;
+					auto dep = rg.dependencies.split(left,right);
+					return parallel(
+						nested(dep.left.toCoreDependencies(), rangeHelper{left, dep.left} ),
+						nested(dep.right.toCoreDependencies(), rangeHelper{right,dep.right})
+					);
+				},
+				[innerBody,boundaryBody,full](const rangeHelper& rg, const auto&) {
+					// the alternative is processing the step sequentially
+					rg.range.forEachWithBoundary(full,innerBody,boundaryBody);
+				}
+			)
+		)(dependency.toCoreDependencies(),rangeHelper{r,dependency}) };
+	}
+
+	template<typename Iter, typename InnerBody, typename BoundaryBody>
+	detail::loop_reference<Iter> pforWithBoundary(const detail::range<Iter>& r, const InnerBody& innerBody, const BoundaryBody& boundaryBody, const no_dependencies&) {
+		using range = detail::range<Iter>;
+
+		// keep a copy of the full range
+		auto full = r;
+
+		// trigger parallel processing
+		return { r, core::prec(
+			[](const range& r) {
+				// if there is only one element left, we reached the base case
+				return r.size() <= 1;
+			},
+			[innerBody,boundaryBody,full](const range& r) {
+				// apply the body operation to every element in the remaining range
+				r.forEachWithBoundary(full,innerBody,boundaryBody);
+			},
+			core::pick(
+				[](const range& r, const auto& nested) {
+					// in the step case we split the range and process sub-ranges recursively
+					auto fragments = r.split();
+					auto& left = fragments.first;
+					auto& right = fragments.second;
+					return parallel(
+						nested(left),
+						nested(right)
+					);
+				},
+				[innerBody,boundaryBody,full](const range& r, const auto&) {
+					// the alternative is processing the step sequentially
+					r.forEachWithBoundary(full,innerBody,boundaryBody);
+				}
+			)
+		)(r) };
+	}
 
 
 

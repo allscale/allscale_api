@@ -637,6 +637,186 @@ namespace user {
 
 	}
 
+
+	TEST(PForWithBoundary, Basic1D) {
+
+		const int N = 100;
+
+		std::atomic<int> countInner(0);
+		std::atomic<int> countBoundary(0);
+
+		// update data in parallel
+		pforWithBoundary(0,N,
+			// the inner case
+			[&](int i){
+				EXPECT_TRUE(0<i && i<N-1) << "Invalid i: " << i;
+				countInner++;
+			},
+			// the boundary case
+			[&](int i){
+				EXPECT_TRUE(0==i || i==N-1) << "Invalid i: " << i;
+				countBoundary++;
+			}
+		);
+
+		EXPECT_EQ(98,countInner);
+		EXPECT_EQ(2,countBoundary);
+
+	}
+
+	TEST(PForWithBoundary, Basic2D) {
+
+		const int N = 100;
+
+		using Point = data::Vector<int,2>;
+
+		Point zero = 0;
+		Point full = N;
+
+
+		std::atomic<int> countInner(0);
+		std::atomic<int> countBoundary(0);
+
+		// update data in parallel
+		pforWithBoundary(zero,full,
+			// the inner case
+			[&](const Point& p){
+				EXPECT_TRUE(0<p.x && p.x<N-1 && 0<p.y && p.y<N-1) << "Invalid p: " << p;
+				countInner++;
+			},
+			// the boundary case
+			[&](const Point& p){
+				EXPECT_TRUE(0==p.x || p.x==N-1 || 0==p.y || p.y==N-1) << "Invalid p: " << p;
+				countBoundary++;
+			}
+		);
+
+		EXPECT_EQ(98*98,countInner);
+		EXPECT_EQ(100*100 - 98*98,countBoundary);
+
+	}
+
+
+	TEST(PForWithBoundary, Basic3D) {
+
+		const int N = 100;
+
+		using Point = data::Vector<int,3>;
+
+		Point zero = 0;
+		Point full = N;
+
+
+		std::atomic<int> countInner(0);
+		std::atomic<int> countBoundary(0);
+
+		// update data in parallel
+		pforWithBoundary(zero,full,
+			// the inner case
+			[&](const Point& p){
+				EXPECT_TRUE(0<p.x && p.x<N-1 && 0<p.y && p.y<N-1 && 0<p.z && p.z<N-1) << "Invalid p: " << p;
+				countInner++;
+			},
+			// the boundary case
+			[&](const Point& p){
+				EXPECT_TRUE(0==p.x || p.x==N-1 || 0==p.y || p.y==N-1 || 0==p.z || p.z==N-1) << "Invalid p: " << p;
+				countBoundary++;
+			}
+		);
+
+		EXPECT_EQ(98*98*98,countInner);
+		EXPECT_EQ(100*100*100 - 98*98*98,countBoundary);
+
+	}
+
+
+	TEST(PForWithBoundary, SyncNeighbor) {
+		const int N = 10000;
+
+		std::vector<int> dataA(N);
+		std::vector<int> dataB(N);
+
+		auto As = pfor(0,N,[&](int i) {
+			dataA[i] = 1;
+		});
+
+		auto Bs = pforWithBoundary(0,N,
+			[&](int i) {
+
+				// this is an inner node
+				EXPECT_TRUE(0 < i && i < N-1) << "Invalid i: " << i;
+
+				EXPECT_EQ(1,dataA[i-1]) << "Index: " << i;
+				EXPECT_EQ(1,dataA[i])   << "Index: " << i;
+				EXPECT_EQ(1,dataA[i+1]) << "Index: " << i;
+
+				dataB[i] = 2;
+			},
+			[&](int i) {
+
+				// this is an boundary node
+				EXPECT_TRUE(0 == i || i == N-1) << "Invalid i: " << i;
+
+				// the neighborhood of i has to be completed in A
+				if (i != 0) {
+					EXPECT_EQ(1,dataA[i-1]) << "Index: " << i;
+				}
+
+				EXPECT_EQ(1,dataA[i])   << "Index: " << i;
+
+				if (i != N-1) {
+					EXPECT_EQ(1,dataA[i+1]) << "Index: " << i;
+				}
+
+				dataB[i] = 2;
+			},
+			neighborhood_sync(As)
+		);
+
+		auto Cs = pforWithBoundary(0,N,
+			[&](int i) {
+
+				// this is an inner node
+				EXPECT_TRUE(0 < i && i < N-1) << "Invalid i: " << i;
+
+				EXPECT_EQ(2,dataB[i-1]) << "Index: " << i;
+				EXPECT_EQ(2,dataB[i])   << "Index: " << i;
+				EXPECT_EQ(2,dataB[i+1]) << "Index: " << i;
+
+				dataA[i] = 3;
+			},
+			[&](int i) {
+
+				// this is an boundary node
+				EXPECT_TRUE(0 == i || i == N-1) << "Invalid i: " << i;
+
+				// the neighborhood of i has to be completed in A
+				if (i != 0) {
+					EXPECT_EQ(2,dataB[i-1]) << "Index: " << i;
+				}
+
+				EXPECT_EQ(2,dataB[i])   << "Index: " << i;
+
+				if (i != N-1) {
+					EXPECT_EQ(2,dataB[i+1]) << "Index: " << i;
+				}
+
+				dataA[i] = 3;
+			},
+			neighborhood_sync(Bs)
+		);
+
+		// trigger execution
+		Cs.wait();
+
+		// check result
+		for(int i=0; i<N; i++) {
+			EXPECT_EQ(3, dataA[i]);
+			EXPECT_EQ(2, dataB[i]);
+		}
+	}
+
+
 	TEST(Pfor,After) {
 
 		const int N = 10;
