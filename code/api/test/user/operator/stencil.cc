@@ -317,6 +317,90 @@ namespace user {
 
 	}
 
+	TYPED_TEST_P(Stencil,Grid3D_Boundary) {
+
+		using Impl = TypeParam;
+
+		const int N = 20;
+
+		// test for an even and an odd number of time steps
+		for(int T : { 40 , 41 , (int)(2.5 * N) }) {
+
+			// initialize the data buffer
+			data::Grid<int,3> data({N,N+2,N+3});
+			data.forEach([](int& x){
+				x = 0;
+			});
+
+			// run the stencil
+			stencil<Impl>(data, T,
+
+					// inner part
+					[=](time_t time, const data::GridPoint<3>& pos, const data::Grid<int,3>& data){
+
+						// check that this is an inner position
+						EXPECT_FALSE(
+								pos[0] == 0 || pos[0] == N-1 ||
+								pos[1] == 0 || pos[1] == N+1 ||
+								pos[2] == 0 || pos[2] == N+2
+							) << "Position " << pos << " should not be a boundary position!";
+
+						// check that input arrays are up-to-date
+						for(int dx = -1; dx <= 1; ++dx) {
+							for(int dy = -1; dy <= 1; ++dy) {
+								for(int dz = -1; dz <= 1; ++dz) {
+									data::GridPoint<3> offset{dx,dy,dz};
+									auto p = pos + offset;
+									if (p[0] < 0 || p[0] >= N) continue;
+									if (p[1] < 0 || p[1] >= N+2) continue;
+									if (p[2] < 0 || p[2] >= N+3) continue;
+									EXPECT_EQ(time,data[p]) << "Position " << pos << " + " << offset << " = " << p;
+								}
+							}
+						}
+
+						// increase the time step of current sell
+						return data[pos] + 1;
+					},
+
+					// boundary update
+					[=](time_t time, const data::GridPoint<3>& pos, const data::Grid<int,3>& data){
+
+						// check that this is an inner position
+						EXPECT_TRUE(
+								pos[0] == 0 || pos[0] == N-1 ||
+								pos[1] == 0 || pos[1] == N+1 ||
+								pos[2] == 0 || pos[2] == N+2
+							) << "Position " << pos << " should be a boundary position!";
+
+						// check that input arrays are up-to-date
+						for(int dx = -1; dx <= 1; ++dx) {
+							for(int dy = -1; dy <= 1; ++dy) {
+								for(int dz = -1; dz <= 1; ++dz) {
+									data::GridPoint<3> offset{dx,dy,dz};
+									auto p = pos + offset;
+									if (p[0] < 0 || p[0] >= N) continue;
+									if (p[1] < 0 || p[1] >= N+2) continue;
+									if (p[2] < 0 || p[2] >= N+3) continue;
+									EXPECT_EQ(time,data[p]) << "Position " << pos << " + " << offset << " = " << p;
+								}
+							}
+						}
+
+						// increase the time step of current sell
+						return data[pos] + 1;
+					}
+			);
+
+			// check final state
+			data.forEach([T](int x){
+				EXPECT_EQ(T,x);
+			});
+
+		}
+
+	}
+
 
 	TYPED_TEST_P(Stencil,Grid2D_Tuning) {
 
@@ -379,6 +463,7 @@ namespace user {
 			Grid3D,
 			Grid4D,
 			Grid5D,
+			Grid3D_Boundary,
 			Grid2D_Tuning
 	);
 
