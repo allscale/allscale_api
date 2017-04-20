@@ -251,14 +251,14 @@ namespace core {
 
 	}
 
-	TEST(IO, MemoryMappedFiles) {
+	TEST(DISABLED_IO, MemoryMappedFiles) {
 
 		using data = std::array<int,1000>;
 
 		FileIOManager& mgr = FileIOManager::getInstance();
 
-		auto entry = mgr.createEntry("element");
-
+		auto entry = mgr.createEntry("element", Mode::Text);
+		std::vector<int> check;
 
 		// -- open a memory mapped buffer for writing --
 		auto out = mgr.openMemoryMappedOutput(entry,sizeof(data));
@@ -268,18 +268,26 @@ namespace core {
 			dataOut[i] = (int)i;
 		}
 
-		mgr.close(out);
+		// check memory mapped output array
+		for(size_t i = 0; i < check.size(); ++i) {
+			EXPECT_EQ(i, dataOut[i]);
+		}
 
+		mgr.close(out);
 
 		// -- open it for reading --
 
 		auto in = mgr.openMemoryMappedInput(entry);
 		auto& dataIn = in.access<data>();
 
-		EXPECT_EQ(dataOut,dataIn);
+		EXPECT_EQ(dataOut,dataIn); // file associated with dataOut has been closed and file reopened, check seem useful at this point
+
+		// check memory mapped input array
+		for(size_t i = 0; i < check.size(); ++i) {
+			EXPECT_EQ(i, dataIn[i]);
+		}
 
 		mgr.close(in);
-
 
 		// delete file
 		mgr.remove(entry);
@@ -315,7 +323,18 @@ namespace core {
 		auto in = mgr.openMemoryMappedInput(entry);
 		auto& dataIn = in.access<data>();
 
-		EXPECT_EQ(dataOut,dataIn);
+		EXPECT_EQ(dataOut,dataIn); // file associated with dataOut has been closed and file reopened, check seem useful at this point
+
+		// check a few pseudo random points
+		EXPECT_EQ(0, dataIn[0]);
+		EXPECT_EQ(42, dataIn[42]);
+		EXPECT_EQ(666, dataIn[666]);
+		EXPECT_EQ(1836, dataIn[1836]);
+		EXPECT_EQ(65438, dataIn[65438]);
+		EXPECT_EQ(321684, dataIn[321684]);
+		EXPECT_EQ(9871354, dataIn[9871354]);
+		EXPECT_EQ(24684312, dataIn[24684312]);
+		EXPECT_EQ(268435455, dataIn[268435455]);
 
 		mgr.close(in);
 
