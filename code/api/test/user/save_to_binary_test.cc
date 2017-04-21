@@ -42,12 +42,11 @@ TEST(SaveToBinary, ArtificialVectorOfVectors) {
 	EXPECT_EQ(0, std::remove(filename.c_str()));
 
 	// memory mapped io
-/* disabled because it does not work, memory mapped io should be fixed
 	saveVecVecToFileMM<double>(vecVec, filename, outerSize, innerSize);
 	loaded = readVecVecFromFileMM<double>(filename, outerSize, innerSize);
 
 	check(vecVec, loaded);
-	EXPECT_EQ(0, std::remove(filename.c_str()));*/
+	EXPECT_EQ(0, std::remove(filename.c_str()));
 }
 
 } // end namespace user

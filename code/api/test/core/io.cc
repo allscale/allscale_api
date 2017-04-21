@@ -251,14 +251,14 @@ namespace core {
 
 	}
 
-	TEST(DISABLED_IO, MemoryMappedFiles) {
+	TEST(IO, MemoryMappedFiles) {
+		static const size_t N = 1000u;
 
-		using data = std::array<int,1000>;
+		using data = std::array<int,N>;
 
 		FileIOManager& mgr = FileIOManager::getInstance();
 
 		auto entry = mgr.createEntry("element", Mode::Text);
-		std::vector<int> check;
 
 		// -- open a memory mapped buffer for writing --
 		auto out = mgr.openMemoryMappedOutput(entry,sizeof(data));
@@ -269,7 +269,7 @@ namespace core {
 		}
 
 		// check memory mapped output array
-		for(size_t i = 0; i < check.size(); ++i) {
+		for(size_t i = 0; i < N; ++i) {
 			EXPECT_EQ(i, dataOut[i]);
 		}
 
@@ -283,14 +283,14 @@ namespace core {
 		EXPECT_EQ(dataOut,dataIn); // file associated with dataOut has been closed and file reopened, check seem useful at this point
 
 		// check memory mapped input array
-		for(size_t i = 0; i < check.size(); ++i) {
+		for(size_t i = 0; i < N; ++i) {
 			EXPECT_EQ(i, dataIn[i]);
 		}
 
 		mgr.close(in);
 
 		// delete file
-		mgr.remove(entry);
+	//	mgr.remove(entry);
 	}
 
 

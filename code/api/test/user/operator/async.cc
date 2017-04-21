@@ -60,7 +60,7 @@ namespace user {
 	TEST(Async, WriteFile) {
 		const std::string filename("asyncTest.dat");
 		core::FileIOManager& manager = core::FileIOManager::getInstance();
-		core::Entry binary = manager.createEntry(filename, core::Mode::Text);
+		core::Entry binary = manager.createEntry(filename, core::Mode::Binary);
 
 		core::treeture<void> asyncWrite = async([&] {
 			// create output stream
@@ -84,7 +84,7 @@ namespace user {
 		EXPECT_EQ(7, fin.read<int>());
 		manager.close(fin);
 
-		EXPECT_EQ(0, std::remove(filename.c_str()));
+		manager.remove(binary);
 	}
 
 } // end namespace user
