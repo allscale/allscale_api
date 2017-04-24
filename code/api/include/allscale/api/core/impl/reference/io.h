@@ -904,7 +904,7 @@ namespace reference {
 
 #ifndef _MSC_VER
 			// map file into address space
-			file.base = mmap(nullptr,file.size, PROT_READ | PROT_WRITE, MAP_PRIVATE, file.fd, 0);
+			file.base = mmap(nullptr,file.size, PROT_READ | PROT_WRITE, MAP_SHARED, file.fd, 0);
 			// check result of mmap
 			if (!checkMappedAddress(file.base)) file.base = nullptr;
 #else

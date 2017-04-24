@@ -3,6 +3,7 @@
 #include <atomic>
 
 #include "allscale/api/user/operator/async.h"
+#include "allscale/api/core/io.h"
 
 namespace allscale {
 namespace api {
@@ -54,6 +55,36 @@ namespace user {
 			EXPECT_EQ(i+1,counter.load());
 		}
 
+	}
+
+	TEST(Async, WriteFile) {
+		const std::string filename("asyncTest.dat");
+		core::FileIOManager& manager = core::FileIOManager::getInstance();
+		core::Entry binary = manager.createEntry(filename, core::Mode::Binary);
+
+		core::treeture<void> asyncWrite = async([&] {
+			// create output stream
+			auto fout = manager.openOutputStream(binary);
+
+			// write data
+			fout.write<int>(7);
+
+			// close output stream
+			manager.close(fout);
+		});
+
+		// the given task should be valid
+		EXPECT_TRUE(asyncWrite.isValid());
+
+		// wait for the task to complete
+		asyncWrite.wait();
+
+		// check file content
+		auto fin = manager.openInputStream(binary);
+		EXPECT_EQ(7, fin.read<int>());
+		manager.close(fin);
+
+		manager.remove(binary);
 	}
 
 } // end namespace user
