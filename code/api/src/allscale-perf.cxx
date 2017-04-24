@@ -14,6 +14,7 @@ using namespace allscale::api::core::impl::reference;
  * of the resource efficiency of the application.
  */
 
+using time_type = std::uint64_t;
 
 bool exists(const std::string& file) {
 	std::ifstream in(file.c_str());
@@ -21,9 +22,18 @@ bool exists(const std::string& file) {
 }
 
 struct EventCounters {
+	time_type timestamp = 0;
 	int numTasksStarted = 0;
 	int numTasksStolen = 0;
 	int maxTaskDepth = 0;
+
+	EventCounters& operator+=(const EventCounters& other) {
+		numTasksStarted += other.numTasksStarted;
+		numTasksStolen += other.numTasksStolen;
+		maxTaskDepth = std::max(maxTaskDepth, other.maxTaskDepth);
+		return *this;
+	}
+
 };
 
 
@@ -38,8 +48,8 @@ struct Activity {
 
 	std::size_t thread;
 	ActivityType activity;
-	std::uint64_t begin;
-	std::uint64_t end;
+	time_type begin;
+	time_type end;
 
 	bool operator<(const Activity& other) const {
 		if (thread < other.thread) return true;
@@ -55,6 +65,9 @@ struct Activity {
 
 struct AnalysisConfig {
 	bool aggregateActivities = true;
+	time_type startTime = 0;
+	time_type duration = 0;
+	time_type numSamples = 1200;
 };
 
 struct AnalysisResult {
@@ -85,7 +98,21 @@ AnalysisResult analyseLogs(const std::vector<ProfileLog>& logs, const AnalysisCo
 /**
  * The operation creating the resulting html report.
  */
-void createReport(const AnalysisResult& result);
+void createReport(const AnalysisResult& result, const AnalysisConfig&);
+
+/**
+ * Prints the usage of this program.
+ */
+void printUsageAndExit(const std::string& name) {
+	std::cout << "Usage: " << name << " [options]\n";
+	std::cout << "  Options:\n";
+	std::cout << "  \t--no-aggregate      disable task aggregation\n";
+	std::cout << "  \t--start <num>       specify lower start time limit in ms\n";
+	std::cout << "  \t--duration <num>    specify upper end time limit in ms\n";
+	std::cout << "  \t--samples <num>     specify number of samples to take for aggregation\n";
+	std::cout << "  \t--help,-h           display this help text\n";
+	exit(0);
+}
 
 /**
  * The main entry point, conducting the necessary analysis steps.
@@ -101,18 +128,37 @@ int main(int argc, char** argv) {
 		if (flag == "--no-aggregate") {
 			config.aggregateActivities = false;
 		}
-		if (flag == "-h") {
-			std::cout << "Usage: " << argv[0] << " [options]\n";
-			std::cout << "  Options:\n";
-			std::cout << "  \t--no-aggregate ... disable task aggregation\n";
-			std::cout << "  \t-h             ... display this help text\n";
-			return 0;
+		if(flag == "-h" || flag == "--help") {
+			printUsageAndExit(argv[0]);
+		}
+		if (flag == "--start") {
+			i++;
+			if(argc <= i) {
+				printUsageAndExit(argv[0]);
+			}
+			config.startTime = std::atol(argv[i]);
+		}
+		if(flag == "--duration") {
+			i++;
+			if(argc <= i) {
+				printUsageAndExit(argv[0]);
+			}
+			config.duration = std::atol(argv[i]);
+		}
+		if(flag == "--samples") {
+			i++;
+			if(argc <= i) {
+				printUsageAndExit(argv[0]);
+			}
+			config.numSamples = std::atoi(argv[i]);
 		}
 	}
 
 
 	// print welcome note
 	std::cout << "--- AllScale API Reference Implementation Profiling Tool (beta) ---\n";
+	std::cout << "Loading logs ...\n";
+
 	auto logs = loadLogs();
 
 
@@ -122,7 +168,7 @@ int main(int argc, char** argv) {
 
 	// produce html report
 	std::cout << "Producing report ...\n";
-	createReport(res);
+	createReport(res,config);
 
 	// open the report in the browser
 	return system("xdg-open report.html > /dev/null");
@@ -153,11 +199,28 @@ std::vector<ProfileLog> loadLogs() {
 	return logs;
 }
 
-std::vector<EventCounters> extractEventCounters(const std::vector<ProfileLog>& logs, const AnalysisConfig&) {
+std::vector<EventCounters> aggregateEventCounters(const std::vector<EventCounters>& events, const AnalysisConfig& config) {
+	std::vector<EventCounters> res;
+
+	const double factor = events.size() / (double)config.numSamples;
+	for(std::size_t i = 0; i < config.numSamples; ++i) {
+		EventCounters temp = events[(time_type)i*factor];
+		for(std::size_t j = i*factor + 1; j < (i + 1)*factor; ++j) {
+			temp += events[j];
+		}
+		res.push_back(temp);
+	}
+
+	return res;
+}
+
+std::vector<EventCounters> extractEventCounters(const std::vector<ProfileLog>& logs, const AnalysisConfig& config) {
+
+	std::cout << "  extracting event counts ...\n";
 
 	// compute time limits
-	auto mintime = std::numeric_limits<std::uint64_t>::max();
-	auto maxtime = std::numeric_limits<std::uint64_t>::min();;
+	auto mintime = std::numeric_limits<time_type>::max();
+	auto maxtime = std::numeric_limits<time_type>::min();
 	for(const auto& cur : logs) {
 		for(const auto& event : cur) {
 			mintime = std::min(event.getTimestamp(),mintime);
@@ -165,51 +228,71 @@ std::vector<EventCounters> extractEventCounters(const std::vector<ProfileLog>& l
 		}
 	}
 
-	// a utility to normalize time stamps
-	auto normalize = [&](std::uint64_t time){ return (time - mintime) / 1000000; };
+	// a utility to shift time stamps to base 0
+	auto shift = [&](time_type time){ return (time - mintime) / 1000000; };
 
 	// adjust max-time to ms
-	auto num_timesteps = normalize(maxtime) + 1;
+	auto num_timesteps = shift(maxtime) + 1;
+	// user-specified duration overrides
+	if(config.duration > 0) {
+		num_timesteps = config.duration + 1;
+	}
 
 	// initialize the event counter
-	auto res = std::vector<EventCounters>(num_timesteps);
+	auto res = std::vector<EventCounters>(num_timesteps - config.startTime);
+
+	// initialize time stamps
+	for(std::size_t i = 0; i < res.size(); ++i) {
+		res[i].timestamp = config.startTime + i;
+	}
 
 	for(const auto& cur : logs) {
 		for(const auto& event : cur) {
 
-			auto time = normalize(event.getTimestamp());
+			auto time = shift(event.getTimestamp());
+			// if timestamp is outside user-specified limits, ignore
+			if(time < config.startTime || time > config.startTime + num_timesteps) continue;
+			// shift timestamp base to 0
+			auto index = time - config.startTime;
 
 			switch(event.getKind()) {
 			case ProfileLogEntry::TaskStarted:
-				res[time].numTasksStarted++;
-				res[time].maxTaskDepth = std::max<int>(res[time].maxTaskDepth,event.getTask().getDepth());
+				res[index].numTasksStarted++;
+				res[index].maxTaskDepth = std::max<int>(res[index].maxTaskDepth,event.getTask().getDepth());
 				break;
-			case ProfileLogEntry::TaskStolen:  res[time].numTasksStolen++;  break;
+			case ProfileLogEntry::TaskStolen:  res[index].numTasksStolen++;  break;
 			default: break;
 			}
 		}
+	}
+
+	if(config.aggregateActivities) {
+		res = aggregateEventCounters(res,config);
 	}
 
 	// done
 	return res;
 }
 
-
-std::vector<Activity> aggregateActivities(const std::vector<Activity>& actions, std::uint64_t maxtime, std::size_t numWorker) {
-
+std::vector<Activity> aggregateActivities(const std::vector<Activity>& actions, const AnalysisConfig& config, time_type maxtime, std::size_t numWorker) {
 	// create empty masks
 	std::vector<std::vector<ActivityType>> masks;
 
+	const time_type length = std::min<time_type>(maxtime, config.numSamples);
+	const double factor = maxtime/(double)length;
+
 	// initialize with inactive tasks
 	for(std::size_t i=0; i<numWorker; ++i) {
-		masks.emplace_back(maxtime+2,None);
+		masks.emplace_back(length+2,None);
 	}
 
 	// fill in tasks
 	for(const auto& cur : actions) {
 		auto& mask = masks[cur.thread];
-		for(std::uint64_t i = cur.begin; i < cur.end; ++i) {
-			mask[i] = std::max(mask[i],cur.activity);
+		for(time_type i = cur.begin; i < cur.end; ++i) {
+			assert_le(i, maxtime);
+			unsigned pos = i / factor;
+			mask[pos] = std::max(mask[pos],cur.activity);
 		}
 	}
 
@@ -217,22 +300,22 @@ std::vector<Activity> aggregateActivities(const std::vector<Activity>& actions, 
 	std::vector<Activity> res;
 	for(std::size_t t=0; t<numWorker; ++t) {
 
-		auto& mask = masks[t];
+		const auto& mask = masks[t];
 
-		std::uint64_t begin = 0;
+		time_type begin = 0;
 		ActivityType last = None;
-		for(std::size_t i=0; i<=maxtime+1; ++i) {
+		for(std::size_t i=0; i<=(length+1); ++i) {
 			// if nothing changed, we are fine
 			if (last == mask[i]) continue;
 
 			// add a new activity
 			res.push_back(Activity{
-				t,last,begin,i
+				t,last,begin,(time_type)(i*factor)
 			});
 
 			// start a new phase
 			last = mask[i];
-			begin = i;
+			begin = i*factor;
 		}
 	}
 
@@ -242,7 +325,9 @@ std::vector<Activity> aggregateActivities(const std::vector<Activity>& actions, 
 
 std::vector<Activity> extractActivities(const std::vector<ProfileLog>& logs, const AnalysisConfig& config) {
 
-	std::uint64_t startTime = std::numeric_limits<std::uint64_t>::max();
+	std::cout << "  extracting activities ...\n";
+
+	time_type startTime = std::numeric_limits<time_type>::max();
 	for(const auto& cur : logs) {
 		startTime = std::min(startTime,(*cur.begin()).getTimestamp());
 	}
@@ -255,8 +340,8 @@ std::vector<Activity> extractActivities(const std::vector<ProfileLog>& logs, con
 	// create activity list
 	std::vector<Activity> res;
 
-	std::uint64_t sleeptime = 0;
-	std::uint64_t maxtime = 0;
+	time_type sleeptime = config.startTime;
+	time_type maxtime = 0;
 
 	// analyse data
 	for(std::size_t i=0; i<logs.size(); ++i) {
@@ -264,11 +349,13 @@ std::vector<Activity> extractActivities(const std::vector<ProfileLog>& logs, con
 
 		for(const auto& entry : log) {
 
+			// process the timestamp (convert to ms)
+			const auto timestamp = (entry.getTimestamp() - startTime) / 1000000;
+			// if timestamp is outside user-specified limits, ignore
+			if(timestamp < config.startTime || (timestamp > config.startTime + config.duration && config.duration > 0)) continue;
+			
 			// remember the thread
 			thread[entry.getTask()] = i;
-
-			// process the timestamp (convert to ms)
-			auto timestamp = (entry.getTimestamp() - startTime) / 1000000;
 
 			// keep track of the maxtime
 			maxtime = std::max(timestamp,maxtime);
@@ -307,11 +394,13 @@ std::vector<Activity> extractActivities(const std::vector<ProfileLog>& logs, con
 
 	// produce task list
 	for(const auto& cur : thread) {
+		// TODO: fix task maps so this check is not necessary?
+		if(start.find(cur.first) == start.end() || end.find(cur.first) == end.end()) { continue; }
 		res.push_back(Activity{
 			cur.second,
 			ActivityType::Task,
-			start[cur.first],
-			end[cur.first]
+			start.at(cur.first),
+			end.at(cur.first)
 		});
 	}
 
@@ -320,9 +409,9 @@ std::vector<Activity> extractActivities(const std::vector<ProfileLog>& logs, con
 
 	// aggregate if requested
 	if (config.aggregateActivities) {
-		res = aggregateActivities(res,maxtime,logs.size());
+		res = aggregateActivities(res,config,maxtime,logs.size());
 	}
-
+	
 	// done
 	return res;
 }
@@ -337,7 +426,7 @@ AnalysisResult analyseLogs(const std::vector<ProfileLog>& logs, const AnalysisCo
 }
 
 
-void createReport(const AnalysisResult& result) {
+void createReport(const AnalysisResult& result, const AnalysisConfig& /*config*/) {
 
 	std::ofstream out("report.html");
 
@@ -356,9 +445,10 @@ void createReport(const AnalysisResult& result) {
 
 	// print chart data
 	out << "['time','tasks started','tasks stolen','max_task_depth'],\n";
+
 	for(std::size_t t = 0; t<result.counters.size(); t++) {
 		out << "["
-				<< (t/1000.0) << ","
+				<< result.counters[t].timestamp/1000.0 << ","
 				<< result.counters[t].numTasksStarted << ","
 				<< result.counters[t].numTasksStolen << ","
 				<< result.counters[t].maxTaskDepth
@@ -385,34 +475,36 @@ void createReport(const AnalysisResult& result) {
 		
 				dataTable.addColumn({ type: 'string', id: 'Thread' });
 				dataTable.addColumn({ type: 'string', id: 'Action' });
+				dataTable.addColumn({ type: 'string', role: 'style' });
 				dataTable.addColumn({ type: 'number', id: 'Start' });
 				dataTable.addColumn({ type: 'number', id: 'End' });
 				dataTable.addRows([
-					[ 'T0', 'task', 0, 0 ],
 	)";
 
+	struct Style {
+		std::string label;
+		std::string color;
+	};
+
+	std::map<ActivityType, Style> appearance = { { None,	{ "unknown",	"#FFFFFF" } },
+												 { Task,	{ "task",		"#3366CC" } },
+												 { Steal,	{ "steal",		"#DC3912" } },
+												 { Sleep,	{ "sleep",		"#FF9900" } } };
 
 	// print timeline data
 	for(const auto& cur : result.activities) {
 
-		const char* info = "unknown";
-		switch(cur.activity) {
-		case None:  continue;
-		case Task:  info = "task"; break;
-		case Steal: info = "steal"; break;
-		case Sleep: info = "sleep"; break;
-		}
+		if(cur.activity == None) { continue; }
 
-		out << "[ 'T" << cur.thread << "', '" << info << "', " << cur.begin << ", " << cur.end << "],\n";
+		out << "[ 'T" << cur.thread << "', '" << appearance[cur.activity].label << "', '" << appearance[cur.activity].color << "', " << cur.begin << ", " << cur.end << "],\n";
 	}
-
 
 	// print tail
 	out << R"(
 				]);
-		
+
 				var options = {
-				  timeline: { showBarLabels: false } 
+				  timeline: { showBarLabels: false },
 				};
 		
 				chart.draw(dataTable, options);
