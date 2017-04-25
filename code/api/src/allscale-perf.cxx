@@ -204,8 +204,8 @@ std::vector<EventCounters> aggregateEventCounters(const std::vector<EventCounter
 
 	const double factor = events.size() / (double)config.numSamples;
 	for(std::size_t i = 0; i < config.numSamples; ++i) {
-		EventCounters temp = events[(time_type)i*factor];
-		for(std::size_t j = i*factor + 1; j < (i + 1)*factor; ++j) {
+		EventCounters temp = events[(time_type)(i*factor)];
+		for(std::size_t j = std::size_t(i*factor) + 1; j < (i + 1)*factor; ++j) {
 			temp += events[j];
 		}
 		res.push_back(temp);
@@ -291,7 +291,7 @@ std::vector<Activity> aggregateActivities(const std::vector<Activity>& actions, 
 		auto& mask = masks[cur.thread];
 		for(time_type i = cur.begin; i < cur.end; ++i) {
 			assert_le(i, maxtime);
-			unsigned pos = i / factor;
+			std::size_t pos = (std::size_t)(i / factor);
 			mask[pos] = std::max(mask[pos],cur.activity);
 		}
 	}
@@ -315,7 +315,7 @@ std::vector<Activity> aggregateActivities(const std::vector<Activity>& actions, 
 
 			// start a new phase
 			last = mask[i];
-			begin = i*factor;
+			begin = (time_type)(i*factor);
 		}
 	}
 
