@@ -426,7 +426,7 @@ AnalysisResult analyseLogs(const std::vector<ProfileLog>& logs, const AnalysisCo
 }
 
 
-void createReport(const AnalysisResult& result, const AnalysisConfig& /*config*/) {
+void createReport(const AnalysisResult& result, const AnalysisConfig& config) {
 
 	std::ofstream out("report.html");
 
@@ -490,6 +490,9 @@ void createReport(const AnalysisResult& result, const AnalysisConfig& /*config*/
 												 { Task,	{ "task",		"#3366CC" } },
 												 { Steal,	{ "steal",		"#DC3912" } },
 												 { Sleep,	{ "sleep",		"#FF9900" } } };
+	// print initial entry for compatibility
+	out << "[ 'T0', '" << appearance[ActivityType::None].label << "', '" << appearance[ActivityType::None].color << "', " << config.startTime << ", " << config.startTime << "],\n";
+
 
 	// print timeline data
 	for(const auto& cur : result.activities) {
