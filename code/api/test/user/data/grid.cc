@@ -13,6 +13,22 @@ namespace data {
 
 	#include "data_item_test.inl"
 
+	using MyGrid = data::Grid<int, 3>;
+	using MyGridPoint = MyGrid::coordinate_type;
+
+		// increment each element by one
+		void increment(MyGrid& data, const MyGridPoint& N) {
+			const MyGridPoint zero = { 0, 0, 0 };
+			pfor(zero, N, [&](MyGridPoint pos) {
+				data[pos]++;
+			});
+		}
+	TEST(Grid, Muha) {
+		const MyGridPoint N = { 200, 200, 400 };
+		MyGrid data(N);
+		increment(data, N);
+	}
+	
 	TEST(GridPoint,Basic) {
 
 		GridPoint<1> a = 3;

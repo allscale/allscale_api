@@ -485,7 +485,7 @@ namespace user {
 
 		using namespace implementation::detail;
 
-		data::Vector<int64_t,3> size = { 4, 5, 6 };
+		utils::Vector<int64_t,3> size = { 4, 5, 6 };
 		Base<3> base = Base<3>::full(size);
 
 		EXPECT_FALSE(base.empty());
@@ -501,7 +501,7 @@ namespace user {
 
 		using namespace implementation::detail;
 
-		data::Vector<int64_t,3> size = { 4, 5, 6 };
+		utils::Vector<int64_t,3> size = { 4, 5, 6 };
 		Base<3> base = Base<3>::full(size);
 		Zoid<3> zoid(base,1,0,2);
 

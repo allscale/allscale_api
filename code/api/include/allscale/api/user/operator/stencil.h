@@ -6,13 +6,13 @@
 #include <vector>
 
 #include "allscale/api/user/data/grid.h"
-#include "allscale/api/user/data/vector.h"
 
 #include "allscale/api/user/operator/pfor.h"
 #include "allscale/api/user/operator/async.h"
 #include "allscale/api/user/operator/internal/operation_reference.h"
 
 #include "allscale/utils/bitmanipulation.h"
+#include "allscale/utils/vector.h"
 
 namespace allscale {
 namespace api {
@@ -25,7 +25,7 @@ namespace user {
 
 
 	template<std::size_t dims>
-	using Coordinate = data::Vector<std::int64_t,dims>;
+	using Coordinate = utils::Vector<std::int64_t,dims>;
 
 	template<std::size_t dims>
 	using Size = Coordinate<dims>;
@@ -240,7 +240,7 @@ namespace user {
 
 
 			template<std::size_t dims>
-			using Slopes = data::Vector<index_type,dims>;
+			using Slopes = utils::Vector<index_type,dims>;
 
 			template<std::size_t dims>
 			class Base {
@@ -265,7 +265,7 @@ namespace user {
 				}
 
 				template<typename T>
-				static Base full(const data::Vector<T,dims>& size) {
+				static Base full(const utils::Vector<T,dims>& size) {
 					Base res;
 					for(std::size_t i=0; i<dims; i++) {
 						res.boundaries[i] = { 0, size[i] };
@@ -1091,7 +1091,7 @@ namespace user {
 
 			template<typename T, std::size_t Dims>
 			struct container_info<data::Grid<T,Dims>> : public container_info_base<Dims> {
-				using index_type = data::Vector<detail::index_type,Dims>;
+				using index_type = utils::Vector<detail::index_type,Dims>;
 			};
 
 

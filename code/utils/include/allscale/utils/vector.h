@@ -8,9 +8,7 @@
 #include "allscale/utils/assert.h"
 
 namespace allscale {
-namespace api {
-namespace user {
-namespace data {
+namespace utils {
 
 	// generic vector implementation
 	template<typename T, std::size_t Dims>
@@ -381,7 +379,5 @@ namespace data {
 
 	};
 
-} // end namespace data
-} // end namespace user
-} // end namespace api
+} // end namespace utils
 } // end namespace allscale

@@ -3,9 +3,9 @@
 #include <utility>
 
 #include "allscale/api/core/prec.h"
-#include "allscale/api/user/data/vector.h"
 
 #include "allscale/utils/assert.h"
+#include "allscale/utils/vector.h"
 
 namespace allscale {
 namespace api {
@@ -254,8 +254,8 @@ namespace user {
 	 * the hyper-box limited by the given vectors.
 	 */
 	template<typename Elem, size_t dims, typename Body>
-	detail::loop_reference<data::Vector<Elem,dims>> pfor(const data::Vector<Elem,dims>& a, const data::Vector<Elem,dims>& b, const Body& body) {
-		return pfor(detail::range<data::Vector<Elem,dims>>(a,b),body);
+	detail::loop_reference<utils::Vector<Elem,dims>> pfor(const utils::Vector<Elem,dims>& a, const utils::Vector<Elem,dims>& b, const Body& body) {
+		return pfor(detail::range<utils::Vector<Elem,dims>>(a,b),body);
 	}
 
 	/**
@@ -263,8 +263,8 @@ namespace user {
 	 * the hyper-box limited by the given vectors. Optional dependencies may be passed.
 	 */
 	template<typename Elem, size_t dims, typename Body, typename Dependencies>
-	detail::loop_reference<data::Vector<Elem,dims>> pfor(const data::Vector<Elem,dims>& a, const data::Vector<Elem,dims>& b, const Body& body, const Dependencies& dependencies) {
-		return pfor(detail::range<data::Vector<Elem,dims>>(a,b),body,dependencies);
+	detail::loop_reference<utils::Vector<Elem,dims>> pfor(const utils::Vector<Elem,dims>& a, const utils::Vector<Elem,dims>& b, const Body& body, const Dependencies& dependencies) {
+		return pfor(detail::range<utils::Vector<Elem,dims>>(a,b),body,dependencies);
 	}
 
 	/**
@@ -272,8 +272,8 @@ namespace user {
 	 * the hyper-box limited by the given vector.
 	 */
 	template<typename Elem, size_t Dims, typename Body>
-	auto pfor(const data::Vector<Elem,Dims>& a, const Body& body) {
-		return pfor(data::Vector<Elem,Dims>(0),a,body);
+	auto pfor(const utils::Vector<Elem,Dims>& a, const Body& body) {
+		return pfor(utils::Vector<Elem,Dims>(0),a,body);
 	}
 
 	/**
@@ -281,8 +281,8 @@ namespace user {
 	 * the hyper-box limited by the given vector. Optional dependencies may be passed.
 	 */
 	template<typename Elem, size_t Dims, typename Body, typename Dependencies>
-	auto pfor(const data::Vector<Elem,Dims>& a, const Body& body, const Dependencies& dependencies) {
-		return pfor(data::Vector<Elem,Dims>(0),a,body,dependencies);
+	auto pfor(const utils::Vector<Elem,Dims>& a, const Body& body, const Dependencies& dependencies) {
+		return pfor(utils::Vector<Elem,Dims>(0),a,body,dependencies);
 	}
 
 	// -------------------------------------------------------------------------------------------
@@ -363,8 +363,8 @@ namespace user {
 		};
 
 		template<typename Iter,size_t dims>
-		struct volume<data::Vector<Iter,dims>> {
-			size_t operator()(const data::Vector<Iter,dims>& a, const data::Vector<Iter,dims>& b) const {
+		struct volume<utils::Vector<Iter,dims>> {
+			size_t operator()(const utils::Vector<Iter,dims>& a, const utils::Vector<Iter,dims>& b) const {
 				return volume<std::array<Iter,dims>>()(a,b);
 			}
 		};
@@ -383,7 +383,7 @@ namespace user {
 		}
 
 		template<typename Iter, typename Point,size_t dims>
-		bool covers(const data::Vector<Iter,dims>& begin, const data::Vector<Iter,dims>& end, const data::Vector<Point,dims>& point) {
+		bool covers(const utils::Vector<Iter,dims>& begin, const utils::Vector<Iter,dims>& end, const utils::Vector<Point,dims>& point) {
 			for(size_t i=0; i<dims; ++i) {
 				if (point[i] < begin[i] || end[i] <= point[i]) return false;
 			}
@@ -590,20 +590,20 @@ namespace user {
 		}
 
 		template<typename Elem, size_t dims, typename InnerOp, typename BoundaryOp>
-		void forEach(const data::Vector<Elem,dims>& fullBegin, const data::Vector<Elem,dims>& fullEnd, const data::Vector<Elem,dims>& begin, const data::Vector<Elem,dims>& end, const InnerOp& inner, const BoundaryOp& boundary) {
+		void forEach(const utils::Vector<Elem,dims>& fullBegin, const utils::Vector<Elem,dims>& fullEnd, const utils::Vector<Elem,dims>& begin, const utils::Vector<Elem,dims>& end, const InnerOp& inner, const BoundaryOp& boundary) {
 
 			// the current position
-			data::Vector<Elem,dims> cur;
+			utils::Vector<Elem,dims> cur;
 
 			// scan range
 			detail::scanner<dims>()(fullBegin, fullEnd, begin, end, cur, inner, boundary);
 		}
 
 		template<typename Elem, size_t dims, typename InnerOp, typename BoundaryOp>
-		void forEach(const data::Vector<Elem,dims>& begin, const data::Vector<Elem,dims>& end, const InnerOp& inner, const BoundaryOp& boundary) {
+		void forEach(const utils::Vector<Elem,dims>& begin, const utils::Vector<Elem,dims>& end, const InnerOp& inner, const BoundaryOp& boundary) {
 
 			// the current position
-			data::Vector<Elem,dims> cur;
+			utils::Vector<Elem,dims> cur;
 
 			// scan range
 			detail::scanner<dims>()(begin, end, cur, inner, boundary);
@@ -611,10 +611,10 @@ namespace user {
 
 
 		template<typename Elem, size_t dims, typename Op>
-		void forEach(const data::Vector<Elem,dims>& begin, const data::Vector<Elem,dims>& end, const Op& op) {
+		void forEach(const utils::Vector<Elem,dims>& begin, const utils::Vector<Elem,dims>& end, const Op& op) {
 
 			// the current position
-			data::Vector<Elem,dims> cur;
+			utils::Vector<Elem,dims> cur;
 
 			// scan range
 			detail::scanner<dims>()(begin, end, cur, op);
@@ -636,8 +636,8 @@ namespace user {
 		}
 
 		template<typename Iter, size_t dims>
-		data::Vector<Iter,dims> grow(const data::Vector<Iter,dims>& value, const data::Vector<Iter,dims>& limit, int steps) {
-			data::Vector<Iter,dims> res;
+		utils::Vector<Iter,dims> grow(const utils::Vector<Iter,dims>& value, const utils::Vector<Iter,dims>& limit, int steps) {
+			utils::Vector<Iter,dims> res;
 			for(unsigned i=0; i<dims; i++) {
 				res[i] = grow(value[i],limit[i],steps);
 			}
@@ -660,8 +660,8 @@ namespace user {
 		}
 
 		template<typename Iter, size_t dims>
-		data::Vector<Iter,dims> shrink(const data::Vector<Iter,dims>& value, const data::Vector<Iter,dims>& limit, int steps) {
-			data::Vector<Iter,dims> res;
+		utils::Vector<Iter,dims> shrink(const utils::Vector<Iter,dims>& value, const utils::Vector<Iter,dims>& limit, int steps) {
+			utils::Vector<Iter,dims> res;
 			for(unsigned i=0; i<dims; i++) {
 				res[i] = shrink(value[i],limit[i],steps);
 			}

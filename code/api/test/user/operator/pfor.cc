@@ -3,13 +3,13 @@
 #include <array>
 #include <vector>
 
-#include "allscale/api/user/operator/pfor.h"
-#include "allscale/api/user/data/vector.h"
-
-#include "allscale/utils/string_utils.h"
-
 #include "allscale/api/core/io.h"
+
+#include "allscale/api/user/operator/pfor.h"
+
 #include "allscale/utils/serializer.h"
+#include "allscale/utils/string_utils.h"
+#include "allscale/utils/vector.h"
 
 namespace allscale {
 namespace api {
@@ -188,7 +188,7 @@ namespace user {
 
 		const int N = 100;
 
-		using Point = data::Vector<int,3>;
+		using Point = utils::Vector<int,3>;
 		using Grid = std::array<std::array<std::array<int,N>,N>,N>;
 
 		Point zero = 0;
@@ -668,7 +668,7 @@ namespace user {
 
 		const int N = 100;
 
-		using Point = data::Vector<int,2>;
+		using Point = utils::Vector<int,2>;
 
 		Point zero = 0;
 		Point full = N;
@@ -701,7 +701,7 @@ namespace user {
 
 		const int N = 100;
 
-		using Point = data::Vector<int,3>;
+		using Point = utils::Vector<int,3>;
 
 		Point zero = 0;
 		Point full = N;
@@ -874,7 +874,7 @@ namespace user {
 
 		const int N = 10;
 
-		using Point = data::Vector<int,2>;
+		using Point = utils::Vector<int,2>;
 
 		Point size = {N,N};
 		Point center = {N/2,N/2};

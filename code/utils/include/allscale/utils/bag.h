@@ -6,9 +6,7 @@
 #include "allscale/utils/printer/join.h"
 
 namespace allscale {
-namespace api {
-namespace user {
-namespace data {
+namespace utils {
 
 	/**
 	 * A data structure for maintaining a collection of
@@ -115,7 +113,5 @@ namespace data {
 	};
 
 
-} // end namespace data
-} // end namespace user
-} // end namespace api
+} // end namespace utils
 } // end namespace allscale

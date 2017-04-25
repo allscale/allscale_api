@@ -4,11 +4,11 @@
 #include <memory>
 
 #include "allscale/api/core/data.h"
-#include "allscale/api/user/data/vector.h"
 
 #include "allscale/utils/assert.h"
 #include "allscale/utils/printer/join.h"
 #include "allscale/utils/large_array.h"
+#include "allscale/utils/vector.h"
 
 namespace allscale {
 namespace api {

@@ -4,13 +4,13 @@
 #include <memory>
 
 #include "allscale/api/core/data.h"
-#include "allscale/api/user/data/vector.h"
 
 #include "allscale/api/user/operator/pfor.h"
 
 #include "allscale/utils/assert.h"
 #include "allscale/utils/printer/join.h"
 #include "allscale/utils/large_array.h"
+#include "allscale/utils/vector.h"
 
 namespace allscale {
 namespace api {
@@ -26,7 +26,7 @@ namespace data {
 	using coordinate_type = std::int64_t;
 
 	template<std::size_t Dims>
-	using GridPoint = Vector<coordinate_type,Dims>;
+	using GridPoint = utils::Vector<coordinate_type,Dims>;
 
 	template<std::size_t Dims>
 	class GridBox;
@@ -411,8 +411,8 @@ namespace data {
 			// compute the bounding box
 			box_type res = regions.front();
 			for(const box_type& cur : regions) {
-				res.min = data::elementwiseMin(res.min, cur.min);
-				res.max = data::elementwiseMax(res.max, cur.max);
+				res.min = utils::elementwiseMin(res.min, cur.min);
+				res.max = utils::elementwiseMax(res.max, cur.max);
 			}
 			return res;
 		}

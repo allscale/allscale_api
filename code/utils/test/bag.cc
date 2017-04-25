@@ -1,12 +1,10 @@
 #include <gtest/gtest.h>
 
-#include "allscale/api/user/data/bag.h"
+#include "allscale/utils/bag.h"
 #include "allscale/utils/string_utils.h"
 
 namespace allscale {
-namespace api {
-namespace user {
-namespace data {
+namespace utils {
 
 	TEST(Bag,Basic) {
 
@@ -154,7 +152,5 @@ namespace data {
 	}
 
 
-} // end namespace data
-} // end namespace user
-} // end namespace api
+} // end namespace utils
 } // end namespace allscale

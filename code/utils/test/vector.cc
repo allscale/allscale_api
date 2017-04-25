@@ -1,13 +1,10 @@
 #include <gtest/gtest.h>
 
-#include "allscale/api/user/data/vector.h"
-
 #include "allscale/utils/string_utils.h"
+#include "allscale/utils/vector.h"
 
 namespace allscale {
-namespace api {
-namespace user {
-namespace data {
+namespace utils {
 
 
 	TEST(Vector, Vector2DLayout) {
@@ -265,7 +262,5 @@ namespace data {
 
 	}
 
-} // end namespace data
-} // end namespace user
-} // end namespace api
+} // end namespace utils
 } // end namespace allscale
