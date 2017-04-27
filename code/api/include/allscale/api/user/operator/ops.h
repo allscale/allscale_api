@@ -27,28 +27,21 @@ preduce(const Iter& a, const Iter& b, const Op& op) {
 		[](const range& r) {
 			return r.size() <= 1;
 		},
-		[&](const range& r)->res_type {
+		[op](const range& r)->res_type {
 			if (r.size() == 0) return res_type();
 			return op(*r.begin(),res_type());
 		},
 		core::pick(
-		[&](const range& r, const auto& nested) {
+		[op](const range& r, const auto& nested) {
 			// here we have the binary splitting
 			auto fragments = r.split();
 			auto left = fragments.first;
 			auto right = fragments.second;
 
-//			core::impl::reference::Task<int>* leftTask = std::move(nested(left)).toTask();
-//			core::impl::reference::Task<int>* rightTask = std::move(nested(right)).toTask();
 			return core::impl::reference::make_split_task(std::move(core::impl::reference::after()),
 					std::move(nested(left)).toTask(), std::move(nested(right)).toTask(), op, true);
-
-			//return core::impl::reference::unreleased_treeture<int>(x);
-//			return fun(left);
-//			core::impl::reference::Task<int> task;
-//			return core::impl::reference::unreleased_treeture<int>(&task);
 		},
-		[&](const range& r, const auto&)->res_type {
+		[op](const range& r, const auto&)->res_type {
 			if (r.size() == 0) return res_type();
 			return op(*r.begin(),res_type());
 		})
@@ -71,6 +64,118 @@ template<typename Container, typename Op>
 typename utils::lambda_traits<Op>::result_type
 preduce(const Container& c, const Op& op) {
 	return preduce(c.begin(), c.end(), op);
+}
+
+// ----- map / reduce ------
+
+template<
+	typename Iter,
+	typename MapOp,
+	typename ReduceOp,
+	typename InitLocalState,
+	typename ReduceLocalState
+>
+typename utils::lambda_traits<ReduceOp>::result_type
+preduce(
+		const Iter& a,
+		const Iter& b,
+		const MapOp& map,
+		const ReduceOp& reduce,
+		const InitLocalState& init,
+		const ReduceLocalState& exit
+	) {
+
+
+	using range = detail::range<Iter>;
+	using res_type = typename utils::lambda_traits<ReduceOp>::result_type;
+
+	return core::prec(
+		[](const range& r) {
+			return r.size() <= 1;
+		},
+		[init,map,exit](const range& r)->res_type {
+			auto res = init();
+			auto mapB = [map,&res](const auto& cur) {
+				return map(cur,res);
+			};
+			r.forEach(mapB);
+			return exit(res);
+		},
+		core::pick(
+		[reduce](const range& r, const auto& nested) {
+			// here we have the binary splitting
+			auto fragments = r.split();
+			auto left = fragments.first;
+			auto right = fragments.second;
+
+			return core::impl::reference::make_split_task(std::move(core::impl::reference::after()),
+					std::move(nested(left)).toTask(), std::move(nested(right)).toTask(), reduce, true);
+		},
+		[init,map,exit](const range& r, const auto&)->res_type {
+			auto res = init();
+			auto mapB = [map,&res](const auto& cur) {
+				return map(cur,res);
+			};
+			r.forEach(mapB);
+			return exit(res);
+		})
+	)(range(a, b)).get();
+}
+
+template<
+	typename Iter,
+	typename MapOp,
+	typename ReduceOp,
+	typename InitLocalState
+>
+typename utils::lambda_traits<ReduceOp>::result_type
+preduce(
+		const Iter& a,
+		const Iter& b,
+		const MapOp& map,
+		const ReduceOp& reduce,
+		const InitLocalState& init
+	) {
+
+	return preduce(a, b, map, reduce, init, ([](typename utils::lambda_traits<ReduceOp>::result_type r) { return r; } ));
+}
+
+template<
+	typename Container,
+	typename MapOp,
+	typename ReduceOp,
+	typename InitLocalState,
+	typename ReduceLocalState
+>
+typename utils::lambda_traits<ReduceOp>::result_type
+preduce(
+		const Container& c,
+		const MapOp& map,
+		const ReduceOp& reduce,
+		const InitLocalState& init,
+		const ReduceLocalState& exit
+	) {
+
+	return preduce(c.begin(), c.end(), map, reduce, init, exit);
+
+}
+
+template<
+	typename Container,
+	typename MapOp,
+	typename ReduceOp,
+	typename InitLocalState
+>
+typename utils::lambda_traits<ReduceOp>::result_type
+preduce(
+		const Container& c,
+		const MapOp& map,
+		const ReduceOp& reduce,
+		const InitLocalState& init
+	) {
+
+	return preduce(c.begin(), c.end(), map, reduce, init);
+
 }
 
 } // end namespace user
