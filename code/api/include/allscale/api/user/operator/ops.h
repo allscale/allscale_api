@@ -29,6 +29,7 @@ preduce(const Iter& a, const Iter& b, const Op& op) {
 		},
 		[op](const range& r)->res_type {
 			if (r.size() == 0) return res_type();
+
 			return op(*r.begin(),res_type());
 		},
 		core::pick(
@@ -43,7 +44,15 @@ preduce(const Iter& a, const Iter& b, const Op& op) {
 		},
 		[op](const range& r, const auto&)->res_type {
 			if (r.size() == 0) return res_type();
-			return op(*r.begin(),res_type());
+
+			auto tmp = res_type();
+
+			auto opB = [op, &tmp](const auto& cur) {
+				tmp = op(cur, tmp);
+			};
+
+			r.forEach(opB);
+			return tmp;
 		})
 	)(range(a,b)).get();
 }
@@ -89,17 +98,21 @@ preduce(
 	using range = detail::range<Iter>;
 	using res_type = typename utils::lambda_traits<ReduceOp>::result_type;
 
+	auto handle = [](const InitLocalState& init, const MapOp& map, const ReduceLocalState& exit, const range& r)->res_type {
+		auto res = init();
+		auto mapB = [map,&res](const auto& cur) {
+			return map(cur,res);
+		};
+		r.forEach(mapB);
+		return exit(res);
+	};
+
 	return core::prec(
 		[](const range& r) {
 			return r.size() <= 1;
 		},
-		[init,map,exit](const range& r)->res_type {
-			auto res = init();
-			auto mapB = [map,&res](const auto& cur) {
-				return map(cur,res);
-			};
-			r.forEach(mapB);
-			return exit(res);
+		[init,map,exit,handle](const range& r)->res_type {
+			return handle(init, map, exit, r);
 		},
 		core::pick(
 		[reduce](const range& r, const auto& nested) {
@@ -111,13 +124,8 @@ preduce(
 			return core::impl::reference::make_split_task(std::move(core::impl::reference::after()),
 					std::move(nested(left)).toTask(), std::move(nested(right)).toTask(), reduce, true);
 		},
-		[init,map,exit](const range& r, const auto&)->res_type {
-			auto res = init();
-			auto mapB = [map,&res](const auto& cur) {
-				return map(cur,res);
-			};
-			r.forEach(mapB);
-			return exit(res);
+		[init,map,exit,handle](const range& r, const auto&)->res_type {
+			return handle(init, map, exit, r);
 		})
 	)(range(a, b)).get();
 }

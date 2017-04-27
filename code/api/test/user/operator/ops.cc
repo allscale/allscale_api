@@ -18,10 +18,14 @@ namespace user {
 		std::vector<int> e = { };
 		EXPECT_EQ(0, preduce(e, plus));
 
-//		auto concat = [](std::string a, std::string b) { return a + b; };
-//		std::vector<std::string> s = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n",
-//				"o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"};
-//		EXPECT_EQ("abcdefghijklmnopqrstuvwxyz", preduce(s, concat));
+		auto concat = [](std::string a, std::string b) { return a + b; };
+		std::vector<std::string> s = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n",
+				"o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"};
+		std::string res = preduce(s, concat);
+		EXPECT_EQ(26, res.size());
+		for(std::string cur : s) {
+			EXPECT_NE(std::string::npos, res.find(cur));
+		}
 	}
 
 
@@ -95,22 +99,22 @@ namespace user {
 			characters.push_back(i);
 
 		auto map = [](int i, std::vector<char>& acc) {
-			if(i == 97)
-				acc[0] = (char)i;
-			else
-				acc.push_back((char)i);
+			acc.push_back((char)i);
 		};
 
 		auto reduce = [](std::string a, std::string b) {
 			return a + b;
 		};
 
-		auto init = []() { return std::vector<char>() = {' '}; };
+		auto init = []() { return std::vector<char>(); };
 		auto exit = [](std::vector<char> vec) { return std::string(vec.begin(), vec.end()); };
 
 		auto res = preduce(characters, map, reduce, init, exit);
 
-		EXPECT_EQ("a b c d e f g h i j k l m n o p q r s t u v w x y z", res);
+		EXPECT_EQ(26, res.size());
+		for(int cur : characters) {
+			EXPECT_NE(std::string::npos, res.find((char)cur));
+		}
 	}
 
 	TEST(Ops, MapReduce2D) {
