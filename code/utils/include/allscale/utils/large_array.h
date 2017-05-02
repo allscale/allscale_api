@@ -366,7 +366,11 @@ namespace utils {
 		/**
 		 * Creates a new large array of the given size.
 		 */
-		LargeArray(std::size_t size) : size(size) {
+		LargeArray(std::size_t size) : data(nullptr), size(size) {
+
+			// check whether there is something to allocate
+			if (size == 0) return;
+
 			// allocate the address space
 			#ifdef _MSC_VER
 				data = (T*)malloc(sizeof(T)*size);
