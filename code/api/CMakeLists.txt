@@ -11,3 +11,5 @@ glob_tests(api_tests test)
 foreach(test ${api_tests})
 	add_module_unittest(api ${test})
 endforeach(test)
+
+add_subdirectory(tutorial)
