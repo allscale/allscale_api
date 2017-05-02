@@ -13,22 +13,6 @@ namespace data {
 
 	#include "data_item_test.inl"
 
-	using MyGrid = data::Grid<int, 3>;
-	using MyGridPoint = MyGrid::coordinate_type;
-
-		// increment each element by one
-		void increment(MyGrid& data, const MyGridPoint& N) {
-			const MyGridPoint zero = { 0, 0, 0 };
-			pfor(zero, N, [&](MyGridPoint pos) {
-				data[pos]++;
-			});
-		}
-	TEST(Grid, Muha) {
-		const MyGridPoint N = { 200, 200, 400 };
-		MyGrid data(N);
-		increment(data, N);
-	}
-	
 	TEST(GridPoint,Basic) {
 
 		GridPoint<1> a = 3;
@@ -626,6 +610,37 @@ namespace data {
 
 		GridRegion<2> region(size,20,30);
 		GridFragment<int,2> fA(region);
+
+	}
+
+	TEST(GridFragment1D,FragmentTestBasic) {
+
+		GridPoint<1> size = 50;
+
+		GridRegion<1> a(size,5,10);
+		GridRegion<1> b(size,8,14);
+
+		testFragment<GridFragment<int,1>>(a,b);
+
+	}
+
+	TEST(GridFragment2D,FragmentTestBasic) {
+
+		GridPoint<2> size = {50,60};
+
+		GridRegion<2> a(size,{5,6},{10,12});
+		GridRegion<2> b(size,{8,9},{14,16});
+
+		testFragment<GridFragment<int,2>>(a,b);
+
+	}
+
+
+	TEST(Grid,TypeProperties) {
+
+		EXPECT_TRUE((core::is_data_item<Grid<int,1>>::value));
+		EXPECT_TRUE((core::is_data_item<Grid<int,2>>::value));
+		EXPECT_TRUE((core::is_data_item<Grid<int,3>>::value));
 
 	}
 

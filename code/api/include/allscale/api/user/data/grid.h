@@ -612,6 +612,15 @@ namespace data {
 		}
 
 		void resize(const region_type& newSize) {
+
+			// if the fragment is empty so far
+			if (size.getTotal() == 0) {
+				// initialize the large array
+				size = region_type(newSize.getTotal());
+				data = utils::LargeArray<T>(area(size.getTotal()));
+			}
+
+			// check that size does not change
 			assert_eq(size.getTotal(),newSize.getTotal());
 
 			// get the difference
