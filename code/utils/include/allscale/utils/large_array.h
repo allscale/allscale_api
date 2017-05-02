@@ -47,6 +47,20 @@ namespace utils {
 			}
 
 			/**
+			 * Compares this and the given intervals for equality.
+			 */
+			bool operator==(const Intervals& other) const {
+				return data == other.data;
+			}
+
+			/**
+			 * Compares this and the given intervals for inequality.
+			 */
+			bool operator!=(const Intervals& other) const {
+				return data != other.data;
+			}
+
+			/**
 			 * Checks whether this is interval is empty.
 			 */
 			bool empty() const {
@@ -443,6 +457,24 @@ namespace utils {
 			size = other.size;
 			active_ranges.swap(other.active_ranges);
 			return *this;
+		}
+
+		bool operator==(const LargeArray& other) const {
+			// quick check
+			if (this == &other) return true;
+
+			// check the same size
+			if (size != other.size) return false;
+
+			// make sure both have allocated all the space
+			assert_eq(active_ranges, other.active_ranges);
+
+			// compare active ranges
+			bool res = true;
+			active_ranges.forEach([&](int pos){
+				res = res && (data[pos] == other.data[pos]);
+			});
+			return res;
 		}
 
 		/**

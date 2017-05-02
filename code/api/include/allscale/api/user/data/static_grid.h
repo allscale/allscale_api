@@ -69,6 +69,10 @@ namespace data {
 			});
 		}
 
+		bool operator==(const StaticGridFragment& other) const {
+			return data == other.data;
+		}
+
 		T& operator[](const point& pos) {
 			return data[flatten(pos)];
 		}
@@ -224,6 +228,13 @@ namespace data {
 		 */
 		coordinate_type size() const {
 			return coordinate_type({ Sizes ... });
+		}
+
+		/**
+		 * Compare the full content of the grid.
+		 */
+		bool operator==(const StaticGrid& other) const {
+			return *base == *other.base;
 		}
 
 		/**
