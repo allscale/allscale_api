@@ -56,6 +56,10 @@ foreach( tutorial ${tutorials} )
 		# add the api dependency
 		target_link_libraries(${target_name} api)
 	
+		# tuturials require pthread
+		find_package(Threads REQUIRED)
+		target_link_libraries(${target_name} ${CMAKE_THREAD_LIBS_INIT})
+	
 		# But the output name will not contain the module prefix, this is fine
 		# inside the build directory since everything is organized in
 		# subfolders. Just be aware when installing the executable, it may be
