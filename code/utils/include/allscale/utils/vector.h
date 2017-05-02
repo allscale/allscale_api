@@ -29,10 +29,16 @@ namespace utils {
 		Vector(const Vector&) = default;
 		Vector(Vector&&) = default;
 
-		Vector(const std::array<T,Dims>& other)
+		template<typename R>
+		Vector(const Vector<R,Dims>& other)
+			: data(other.data) {}
+
+		template<typename R>
+		Vector(const std::array<R,Dims>& other)
 			: data(other) {}
 
-		Vector(const std::initializer_list<T>& values) {
+		template<typename R>
+		Vector(const std::initializer_list<R>& values) {
 			assert_le(Dims, values.size()) << "Expected initializer list of size less or equal " << Dims << " but got " << values.size();
 			std::size_t pos = 0;
 			for(const auto& cur : values) { data[pos++] = cur; }
@@ -226,9 +232,14 @@ namespace utils {
 		Vector(const Vector&) = default;
 		Vector(Vector&&) = default;
 
-		Vector(const std::array<T,3>& other) : x(other[0]), y(other[1]), z(other[2]) {}
+		template<typename R>
+		Vector(const Vector<R,3>& other) : x(other.x), y(other.y), z(other.z) {}
 
-		Vector(const std::initializer_list<T>& values) {
+		template<typename R>
+		Vector(const std::array<R,3>& other) : x(other[0]), y(other[1]), z(other[2]) {}
+
+		template<typename R>
+		Vector(const std::initializer_list<R>& values) {
 			assert_le(3, values.size()) << "Expected initializer list of size less or equal 3 but got " << values.size();
 			std::size_t pos = 0;
 			for(const auto& cur : values) { (*this)[pos++] = cur; }
@@ -315,9 +326,14 @@ namespace utils {
 		Vector(const Vector&) = default;
 		Vector(Vector&&) = default;
 
-		Vector(const std::array<T,2>& other) : x(other[0]), y(other[1]) {}
+		template<typename R>
+		Vector(const Vector<R,2>& other) : x(other.x), y(other.y) {}
 
-		Vector(const std::initializer_list<T>& values) {
+		template<typename R>
+		Vector(const std::array<R,2>& other) : x(other[0]), y(other[1]) {}
+
+		template<typename R>
+		Vector(const std::initializer_list<R>& values) {
 			assert_le(2, values.size()) << "Expected initializer list of size less or equal 2 but got " << values.size();
 			std::size_t pos = 0;
 			for(const auto& cur : values) { (*this)[pos++] = cur; }
