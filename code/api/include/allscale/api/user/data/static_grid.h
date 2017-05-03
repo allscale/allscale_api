@@ -204,6 +204,14 @@ namespace data {
 			: owned(std::make_unique<StaticGridFragment<T,Sizes...>>(region_type(size(),0,size()))), base(owned.get()) {}
 
 		/**
+		 * A constructor for static grids accepting a size parameter, to be compatible to the dynamic sized grid.
+		 */
+		StaticGrid(const StaticGridPoint<dimensions>& size)
+			: owned(std::make_unique<StaticGridFragment<T,Sizes...>>(region_type(size,0,size))), base(owned.get()) {
+			assert_eq(size,this->size()) << "Initialization of invalid sized static grid.";
+		}
+
+		/**
 		 * Disable copy construction.
 		 */
 		StaticGrid(const StaticGrid&) = delete;
