@@ -44,7 +44,7 @@ namespace user {
 				EXPECT_EQ(I+time,data[pos]) << "Position: " << pos;
 				if (pos < N-1) EXPECT_EQ(I+time,data[pos+1]) << "Position: " << pos << " + 1 = " << (pos+1);;
 
-				// increase the time step of current sell
+				// increase the time step of current cell
 				return data[pos] + 1;
 			});
 
@@ -83,7 +83,7 @@ namespace user {
 					EXPECT_EQ(time,data[p]) << "Position " << pos << " + " << offset << " = " << p;
 				}
 
-				// increase the time step of current sell
+				// increase the time step of current cell
 				return data[pos] + 1;
 			});
 
@@ -125,7 +125,7 @@ namespace user {
 					}
 				}
 
-				// increase the time step of current sell
+				// increase the time step of current cell
 				return data[pos] + 1;
 			});
 
@@ -171,7 +171,7 @@ namespace user {
 					}
 				}
 
-				// increase the time step of current sell
+				// increase the time step of current cell
 				return data[pos] + 1;
 			});
 
@@ -220,7 +220,7 @@ namespace user {
 					}
 				}
 
-				// increase the time step of current sell
+				// increase the time step of current cell
 				return data[pos] + 1;
 			});
 
@@ -271,7 +271,7 @@ namespace user {
 					}
 				}
 
-				// increase the time step of current sell
+				// increase the time step of current cell
 				return data[pos] + 1;
 			});
 
@@ -304,7 +304,7 @@ namespace user {
 				EXPECT_EQ(time,data[pos]);
 				if (pos < N-1) EXPECT_EQ(time,data[pos+1]);
 
-				// increase the time step of current sell
+				// increase the time step of current cell
 				return data[pos] + 1;
 			});
 
@@ -359,7 +359,7 @@ namespace user {
 							}
 						}
 
-						// increase the time step of current sell
+						// increase the time step of current cell
 						return data[pos] + 1;
 					},
 
@@ -387,7 +387,7 @@ namespace user {
 							}
 						}
 
-						// increase the time step of current sell
+						// increase the time step of current cell
 						return data[pos] + 1;
 					}
 			);
@@ -432,7 +432,7 @@ namespace user {
 					}
 				}
 
-				// increase the time step of current sell
+				// increase the time step of current cell
 				return data[pos] + 1;
 			});
 
@@ -446,8 +446,73 @@ namespace user {
 	}
 
 
+	TYPED_TEST_P(Stencil,Grid2D_Observer) {
+
+		using Impl = TypeParam;
+
+		const int N = 100;
+
+		// run one layer of iterations
+		for(int T : { N/2 }) {
+
+			// initialize the data buffer
+			data::Grid<int,2> data({N,N});
+			data.forEach([](int& x){
+				x = 0;
+			});
+
+			// count the number of collected observations
+			int observationCounterA = 0;
+			int observationCounterB = 0;
+
+			// run the stencil
+			stencil<Impl>(data, T,
+				[=](time_t, const data::GridPoint<2>& pos, const data::Grid<int,2>& data){
+					// increase the time step of current cell
+					return data[pos] + 1;
+				},
+				observer(
+					[](time_t t) { return t % 10 == 0; },
+					[N](const data::GridPoint<2>& loc) { return loc.x == N/2 && loc.y == N/3; },
+					[N,&observationCounterA](time_t t, const data::GridPoint<2>& loc, int& value) {
+						EXPECT_EQ(0,t%10);
+						EXPECT_EQ(N/2,loc.x);
+						EXPECT_EQ(N/3,loc.y);
+						EXPECT_EQ(t+1,value);
+
+						EXPECT_EQ(observationCounterA * 10, t);
+						observationCounterA++;
+					}
+				),
+				observer(
+					[](time_t t) { return t % 8 == 0; },
+					[N](const data::GridPoint<2>& loc) { return loc.x == N/4 && loc.y == N/2; },
+					[N,&observationCounterB](time_t t, const data::GridPoint<2>& loc, int& value) {
+						EXPECT_EQ(0,t%8);
+						EXPECT_EQ(N/4,loc.x);
+						EXPECT_EQ(N/2,loc.y);
+						EXPECT_EQ(t+1,value);
+
+						EXPECT_EQ(observationCounterB * 8, t);
+						observationCounterB++;
+					}
+				)
+			);
+
+			// check final state
+			data.forEach([T](int x){
+				EXPECT_EQ(T,x);
+			});
+
+			// check number of collected observations
+			EXPECT_EQ(5,observationCounterA);
+			EXPECT_EQ(7,observationCounterB);
+		}
+
+	}
+
+
 	// TODO:
-	//  - support boundary handling
 	//  - return a treeture wrapper
 	//    - how to link multiple instances
 	//  - integrate observers?
@@ -464,7 +529,8 @@ namespace user {
 			Grid4D,
 			Grid5D,
 			Grid3D_Boundary,
-			Grid2D_Tuning
+			Grid2D_Tuning,
+			Grid2D_Observer
 	);
 
 	using test_params = ::testing::Types<

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "allscale/api/user/data/grid.h"
+#include "allscale/api/user/data/static_grid.h"
 
 #include "allscale/api/user/operator/pfor.h"
 #include "allscale/api/user/operator/async.h"
@@ -44,16 +45,35 @@ namespace user {
 
 	}
 
+	template<typename TimeStampFilter, typename LocationFilter, typename Action>
+	class Observer;
+
+	template<typename T>
+	struct is_observer;
 
 	template<typename Impl>
 	class stencil_reference;
 
-	template<typename Impl = implementation::fine_grained_iterative, typename Container, typename InnerUpdate, typename BoundaryUpdate>
-	stencil_reference<Impl> stencil(Container& res, std::size_t steps, const InnerUpdate& innerUpdate, const BoundaryUpdate& boundaryUpdate);
+	template<
+		typename Impl = implementation::fine_grained_iterative, typename Container, typename InnerUpdate, typename BoundaryUpdate,
+		typename ... ObserverTimeFilters, typename ... ObserverLocationFilters, typename ... ObserverActions
+	>
+	std::enable_if_t<!is_observer<BoundaryUpdate>::value,stencil_reference<Impl>> stencil(
+		Container& res, std::size_t steps, const InnerUpdate& innerUpdate, const BoundaryUpdate& boundaryUpdate,
+		const Observer<ObserverTimeFilters,ObserverLocationFilters,ObserverActions>& ... observers
+	);
 
-	template<typename Impl = implementation::fine_grained_iterative, typename Container, typename Update>
-	stencil_reference<Impl> stencil(Container& res, std::size_t steps, const Update& update);
+	template<
+		typename Impl = implementation::fine_grained_iterative, typename Container, typename Update,
+		typename ... ObserverTimeFilters, typename ... ObserverLocationFilters, typename ... ObserverActions
+	>
+	stencil_reference<Impl> stencil(
+		Container& res, std::size_t steps, const Update& update,
+		const Observer<ObserverTimeFilters,ObserverLocationFilters,ObserverActions>& ... observers
+	);
 
+	template<typename TimeStampFilter, typename LocationFilter, typename Action>
+	Observer<TimeStampFilter,LocationFilter,Action> observer(const TimeStampFilter& timeFilter, const LocationFilter& locationFilter, const Action& action);
 
 	// ---------------------------------------------------------------------------------------------
 	//									    Definitions
@@ -70,33 +90,80 @@ namespace user {
 
 	};
 
-	template<typename Impl, typename Container, typename InnerUpdate, typename BoundaryUpdate>
-	stencil_reference<Impl> stencil(Container& a, std::size_t steps, const InnerUpdate& innerUpdate, const BoundaryUpdate& boundaryUpdate) {
+	template<
+		typename Impl = implementation::fine_grained_iterative, typename Container, typename InnerUpdate, typename BoundaryUpdate,
+		typename ... ObserverTimeFilters, typename ... ObserverLocationFilters, typename ... ObserverActions
+	>
+	std::enable_if_t<!is_observer<BoundaryUpdate>::value,stencil_reference<Impl>> stencil(
+			Container& a, std::size_t steps, const InnerUpdate& innerUpdate, const BoundaryUpdate& boundaryUpdate,
+			const Observer<ObserverTimeFilters,ObserverLocationFilters,ObserverActions>& ... observers
+		) {
 
 		// forward everything to the implementation
-		return Impl().process(a,steps,innerUpdate,boundaryUpdate);
+		return Impl().process(a,steps,innerUpdate,boundaryUpdate,observers...);
 
 	}
 
-	template<typename Impl, typename Container, typename Update>
-	stencil_reference<Impl> stencil(Container& a, std::size_t steps, const Update& update) {
+	template<
+		typename Impl = implementation::fine_grained_iterative, typename Container, typename Update,
+		typename ... ObserverTimeFilters, typename ... ObserverLocationFilters, typename ... ObserverActions
+	>
+	stencil_reference<Impl> stencil(Container& a, std::size_t steps, const Update& update,const Observer<ObserverTimeFilters,ObserverLocationFilters,ObserverActions>& ... observers) {
 
 		// use the same update for inner and boundary updates
-		return Impl().process(a,steps,update,update);
+		return stencil<Impl>(a,steps,update,update,observers...);
 
+	}
+
+	template<typename TimeStampFilter, typename LocationFilter, typename Action>
+	class Observer {
+	public:
+		TimeStampFilter isInterestedInTime;
+		LocationFilter isInterestedInLocation;
+		Action trigger;
+
+		Observer(const TimeStampFilter& timeFilter, const LocationFilter& locationFilter, const Action& action)
+			: isInterestedInTime(timeFilter), isInterestedInLocation(locationFilter), trigger(action) {}
+	};
+
+	template<typename T>
+	struct is_observer : public std::false_type {};
+
+	template<typename T, typename L, typename A>
+	struct is_observer<Observer<T,L,A>> : public std::true_type {};
+
+	template<typename TimeStampFilter, typename LocationFilter, typename Action>
+	Observer<TimeStampFilter,LocationFilter,Action> observer(const TimeStampFilter& timeFilter, const LocationFilter& locationFilter, const Action& action) {
+		return Observer<TimeStampFilter,LocationFilter,Action>(timeFilter,locationFilter,action);
 	}
 
 	namespace implementation {
+
+		namespace detail {
+
+			template<typename Op>
+			void staticForEach(const Op&) {
+				// nothing to do
+			}
+
+			template<typename Op, typename First, typename ... Rest>
+			void staticForEach(const Op& op, const First& first, const Rest& ... rest) {
+				op(first);
+				staticForEach(op,rest...);
+			}
+
+		}
+
 
 		// -- Iterative Stencil Implementation ---------------------------------------------------------
 
 		struct sequential_iterative {
 
-			template<typename Container, typename InnerUpdate, typename BoundaryUpdate>
-			stencil_reference<sequential_iterative> process(Container& a, std::size_t steps, const InnerUpdate& innerUpdate, const BoundaryUpdate& boundaryUpdate) {
+			template<typename Container, typename InnerUpdate, typename BoundaryUpdate, typename ... Observers>
+			stencil_reference<sequential_iterative> process(Container& a, std::size_t steps, const InnerUpdate& innerUpdate, const BoundaryUpdate& boundaryUpdate, const Observers& ... observers) {
 
 				// return handle to asynchronous execution
-				return async([&a,steps,innerUpdate,boundaryUpdate]{
+				return async([&a,steps,innerUpdate,boundaryUpdate,observers...]{
 
 					// iterative implementation
 					Container b(a.size());
@@ -120,6 +187,23 @@ namespace user {
 							}
 						);
 
+						// check observers
+						detail::staticForEach(
+							[&](const auto& observer){
+								// check whether this time step is of interest
+								if(!observer.isInterestedInTime(t)) return;
+								// walk through space
+								user::detail::forEach(iter_type(0),a.size(),
+									[&](const iter_type& i) {
+										if (observer.isInterestedInLocation(i)) {
+											observer.trigger(t,i,(*y)[i]);
+										}
+									}
+								);
+							},
+							observers...
+						);
+
 						// swap buffers
 						std::swap(x,y);
 					}
@@ -138,11 +222,11 @@ namespace user {
 
 		struct coarse_grained_iterative {
 
-			template<typename Container, typename InnerUpdate, typename BoundaryUpdate>
-			stencil_reference<coarse_grained_iterative> process(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary) {
+			template<typename Container, typename InnerUpdate, typename BoundaryUpdate, typename ... Observers>
+			stencil_reference<coarse_grained_iterative> process(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary, const Observers& ... observers) {
 
 				// return handle to asynchronous execution
-				return async([&a,steps,inner,boundary]{
+				return async([&a,steps,inner,boundary,observers...]{
 
 					// iterative implementation
 					Container b(a.size());
@@ -164,6 +248,23 @@ namespace user {
 							}
 						);
 
+						// check observers
+						detail::staticForEach(
+							[&](const auto& observer){
+								// check whether this time step is of interest
+								if(!observer.isInterestedInTime(t)) return;
+								// walk through space
+								pfor(iter_type(0),a.size(),
+									[&](const iter_type& i) {
+										if (observer.isInterestedInLocation(i)) {
+											observer.trigger(t,i,(*y)[i]);
+										}
+									}
+								);
+							},
+							observers...
+						);
+
 						// swap buffers
 						std::swap(x,y);
 					}
@@ -182,11 +283,11 @@ namespace user {
 
 		struct fine_grained_iterative {
 
-			template<typename Container, typename InnerUpdate, typename BoundaryUpdate>
-			stencil_reference<fine_grained_iterative> process(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary) {
+			template<typename Container, typename InnerUpdate, typename BoundaryUpdate, typename ... Observers>
+			stencil_reference<fine_grained_iterative> process(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary, const Observers& ... observers) {
 
 				// return handle to asynchronous execution
-				return async([&a,steps,inner,boundary]{
+				return async([&a,steps,inner,boundary,observers...]{
 
 					// iterative implementation
 					Container b(a.size());
@@ -209,6 +310,24 @@ namespace user {
 								(*y)[i] = boundary(t,i,*x);
 							},
 							neighborhood_sync(ref)
+						);
+
+						// check observers
+						detail::staticForEach(
+							[t,y,&ref,&a](const auto& observer){
+								// check whether this time step is of interest
+								if(!observer.isInterestedInTime(t)) return;
+								// walk through space
+								ref = pfor(iter_type(0),a.size(),
+									[t,y,observer](const iter_type& i) {
+										if (observer.isInterestedInLocation(i)) {
+											observer.trigger(t,i,(*y)[i]);
+										}
+									},
+									one_on_one(ref)
+								);
+							},
+							observers...
 						);
 
 						// swap buffers
@@ -347,8 +466,8 @@ namespace user {
 
 				plain_scanner<dim-1> nested;
 
-				template<std::size_t full_dim, typename InnerBody, typename BoundaryBody>
-				void operator()(const Base<full_dim>& base, const InnerBody& inner, const BoundaryBody& boundary, Coordinate<full_dim>& pos, std::size_t t, const Coordinate<full_dim>& size) const {
+				template<std::size_t full_dim, typename InnerBody, typename BoundaryBody, typename ObserverBody>
+				void operator()(const Base<full_dim>& base, const InnerBody& inner, const BoundaryBody& boundary, const ObserverBody& observer, Coordinate<full_dim>& pos, std::size_t t, const Coordinate<full_dim>& size) const {
 					constexpr const auto idx = full_dim - dim - 1;
 
 					// compute boundaries
@@ -364,17 +483,17 @@ namespace user {
 
 					// process range from start to limit
 					auto limit = std::min(to,length);
-					processRange(base,inner,boundary,pos,t,size,from,limit);
+					processRange(base,inner,boundary,observer,pos,t,size,from,limit);
 
 					// and if necessary the elements beyond, after a wrap-around
 					if (to <= length) return;
 
 					to -= length;
-					processRange(base,inner,boundary,pos,t,size,0,to);
+					processRange(base,inner,boundary,observer,pos,t,size,0,to);
 				}
 
-				template<std::size_t full_dim, typename InnerBody, typename BoundaryBody>
-				void processRange(const Base<full_dim>& base, const InnerBody& inner, const BoundaryBody& boundary, Coordinate<full_dim>& pos, std::size_t t, const Coordinate<full_dim>& size, std::int64_t from, std::int64_t to) const {
+				template<std::size_t full_dim, typename InnerBody, typename BoundaryBody, typename ObserverBody>
+				void processRange(const Base<full_dim>& base, const InnerBody& inner, const BoundaryBody& boundary, const ObserverBody& observer, Coordinate<full_dim>& pos, std::size_t t, const Coordinate<full_dim>& size, std::int64_t from, std::int64_t to) const {
 					constexpr const auto idx = full_dim - dim - 1;
 
 					// skip an empty range
@@ -389,7 +508,7 @@ namespace user {
 
 						// process left as a boundary
 						pos[idx] = 0;
-						nested(base,boundary,boundary,pos,t,size);
+						nested(base,boundary,boundary,observer,pos,t,size);
 
 						// skip this one from the inner part
 						innerFrom++;
@@ -402,13 +521,13 @@ namespace user {
 
 					// process inner part
 					for(pos[idx]=innerFrom; pos[idx]<innerTo; pos[idx]++) {
-						nested(base, inner, boundary, pos, t, size);
+						nested(base, inner, boundary, observer, pos, t, size);
 					}
 
 					// process right boundary (if necessary)
 					if (innerTo != to) {
 						pos[idx] = innerTo;
-						nested(base,boundary,boundary,pos,t,size);
+						nested(base,boundary,boundary,observer,pos,t,size);
 					}
 
 				}
@@ -418,8 +537,8 @@ namespace user {
 			template<>
 			struct plain_scanner<0> {
 
-				template<std::size_t full_dim, typename InnerBody, typename BoundaryBody>
-				void operator()(const Base<full_dim>& base, const InnerBody& inner, const BoundaryBody& boundary, Coordinate<full_dim>& pos, std::size_t t, const Coordinate<full_dim>& size) const {
+				template<std::size_t full_dim, typename InnerBody, typename BoundaryBody, typename ObserverBody>
+				void operator()(const Base<full_dim>& base, const InnerBody& inner, const BoundaryBody& boundary, const ObserverBody& observer, Coordinate<full_dim>& pos, std::size_t t, const Coordinate<full_dim>& size) const {
 					constexpr const auto idx = full_dim - 1;
 
 					// compute boundaries
@@ -435,17 +554,17 @@ namespace user {
 
 					// process range from start to limit
 					auto limit = std::min(to,length);
-					processRange(inner,boundary,pos,t,size,from,limit);
+					processRange(inner,boundary,observer,pos,t,size,from,limit);
 
 					// and if necessary the elements beyond, after a wrap-around
 					if (to <= length) return;
 
 					to -= length;
-					processRange(inner,boundary,pos,t,size,0,to);
+					processRange(inner,boundary,observer,pos,t,size,0,to);
 				}
 
-				template<std::size_t full_dim, typename InnerBody, typename BoundaryBody>
-				void processRange(const InnerBody& inner, const BoundaryBody& boundary, Coordinate<full_dim>& pos, std::size_t t, const Coordinate<full_dim>& size, std::int64_t from, std::int64_t to) const {
+				template<std::size_t full_dim, typename InnerBody, typename BoundaryBody, typename ObserverBody>
+				void processRange(const InnerBody& inner, const BoundaryBody& boundary, const ObserverBody& observer, Coordinate<full_dim>& pos, std::size_t t, const Coordinate<full_dim>& size, std::int64_t from, std::int64_t to) const {
 					constexpr const auto idx = full_dim - 1;
 
 					// skip an empty range
@@ -481,6 +600,19 @@ namespace user {
 						pos[idx] = innerTo;
 						boundary(pos,t);
 					}
+
+					// compute start/end for observers
+					auto fromCoordinates = pos;
+					fromCoordinates[idx] = from;
+
+					auto toCoordinates = pos;
+					for(std::size_t i=0; i<idx; i++) {
+						toCoordinates[i]++;
+					}
+					toCoordinates[idx] = to;
+
+					// run observer
+					observer(fromCoordinates,toCoordinates,t);
 
 				}
 
@@ -567,8 +699,8 @@ namespace user {
 					: base(base), slopes(slopes), t_begin(t_begin), t_end(t_end) {}
 
 
-				template<typename EvenOp, typename OddOp, typename EvenBoundaryOp, typename OddBoundaryOp>
-				void forEach(const EvenOp& even, const OddOp& odd, const EvenBoundaryOp& evenBoundary, const OddBoundaryOp& oddBoundary, const Size<dims>& limits) const {
+				template<typename EvenOp, typename OddOp, typename EvenBoundaryOp, typename OddBoundaryOp, typename EvenObserverOp, typename OddObserverOp>
+				void forEach(const EvenOp& even, const OddOp& odd, const EvenBoundaryOp& evenBoundary, const OddBoundaryOp& oddBoundary, const EvenObserverOp& evenObserver, const OddObserverOp& oddObserver, const Size<dims>& limits) const {
 
 					// TODO: make this one cache oblivious
 
@@ -583,9 +715,9 @@ namespace user {
 
 						// process this plain
 						if ( t & 0x1 ) {
-							scanner(plainBase, odd, oddBoundary, x, t, limits);
+							scanner(plainBase, odd, oddBoundary, oddObserver, x, t, limits);
 						} else {
-							scanner(plainBase, even, evenBoundary, x, t, limits);
+							scanner(plainBase, even, evenBoundary, evenObserver, x, t, limits);
 						}
 
 						// update the plain for the next level
@@ -597,8 +729,8 @@ namespace user {
 
 				}
 
-				template<typename EvenOd, typename OddOp, typename EvenBoundaryOp, typename OddBoundaryOp>
-				core::treeture<void> pforEach(const ZoidDependencies<dims>& deps, const EvenOd& even, const OddOp& odd, const EvenBoundaryOp& evenBoundary, const OddBoundaryOp& oddBoundary, const Size<dims>& limits) const {
+				template<typename EvenOd, typename OddOp, typename EvenBoundaryOp, typename OddBoundaryOp, typename EvenObserverOp, typename OddObserverOp>
+				core::treeture<void> pforEach(const ZoidDependencies<dims>& deps, const EvenOd& even, const OddOp& odd, const EvenBoundaryOp& evenBoundary, const OddBoundaryOp& oddBoundary, const EvenObserverOp& evenObserver, const OddObserverOp& oddObserver, const Size<dims>& limits) const {
 
 					struct Params {
 						Zoid zoid;
@@ -613,7 +745,7 @@ namespace user {
 						},
 						[&](const Params& params) {
 							// process final steps sequentially
-							params.zoid.forEach(even,odd,evenBoundary,oddBoundary,limits);
+							params.zoid.forEach(even,odd,evenBoundary,oddBoundary,evenObserver,oddObserver,limits);
 						},
 						core::pick(
 							[](const Params& params, const auto& rec) {
@@ -658,17 +790,17 @@ namespace user {
 							},
 							[&](const Params& params, const auto&) {
 								// provide sequential alternative
-								params.zoid.forEach(even,odd,evenBoundary,oddBoundary,limits);
+								params.zoid.forEach(even,odd,evenBoundary,oddBoundary,evenObserver,oddObserver,limits);
 							}
 						)
 					)(deps.toCoreDependencies(),Params{*this,deps});
 
 				}
 
-				template<typename EvenOd, typename OddOp, typename EvenBoundaryOp, typename OddBoundaryOp>
-				core::treeture<void> pforEach(const EvenOd& even, const OddOp& odd, const EvenBoundaryOp& evenBoundary, const OddBoundaryOp& oddBoundary, const Size<dims>& limits) const {
+				template<typename EvenOd, typename OddOp, typename EvenBoundaryOp, typename OddBoundaryOp, typename EvenObserverOp, typename OddObserverOp>
+				core::treeture<void> pforEach(const EvenOd& even, const OddOp& odd, const EvenBoundaryOp& evenBoundary, const OddBoundaryOp& oddBoundary, const EvenObserverOp& evenObserver, const OddObserverOp& oddObserver, const Size<dims>& limits) const {
 					// run the pforEach with no initial dependencies
-					return pforEach(ZoidDependencies<dims>(),even,odd,evenBoundary,oddBoundary,limits);
+					return pforEach(ZoidDependencies<dims>(),even,odd,evenBoundary,oddBoundary,evenObserver,oddObserver,limits);
 				}
 
 
@@ -930,8 +1062,8 @@ namespace user {
 
 			public:
 
-				template<typename EvenOp, typename OddOp, typename EvenBoundaryOp, typename OddBoundaryOp>
-				void runSequential(const EvenOp& even, const OddOp& odd, const EvenBoundaryOp& evenBoundary, const OddBoundaryOp& oddBoundary, const Size<Dims>& limits) const {
+				template<typename EvenOp, typename OddOp, typename EvenBoundaryOp, typename OddBoundaryOp, typename EvenObserver, typename OddObserver>
+				void runSequential(const EvenOp& even, const OddOp& odd, const EvenBoundaryOp& evenBoundary, const OddBoundaryOp& oddBoundary, const EvenObserver& evenObserver, const OddObserver& oddObserver, const Size<Dims>& limits) const {
 					const std::size_t num_tasks = 1 << Dims;
 
 					// fill a vector with the indices of the tasks
@@ -948,13 +1080,13 @@ namespace user {
 					// process zoids in obtained order
 					for(const auto& cur : layers) {
 						for(const auto& idx : order) {
-							cur[idx].forEach(even,odd,evenBoundary,oddBoundary,limits);
+							cur[idx].forEach(even,odd,evenBoundary,oddBoundary,evenObserver,oddObserver,limits);
 						}
 					}
 				}
 
-				template<typename EvenOp, typename OddOp, typename EvenBoundaryOp, typename OddBoundaryOp>
-				core::treeture<void> runParallel(const EvenOp& even, const OddOp& odd, const EvenBoundaryOp& evenBoundary, const OddBoundaryOp& oddBoundary, const Size<Dims>& limits) const {
+				template<typename EvenOp, typename OddOp, typename EvenBoundaryOp, typename OddBoundaryOp, typename EvenObserver, typename OddObserver>
+				core::treeture<void> runParallel(const EvenOp& even, const OddOp& odd, const EvenBoundaryOp& evenBoundary, const OddBoundaryOp& oddBoundary, const EvenObserver& evenObserver, const OddObserver& oddObserver, const Size<Dims>& limits) const {
 
 					const std::size_t num_tasks = 1 << Dims;
 
@@ -971,13 +1103,13 @@ namespace user {
 							if (idx == 0) {
 								// create first task
 								jobs[idx] = (last.isDone())
-										? cur[idx].pforEach(even,odd,evenBoundary,oddBoundary,limits)
-										: cur[idx].pforEach(ZoidDependencies<Dims>(last),even,odd,evenBoundary,oddBoundary,limits);
+										? cur[idx].pforEach(even,odd,evenBoundary,oddBoundary,evenObserver,oddObserver,limits)
+										: cur[idx].pforEach(ZoidDependencies<Dims>(last),even,odd,evenBoundary,oddBoundary,evenObserver,oddObserver,limits);
 								return;
 							}
 
 							// create this task with corresponding dependencies
-							jobs[idx] = cur[idx].pforEach(ZoidDependencies<Dims>(jobs[deps]...),even,odd,evenBoundary,oddBoundary,limits);
+							jobs[idx] = cur[idx].pforEach(ZoidDependencies<Dims>(jobs[deps]...),even,odd,evenBoundary,oddBoundary,evenObserver,oddObserver,limits);
 
 						});
 
@@ -1094,6 +1226,10 @@ namespace user {
 				using index_type = utils::Vector<detail::index_type,Dims>;
 			};
 
+			template<typename T, std::size_t ... Sizes>
+			struct container_info<data::StaticGrid<T,Sizes...>> : public container_info_base<sizeof...(Sizes)> {
+				using index_type = utils::Vector<detail::index_type,sizeof...(Sizes)>;
+			};
 
 			template<typename Container>
 			struct coordinate_converter {
@@ -1109,12 +1245,19 @@ namespace user {
 				}
 			};
 
+			template<typename T, std::size_t ... Sizes>
+			struct coordinate_converter<data::StaticGrid<T,Sizes...>> {
+				auto& operator()(const Coordinate<sizeof...(Sizes)>& pos) {
+					return pos;
+				}
+			};
+
 		}
 
 		struct sequential_recursive {
 
-			template<typename Container, typename InnerUpdate, typename BoundaryUpdate>
-			stencil_reference<sequential_recursive> process(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary) {
+			template<typename Container, typename InnerUpdate, typename BoundaryUpdate, typename ... Observers>
+			stencil_reference<sequential_recursive> process(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary, const Observers& ... observers) {
 
 				using namespace detail;
 
@@ -1156,11 +1299,51 @@ namespace user {
 					a[p] = boundary(t,p,b);
 				};
 
+				auto evenObserver = [&](const Coordinate<dims>& from, const Coordinate<dims>& to, time_t t){
+					// check observers
+					detail::staticForEach(
+						[&](const auto& observer){
+							// check whether this time step is of interest
+							if(!observer.isInterestedInTime(t)) return;
+							// walk through space
+							pfor(from,to,
+								[&](const Coordinate<dims>& i) {
+									coordinate_converter<Container> conv;
+									if (observer.isInterestedInLocation(i)) {
+										observer.trigger(t,i,b[conv(i)]);
+									}
+								}
+							);
+						},
+						observers...
+					);
+				};
+
+				auto oddObserver = [&](const Coordinate<dims>& from, const Coordinate<dims>& to, time_t t){
+					// check observers
+					detail::staticForEach(
+						[&](const auto& observer){
+							// check whether this time step is of interest
+							if(!observer.isInterestedInTime(t)) return;
+							// walk through space
+							pfor(from,to,
+								[&](const Coordinate<dims>& i) {
+									coordinate_converter<Container> conv;
+									if (observer.isInterestedInLocation(i)) {
+										observer.trigger(t,i,a[conv(i)]);
+									}
+								}
+							);
+						},
+						observers...
+					);
+				};
+
 				// get the execution plan
 				auto exec_plan = ExecutionPlan<dims>::create(base,steps);
 
 				// process the execution plan
-				exec_plan.runSequential(even,odd,evenBoundary,oddBoundary,size);
+				exec_plan.runSequential(even,odd,evenBoundary,oddBoundary,evenObserver,oddObserver,size);
 
 
 				// make sure the result is in the a copy
@@ -1176,8 +1359,8 @@ namespace user {
 
 		struct parallel_recursive {
 
-			template<typename Container, typename InnerUpdate, typename BoundaryUpdate>
-			stencil_reference<parallel_recursive> process(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary) {
+			template<typename Container, typename InnerUpdate, typename BoundaryUpdate, typename ... Observers>
+			stencil_reference<parallel_recursive> process(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary, const Observers& ... observers) {
 
 				using namespace detail;
 
@@ -1220,11 +1403,51 @@ namespace user {
 					a[p] = boundary(t,p,b);
 				};
 
+				auto evenObserver = [&](const Coordinate<dims>& from, const Coordinate<dims>& to, time_t t){
+					// check observers
+					detail::staticForEach(
+						[&](const auto& observer){
+							// check whether this time step is of interest
+							if(!observer.isInterestedInTime(t)) return;
+							// walk through space
+							pfor(from,to,
+								[&](const Coordinate<dims>& i) {
+									coordinate_converter<Container> conv;
+									if (observer.isInterestedInLocation(i)) {
+										observer.trigger(t,i,b[conv(i)]);
+									}
+								}
+							);
+						},
+						observers...
+					);
+				};
+
+				auto oddObserver = [&](const Coordinate<dims>& from, const Coordinate<dims>& to, time_t t){
+					// check observers
+					detail::staticForEach(
+						[&](const auto& observer){
+							// check whether this time step is of interest
+							if(!observer.isInterestedInTime(t)) return;
+							// walk through space
+							pfor(from,to,
+								[&](const Coordinate<dims>& i) {
+									coordinate_converter<Container> conv;
+									if (observer.isInterestedInLocation(i)) {
+										observer.trigger(t,i,a[conv(i)]);
+									}
+								}
+							);
+						},
+						observers...
+					);
+				};
+
 				// get the execution plan
 				auto exec_plan = ExecutionPlan<dims>::create(base,steps);
 
 				// process the execution plan
-				exec_plan.runParallel(even,odd,evenBoundary,oddBoundary,size).wait();
+				exec_plan.runParallel(even,odd,evenBoundary,oddBoundary,evenObserver,oddObserver,size).wait();
 
 				// make sure the result is in the a copy
 				if (steps % 2) {
