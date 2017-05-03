@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <type_traits>
 
 #include "allscale/utils/type_list.h"
@@ -72,11 +73,37 @@ namespace utils {
 			typedef type_list<T1,T2,T3,A...> argument_types;
 		};
 
+
+		template<typename Lambda>
+		struct call_operator_type {
+			using type = decltype(Lambda::operator());
+		};
+
+		template<typename Lambda>
+		std::enable_if_t<true,decltype(&Lambda::operator())> getCallOperator() {
+			return &Lambda::operator();
+		}
+
+		template<typename Lambda>
+		std::enable_if_t<true,decltype(&Lambda::template operator()<int>)> getCallOperator() {
+			return &Lambda::template operator()<int>;
+		}
+
+		template<typename Lambda>
+		std::enable_if_t<true,decltype(&Lambda::template operator()<int,int>)> getCallOperator() {
+			return &Lambda::template operator()<int,int>;
+		}
+
+		template<typename Lambda>
+		std::enable_if_t<true,decltype(&Lambda::template operator()<int,int,int>)> getCallOperator() {
+			return &Lambda::template operator()<int,int,int>;
+		}
+
 	} // end namespace detail
 
 
 	template <typename Lambda>
-	struct lambda_traits : public detail::lambda_traits_helper<decltype(&Lambda::operator())> { };
+	struct lambda_traits : public detail::lambda_traits_helper<decltype(detail::getCallOperator<Lambda>())> { };
 
 	template<typename R, typename ... P>
 	struct lambda_traits<R(P...)> : public detail::lambda_traits_helper<R(P...)> { };
