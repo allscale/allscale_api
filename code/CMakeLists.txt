@@ -29,3 +29,4 @@ include(nproc)
 # -- Project Modules
 add_subdirectory(api)
 add_subdirectory(utils)
+add_subdirectory(tutorials)
