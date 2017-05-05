@@ -4,8 +4,9 @@ add_custom_target(test_tutorials)
 file(GLOB tutorials RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/src src/*)
 foreach(tutorial ${tutorials})
 	add_custom_target(tutorials_${tutorial})
+	add_dependencies(tutorials tutorials_${tutorial})
 
-	file(GLOB_RECURSE tutorial_exes src/${tutorial}/*.cxx)
+	glob_executables(tutorial_exes src/${tutorial})
 	foreach(exe ${tutorial_exes})
 		add_module_executable(tutorials ${exe} NO_LIB EXCLUDE_FROM_ALL OUTPUT_TARGET_NAME exe_tgt)
 
