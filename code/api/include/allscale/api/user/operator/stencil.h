@@ -13,6 +13,7 @@
 #include "allscale/api/user/operator/internal/operation_reference.h"
 
 #include "allscale/utils/bitmanipulation.h"
+#include "allscale/utils/unused.h"
 #include "allscale/utils/vector.h"
 
 namespace allscale {
@@ -1300,43 +1301,45 @@ namespace user {
 				};
 
 				auto evenObserver = [&](const Coordinate<dims>& from, const Coordinate<dims>& to, time_t t){
-					// check observers
-					detail::staticForEach(
-						[&](const auto& observer){
-							// check whether this time step is of interest
-							if(!observer.isInterestedInTime(t)) return;
-							// walk through space
-							pfor(from,to,
-								[&](const Coordinate<dims>& i) {
-									coordinate_converter<Container> conv;
-									if (observer.isInterestedInLocation(i)) {
-										observer.trigger(t,i,b[conv(i)]);
-									}
+
+					// create a operation handling one observer
+					__unused auto handler = [&](const auto& observer){
+						// check whether this time step is of interest
+						if(!observer.isInterestedInTime(t)) return;
+						// walk through space
+						pfor(from,to,
+							[&](const Coordinate<dims>& i) {
+								coordinate_converter<Container> conv;
+								if (observer.isInterestedInLocation(i)) {
+									observer.trigger(t,i,b[conv(i)]);
 								}
-							);
-						},
-						observers...
-					);
+							}
+						);
+					};
+
+					// process all observers
+					__unused auto l = { 0,(handler(observers),0)... };
 				};
 
 				auto oddObserver = [&](const Coordinate<dims>& from, const Coordinate<dims>& to, time_t t){
-					// check observers
-					detail::staticForEach(
-						[&](const auto& observer){
-							// check whether this time step is of interest
-							if(!observer.isInterestedInTime(t)) return;
-							// walk through space
-							pfor(from,to,
-								[&](const Coordinate<dims>& i) {
-									coordinate_converter<Container> conv;
-									if (observer.isInterestedInLocation(i)) {
-										observer.trigger(t,i,a[conv(i)]);
-									}
+
+					// create a operation handling one observer
+					__unused auto handler = [&](const auto& observer){
+						// check whether this time step is of interest
+						if(!observer.isInterestedInTime(t)) return;
+						// walk through space
+						pfor(from,to,
+							[&](const Coordinate<dims>& i) {
+								coordinate_converter<Container> conv;
+								if (observer.isInterestedInLocation(i)) {
+									observer.trigger(t,i,a[conv(i)]);
 								}
-							);
-						},
-						observers...
-					);
+							}
+						);
+					};
+
+					// process all observers
+					__unused auto l = { 0,(handler(observers),0)... };
 				};
 
 				// get the execution plan
@@ -1404,43 +1407,45 @@ namespace user {
 				};
 
 				auto evenObserver = [&](const Coordinate<dims>& from, const Coordinate<dims>& to, time_t t){
-					// check observers
-					detail::staticForEach(
-						[&](const auto& observer){
-							// check whether this time step is of interest
-							if(!observer.isInterestedInTime(t)) return;
-							// walk through space
-							pfor(from,to,
-								[&](const Coordinate<dims>& i) {
-									coordinate_converter<Container> conv;
-									if (observer.isInterestedInLocation(i)) {
-										observer.trigger(t,i,b[conv(i)]);
-									}
+
+					// create a operation handling one observer
+					__unused auto handler = [&](const auto& observer){
+						// check whether this time step is of interest
+						if(!observer.isInterestedInTime(t)) return;
+						// walk through space
+						pfor(from,to,
+							[&](const Coordinate<dims>& i) {
+								coordinate_converter<Container> conv;
+								if (observer.isInterestedInLocation(i)) {
+									observer.trigger(t,i,b[conv(i)]);
 								}
-							);
-						},
-						observers...
-					);
+							}
+						);
+					};
+
+					// process all observers
+					__unused auto l = { 0,(handler(observers),0)... };
 				};
 
 				auto oddObserver = [&](const Coordinate<dims>& from, const Coordinate<dims>& to, time_t t){
-					// check observers
-					detail::staticForEach(
-						[&](const auto& observer){
-							// check whether this time step is of interest
-							if(!observer.isInterestedInTime(t)) return;
-							// walk through space
-							pfor(from,to,
-								[&](const Coordinate<dims>& i) {
-									coordinate_converter<Container> conv;
-									if (observer.isInterestedInLocation(i)) {
-										observer.trigger(t,i,a[conv(i)]);
-									}
+
+					// create a operation handling one observer
+					__unused auto handler = [&](const auto& observer){
+						// check whether this time step is of interest
+						if(!observer.isInterestedInTime(t)) return;
+						// walk through space
+						pfor(from,to,
+							[&](const Coordinate<dims>& i) {
+								coordinate_converter<Container> conv;
+								if (observer.isInterestedInLocation(i)) {
+									observer.trigger(t,i,a[conv(i)]);
 								}
-							);
-						},
-						observers...
-					);
+							}
+						);
+					};
+
+					// process all observers
+					__unused auto l = { 0,(handler(observers),0)... };
 				};
 
 				// get the execution plan
