@@ -91,7 +91,7 @@ namespace user {
 	};
 
 	template<
-		typename Impl = implementation::fine_grained_iterative, typename Container, typename InnerUpdate, typename BoundaryUpdate,
+		typename Impl, typename Container, typename InnerUpdate, typename BoundaryUpdate,
 		typename ... ObserverTimeFilters, typename ... ObserverLocationFilters, typename ... ObserverActions
 	>
 	std::enable_if_t<!is_observer<BoundaryUpdate>::value,stencil_reference<Impl>> stencil(
@@ -105,7 +105,7 @@ namespace user {
 	}
 
 	template<
-		typename Impl = implementation::fine_grained_iterative, typename Container, typename Update,
+		typename Impl, typename Container, typename Update,
 		typename ... ObserverTimeFilters, typename ... ObserverLocationFilters, typename ... ObserverActions
 	>
 	stencil_reference<Impl> stencil(Container& a, std::size_t steps, const Update& update,const Observer<ObserverTimeFilters,ObserverLocationFilters,ObserverActions>& ... observers) {
