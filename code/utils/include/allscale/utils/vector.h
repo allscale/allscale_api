@@ -39,7 +39,6 @@ namespace utils {
 
 		template<typename R>
 		Vector(const std::initializer_list<R>& values) {
-			assert_le(Dims, values.size()) << "Expected initializer list of size less or equal " << Dims << " but got " << values.size();
 			std::size_t pos = 0;
 			for(const auto& cur : values) { data[pos++] = cur; }
 		}
@@ -240,7 +239,6 @@ namespace utils {
 
 		template<typename R>
 		Vector(const std::initializer_list<R>& values) {
-			assert_le(3, values.size()) << "Expected initializer list of size less or equal 3 but got " << values.size();
 			std::size_t pos = 0;
 			for(const auto& cur : values) { (*this)[pos++] = cur; }
 		}
@@ -334,7 +332,6 @@ namespace utils {
 
 		template<typename R>
 		Vector(const std::initializer_list<R>& values) {
-			assert_le(2, values.size()) << "Expected initializer list of size less or equal 2 but got " << values.size();
 			std::size_t pos = 0;
 			for(const auto& cur : values) { (*this)[pos++] = cur; }
 		}
