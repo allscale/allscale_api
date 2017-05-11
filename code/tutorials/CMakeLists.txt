@@ -1,10 +1,23 @@
 add_custom_target(tutorials)
 add_custom_target(test_tutorials)
 
+if(MSVC)
+	set_target_properties(tutorials PROPERTIES FOLDER tutorials)
+	set_target_properties(test_tutorials PROPERTIES FOLDER tutorials/Tests)
+endif()
+
 file(GLOB tutorials RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/src src/*)
 foreach(tutorial ${tutorials})
 	add_custom_target(tutorials_${tutorial})
 	add_dependencies(tutorials tutorials_${tutorial})
+
+	add_custom_target(test_tutorials_${tutorial})
+	add_dependencies(test_tutorials test_tutorials_${tutorial})
+
+	if(MSVC)
+		set_target_properties(tutorials_${tutorial} PROPERTIES FOLDER tutorials)
+		set_target_properties(test_tutorials_${tutorial} PROPERTIES FOLDER tutorials/Tests)
+	endif()
 
 	glob_executables(tutorial_exes src/${tutorial})
 	foreach(exe ${tutorial_exes})
@@ -22,6 +35,10 @@ foreach(tutorial ${tutorials})
 		# setup as test
 		add_custom_target(${exe_tgt}_test COMMAND $<TARGET_FILE:${exe_tgt}>)
 		add_dependencies(${exe_tgt}_test ${exe_tgt})
-		add_dependencies(test_tutorials ${exe_tgt}_test)
+		add_dependencies(test_tutorials_${tutorial} ${exe_tgt}_test)
+
+		if(MSVC)
+			set_target_properties(${exe_tgt}_test PROPERTIES FOLDER tutorials/Tests)
+		endif()
 	endforeach(exe)
 endforeach(tutorial)
