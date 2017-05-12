@@ -344,7 +344,7 @@ namespace user {
 		}
 
 		// check the final state
-		pfor(Point{1,1},Point{N-1,N-1},[A](const Point& p){
+		pfor(Point{1,1},Point{N-1,N-1},[T,A](const Point& p){
 			EXPECT_EQ(T,(*A)[p.x][p.y]);
 		},one_on_one(ref));
 
@@ -531,7 +531,7 @@ namespace user {
 	    }
 
 	    // check the final state
-	    pfor(Point{1,1},Point{N-1,N-1},[A](const Point& p){
+	    pfor(Point{1,1},Point{N-1,N-1},[T,A](const Point& p){
 	    	EXPECT_EQ(T,(*A)[p.x][p.y]);
 	    },neighborhood_sync(ref));
 
