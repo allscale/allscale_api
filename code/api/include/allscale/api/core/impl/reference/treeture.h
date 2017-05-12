@@ -1245,6 +1245,9 @@ namespace reference {
 
 		void childDone(const TaskBase& child) {
 
+			// this task must not be done yet
+			assert_ne(state,State::Done);
+
 			// check whether it is the substitute
 			if (substitute == &child) {
 
@@ -1269,25 +1272,24 @@ namespace reference {
 			// process a split-child
 			LOG_TASKS( "Child " << child << " of " << *this << " done" );
 
-			// decrement active child count
-			unsigned old_child_count = alive_child_counter.fetch_sub(1);
-
-			// log alive counter
-			LOG_TASKS( "Child " << child << " of " << *this << " -- alive left: " << (old_child_count - 1) );
-
 			// if this is a sequential node, start next child
 			if (!parallel && &child == left) {
 
 				// continue with the right child
 				if (right->getState() != State::Done) {
 					right->start();
-					return;
 				} else {
 					// notify that the right child is also done
 					childDone(*right);
-					return;
 				}
+
 			}
+
+			// decrement active child count
+			unsigned old_child_count = alive_child_counter.fetch_sub(1);
+
+			// log alive counter
+			LOG_TASKS( "Child " << child << " of " << *this << " -- alive left: " << (old_child_count - 1) );
 
 			// check whether this was the last child
 			if (old_child_count != 1) return;
@@ -2784,11 +2786,11 @@ namespace reference {
 		// move to next state
 		setState(State::Blocked);
 
-		// if below this limit, split the task
-		if (isSplitable() && getDepth() < runtime::WorkerPool::getInstance().getInitialSplitDepthLimit()) {
+		// if below the initial split limit, split this task
+		if (!isOrphan() && isSplitable() && getDepth() < runtime::WorkerPool::getInstance().getInitialSplitDepthLimit()) {
 
-			// if splitting worked => we are done
-			if (split()) return;
+			// attempt to split this task
+			split();
 
 		}
 
@@ -2797,6 +2799,9 @@ namespace reference {
 	}
 
 	inline void TaskBase::dependencyDone() {
+
+		// keep a backup in case the object is destroyed asynchronously
+		auto substituteLocalCopy = substitute;
 
 		// decrease the number of active dependencies
 		int oldValue = num_active_dependencies.fetch_sub(1);
@@ -2825,7 +2830,7 @@ namespace reference {
 		assert_eq(1,newValue);
 
 		// handle substituted instances by ignoring the message
-		if (substituted) return;
+		if (substituteLocalCopy) return;
 
 		// make sure that at this point there is still a parent left
 		assert_eq(num_active_dependencies, 1);
