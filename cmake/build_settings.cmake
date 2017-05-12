@@ -4,6 +4,7 @@ option(BUILD_DOCS "Enable documentation" OFF)
 option(BUILD_COVERAGE "Enables code coverage report" OFF)
 option(USE_ASSERT "Enable assertions" ON)
 option(USE_VALGRIND "Allow Valgrind for unit tests" OFF)
+option(ENABLE_PROFILING "Enable AllScale profiling support" OFF)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -21,6 +22,10 @@ if(BUILD_COVERAGE AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 if(BUILD_COVERAGE AND NOT BUILD_TESTS)
 	message(FATAL_ERROR "Code coverage report requires -DBUILD_TESTS=ON")
+endif()
+
+if(ENABLE_PROFILING)
+	add_definitions(-DENABLE_PROFILING)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
