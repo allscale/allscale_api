@@ -228,6 +228,9 @@ namespace utils {
 
 		Vector(const T& e) : x(e), y(e), z(e) { }
 
+		template<typename R>
+		Vector(const R& x, const R& y, const R& z) : x(x), y(y), z(z) { }
+
 		Vector(const Vector&) = default;
 		Vector(Vector&&) = default;
 
@@ -236,12 +239,6 @@ namespace utils {
 
 		template<typename R>
 		Vector(const std::array<R,3>& other) : x(other[0]), y(other[1]), z(other[2]) {}
-
-		template<typename R>
-		Vector(const std::initializer_list<R>& values) {
-			std::size_t pos = 0;
-			for(const auto& cur : values) { (*this)[pos++] = cur; }
-		}
 
 		T& operator[](std::size_t i) {
 			return reinterpret_cast<std::array<T,3>&>(*this)[i];
@@ -321,6 +318,9 @@ namespace utils {
 
 		Vector(const T& e) : x(e), y(e) { }
 
+		template<typename R>
+		Vector(const R& x, const R& y) : x(x), y(y) { }
+
 		Vector(const Vector&) = default;
 		Vector(Vector&&) = default;
 
@@ -329,12 +329,6 @@ namespace utils {
 
 		template<typename R>
 		Vector(const std::array<R,2>& other) : x(other[0]), y(other[1]) {}
-
-		template<typename R>
-		Vector(const std::initializer_list<R>& values) {
-			std::size_t pos = 0;
-			for(const auto& cur : values) { (*this)[pos++] = cur; }
-		}
 
 		T& operator[](std::size_t i) {
 			return reinterpret_cast<std::array<T,2>&>(*this)[i];
