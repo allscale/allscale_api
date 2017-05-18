@@ -49,8 +49,8 @@ int main() {
 		},
 		// an observer
 		observer(
-			[](time_t t){ return (t % (T/10)) == 0; },
-			[](const Point& p){ return p.x == N/2 && p.y == N/2; },
+			[T](time_t t){ return (t % (T/10)) == 0; },
+			[N](const Point& p){ return p.x == N/2 && p.y == N/2; },
 			[](time_t t, const Point&, double value){
 				std::cout << "t=" << t << " - center: " << value << std::endl;
 			}

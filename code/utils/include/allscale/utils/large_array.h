@@ -471,7 +471,7 @@ namespace utils {
 
 			// compare active ranges
 			bool res = true;
-			active_ranges.forEach([&](int pos){
+			active_ranges.forEach([&](std::size_t pos){
 				res = res && (data[pos] == other.data[pos]);
 			});
 			return res;
