@@ -308,6 +308,48 @@ namespace user {
 		}
 	}
 
+	TEST(Pfor, SyncOneOnOne_2D) {
+
+		const int N = 50;
+		const int T = 10;
+
+		using Point = utils::Vector<int,2>;
+
+		Point size = {N,N};
+
+		std::array<std::array<int,N>,N> bufferA;
+		std::array<std::array<int,N>,N> bufferB;
+
+		auto* A = &bufferA;
+		auto* B = &bufferB;
+
+		// start with an initialization
+		auto ref = pfor(size,[A,B](const Point& p){
+			(*A)[p.x][p.y] = 0;
+			(*B)[p.x][p.y] = -1;
+		});
+
+		// run the time loop
+		for(int t=0; t<T; ++t) {
+			ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,N,t](const Point& p) {
+
+				EXPECT_EQ(t,(*A)[p.x][p.y]);
+				EXPECT_EQ(t-1,(*B)[p.x][p.y]);
+
+				(*B)[p.x][p.y]=t+1;
+
+			},one_on_one(ref));
+
+			std::swap(A,B);
+		}
+
+		// check the final state
+		pfor(Point{1,1},Point{N-1,N-1},[T,A](const Point& p){
+			EXPECT_EQ(T,(*A)[p.x][p.y]);
+		},one_on_one(ref));
+
+	}
+
 
 	TEST(Pfor, SyncNeighbor) {
 		const int N = 10000;
@@ -441,6 +483,61 @@ namespace user {
 		}
 	}
 
+
+	TEST(Pfor, SyncNeighbor_2D) {
+
+		const int N = 50;
+		const int T = 10;
+
+		using Point = utils::Vector<int,2>;
+
+		Point size = {N,N};
+
+		std::array<std::array<int,N>,N> bufferA;
+		std::array<std::array<int,N>,N> bufferB;
+
+		auto* A = &bufferA;
+		auto* B = &bufferB;
+
+		// start with an initialization
+		auto ref = pfor(size,[A,B](const Point& p){
+			(*A)[p.x][p.y] = 0;
+			(*B)[p.x][p.y] = -1;
+		});
+
+		// run the time loop
+	    for(int t=0; t<T; ++t) {
+	        ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,N,t](const Point& p) {
+
+	        	if (p.x != 1   && p.y != 1  )  EXPECT_EQ(t,(*A)[p.x-1][p.y-1]);
+	        	if (              p.y != 1  )  EXPECT_EQ(t,(*A)[p.x  ][p.y-1]);
+	        	if (p.x != N-2 && p.y != 1  )  EXPECT_EQ(t,(*A)[p.x+1][p.y-1]);
+
+	        	if (p.x != N-2 && p.y != 1  )  EXPECT_EQ(t,(*A)[p.x+1][p.y-1]);
+	        	if (p.x != N-2              )  EXPECT_EQ(t,(*A)[p.x+1][p.y  ]);
+	        	if (p.x != N-2 && p.y != N-2)  EXPECT_EQ(t,(*A)[p.x+1][p.y+1]);
+
+	        	if (p.y != 1  )  EXPECT_EQ(t,(*A)[p.x][p.y-1]);
+	        	if (p.y != N-2)  EXPECT_EQ(t,(*A)[p.x][p.y+1]);
+
+	        	EXPECT_EQ(t,(*A)[p.x][p.y]);
+	        	EXPECT_EQ(t-1,(*B)[p.x][p.y]);
+
+	        	(*B)[p.x][p.y]=t+1;
+
+	        },neighborhood_sync(ref));
+
+	        std::swap(A,B);
+	    }
+
+	    // check the final state
+	    pfor(Point{1,1},Point{N-1,N-1},[T,A](const Point& p){
+	    	EXPECT_EQ(T,(*A)[p.x][p.y]);
+	    },neighborhood_sync(ref));
+
+	}
+
+
 	// --- stencil variants --.
 
 	const int N = 10000;
@@ -517,6 +614,87 @@ namespace user {
 	    delete [] A;
 	    delete [] B;
 	}
+
+
+	TEST(Range,Covers) {
+
+		using range = detail::range<int>;
+
+		auto covers = [](const range& a, const range& b) {
+			return a.covers(b);
+		};
+		auto not_covers = [](const range& a, const range& b) {
+			return !a.covers(b);
+		};
+
+		// sub-ranges
+		EXPECT_PRED2(covers,range(2,5),range(2,2));
+		EXPECT_PRED2(covers,range(2,5),range(2,3));
+		EXPECT_PRED2(covers,range(2,5),range(2,4));
+		EXPECT_PRED2(covers,range(2,5),range(2,5));
+
+		EXPECT_PRED2(covers,range(2,5),range(2,5));
+		EXPECT_PRED2(covers,range(2,5),range(3,5));
+		EXPECT_PRED2(covers,range(2,5),range(4,5));
+		EXPECT_PRED2(covers,range(2,5),range(5,5));
+
+		// always cover empty ranges
+		EXPECT_PRED2(covers,range(2,5),range(1,1));
+		EXPECT_PRED2(covers,range(2,5),range(2,2));
+		EXPECT_PRED2(covers,range(2,5),range(6,6));
+
+		// negative cases
+		EXPECT_PRED2(not_covers,range(2,5),range(2,6));
+		EXPECT_PRED2(not_covers,range(2,5),range(1,2));
+		EXPECT_PRED2(not_covers,range(2,5),range(1,3));
+		EXPECT_PRED2(not_covers,range(2,5),range(3,6));
+		EXPECT_PRED2(not_covers,range(2,5),range(8,9));
+
+	}
+
+	TEST(Range,Covers_2D) {
+
+		using point = utils::Vector<int,2>;
+		using range = detail::range<point>;
+
+		auto covers = [](const range& a, const range& b) {
+			return a.covers(b);
+		};
+		auto not_covers = [](const range& a, const range& b) {
+			return !a.covers(b);
+		};
+
+		// equal range
+		EXPECT_PRED2(covers,range({2,3},{5,6}),range({2,3},{5,6}));
+
+		// sub-ranges
+		EXPECT_PRED2(covers,range({2,3},{5,6}),range({2,3},{4,5}));
+		EXPECT_PRED2(covers,range({2,3},{5,6}),range({2,3},{5,4}));
+
+		// empty ranges
+		EXPECT_PRED2(covers,range({2,3},{5,6}),range({2,3},{8,3}));
+		EXPECT_PRED2(covers,range({2,3},{5,6}),range({2,3},{2,9}));
+
+		EXPECT_PRED2(covers,range({2,3},{5,6}),range({1,3},{1,3}));
+		EXPECT_PRED2(covers,range({2,3},{5,6}),range({2,9},{2,9}));
+
+		// negative cases
+		EXPECT_PRED2(not_covers,range({2,3},{5,6}),range({4,5},{8,9}));
+
+		// once on each edge
+		EXPECT_PRED2(not_covers,range({2,5},{5,8}),range({1,6},{4,7}));
+		EXPECT_PRED2(not_covers,range({2,5},{5,8}),range({4,6},{6,7}));
+		EXPECT_PRED2(not_covers,range({2,5},{5,8}),range({3,4},{4,7}));
+		EXPECT_PRED2(not_covers,range({2,5},{5,8}),range({3,6},{6,9}));
+
+		// once over each corner
+		EXPECT_PRED2(not_covers,range({2,5},{5,8}),range({1,4},{4,7}));
+		EXPECT_PRED2(not_covers,range({2,5},{5,8}),range({3,4},{6,7}));
+		EXPECT_PRED2(not_covers,range({2,5},{5,8}),range({3,4},{6,7}));
+		EXPECT_PRED2(not_covers,range({2,5},{5,8}),range({3,6},{6,9}));
+
+	}
+
 
 	TEST(Range,GrowAndShrink) {
 
@@ -620,7 +798,7 @@ namespace user {
 			readFromFile.erase(val);
 		}
 		EXPECT_TRUE(readFromFile.empty());
-		
+
 		// nevermore
 		EXPECT_FALSE(in >> x);
 
@@ -973,6 +1151,107 @@ namespace user {
 	    // now all the steps should be done
 	    EXPECT_EQ(T+2,counter);
 
+	}
+
+	TEST(Pfor,OverlapTest_Barrier) {
+
+		const int N = 100;
+		const int T = 10;
+		const int dT = 1;
+
+		std::atomic<int> maxTime(0);
+		std::atomic<bool> overlapDetected(false);
+
+		for(int t=0; t<T; ++t) {
+			pfor(0,N,[&,t](int){
+
+				// check whether the current time is less than the encountered max
+				while(true) {
+					int curMaxTime = maxTime.load();
+					if (t < curMaxTime) {
+						overlapDetected = true;
+					}
+
+					if (maxTime.compare_exchange_strong(curMaxTime,std::max(curMaxTime,t))) break;
+				}
+
+				// introduce some delay
+				std::this_thread::sleep_for(std::chrono::milliseconds(dT));
+			});
+		}
+
+		// there should have been some overlap
+		EXPECT_FALSE(overlapDetected.load());
+	}
+
+	TEST(Pfor,OverlapTest_OneOnOne) {
+
+		const int N = 100;
+		const int T = 10;
+		const int dT = 1;
+
+		detail::loop_reference<int> ref;
+
+		std::atomic<int> maxTime(0);
+		std::atomic<bool> overlapDetected(false);
+
+		for(int t=0; t<T; ++t) {
+			ref = pfor(0,N,[&,t](int){
+
+				// check whether the current time is less than the encountered max
+				while(true) {
+					int curMaxTime = maxTime.load();
+					if (t < curMaxTime) {
+						overlapDetected = true;
+					}
+
+					if (maxTime.compare_exchange_strong(curMaxTime,std::max(curMaxTime,t))) break;
+				}
+
+				// introduce some delay
+				std::this_thread::sleep_for(std::chrono::milliseconds(dT));
+			},one_on_one(ref));
+		}
+
+		ref.wait();
+
+		// there should have been some overlap
+		EXPECT_TRUE(overlapDetected.load());
+	}
+
+	TEST(Pfor,OverlapTest_NeighborSync) {
+
+		const int N = 100;
+		const int T = 10;
+		const int dT = 1;
+
+		detail::loop_reference<int> ref;
+
+		std::atomic<int> maxTime(0);
+		std::atomic<bool> overlapDetected(false);
+
+		for(int t=0; t<T; ++t) {
+			ref = pfor(0,N,[&,t](int){
+
+				// check whether the current time is less than the encountered max
+				while(true) {
+					int curMaxTime = maxTime.load();
+					if (t < curMaxTime) {
+						overlapDetected = true;
+					}
+
+					if (maxTime.compare_exchange_strong(curMaxTime,std::max(curMaxTime,t))) break;
+				}
+
+				// introduce some delay
+				std::this_thread::sleep_for(std::chrono::milliseconds(dT));
+			},neighborhood_sync(ref));
+		}
+
+		ref.wait();
+
+		// there should have been some overlap
+		EXPECT_TRUE(overlapDetected.load());
 	}
 
 } // end namespace user

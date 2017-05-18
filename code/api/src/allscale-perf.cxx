@@ -239,7 +239,7 @@ std::vector<EventCounters> extractEventCounters(const std::vector<ProfileLog>& l
 	}
 
 	// initialize the event counter
-	auto res = std::vector<EventCounters>(num_timesteps - config.startTime);
+	auto res = std::vector<EventCounters>(num_timesteps);
 
 	// initialize time stamps
 	for(std::size_t i = 0; i < res.size(); ++i) {

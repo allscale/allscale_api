@@ -377,6 +377,20 @@ namespace user {
 			return b_begin >= b_end || (a_begin <= b_begin && b_end <= a_end);
 		}
 
+		template<typename Iter, size_t dims>
+		bool covers(const utils::Vector<Iter,dims>& a_begin, const utils::Vector<Iter,dims>& a_end, const utils::Vector<Iter,dims>& b_begin, const utils::Vector<Iter,dims>& b_end) {
+			// if the second is empty, it is covered
+			for(size_t i=0; i<dims; ++i) {
+				if (b_begin[i] >= b_end[i]) return true;
+			}
+			// check that a non-empty range is covered
+			for(size_t i=0; i<dims; ++i) {
+				if (!(a_begin[i] <= b_begin[i] && b_end[i] <= a_end[i])) return false;
+			}
+			return true;
+		}
+
+
 		template<typename Iter, typename Point>
 		bool covers(const Iter& begin, const Iter& end, const Point& p) {
 			return begin <= p && p < end;

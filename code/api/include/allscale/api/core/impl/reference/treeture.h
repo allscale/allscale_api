@@ -1,15 +1,16 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <atomic>
-#include <algorithm>
 #include <bitset>
 #include <cassert>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
-#include <type_traits>
 #include <random>
+#include <set>
+#include <type_traits>
 
 #ifdef __linux__
 	#include <pthread.h>
@@ -855,6 +856,9 @@ namespace reference {
 			  substituted(false) {
 
 			LOG_TASKS( "Created " << *this );
+
+			// register this task
+			if (MONITORING_ENABLED) registerTask(*this);
 		}
 
 		TaskBase(TaskBase* left, TaskBase* right, bool parallel)
@@ -876,12 +880,16 @@ namespace reference {
 			// fix the parent pointer
 			this->left->parent = this;
 			this->right->parent = this;
+
+			// register this task
+			if (MONITORING_ENABLED) registerTask(*this);
 		}
 
 	protected:
 
 		// make the destructor private, such that only this class can destroy itself
 		virtual ~TaskBase() {
+			if (MONITORING_ENABLED) unregisterTask(*this);
 			LOG_TASKS( "Destroying Task " << *this );
 			assert_true(isDone()) << getId() << " - " << getState();
 		};
@@ -918,6 +926,10 @@ namespace reference {
 
 
 		// -- mutators --
+
+		void addDependency(const task_reference& ref) {
+			addDependencies(&ref,&ref+1);
+		}
 
 		template<typename Iter>
 		void addDependencies(const Iter& begin, const Iter& end) {
@@ -1027,19 +1039,12 @@ namespace reference {
 					// process left first
 					if (lState != State::Done) {
 						left->start();
-						left->wait();
 					} else {
 						// notify that this child is done
 						childDone(*left);
 					}
 
-					// continue with the right child
-					if (rState != State::Done) {
-						right->start();
-					} else {
-						// notify that this child is done
-						childDone(*right);
-					}
+					// right child is started by childDone once left is finished
 
 					// done
 					return;
@@ -1240,6 +1245,9 @@ namespace reference {
 
 		void childDone(const TaskBase& child) {
 
+			// this task must not be done yet
+			assert_ne(state,State::Done);
+
 			// check whether it is the substitute
 			if (substitute == &child) {
 
@@ -1263,6 +1271,19 @@ namespace reference {
 
 			// process a split-child
 			LOG_TASKS( "Child " << child << " of " << *this << " done" );
+
+			// if this is a sequential node, start next child
+			if (!parallel && &child == left) {
+
+				// continue with the right child
+				if (right->getState() != State::Done) {
+					right->start();
+				} else {
+					// notify that the right child is also done
+					childDone(*right);
+				}
+
+			}
 
 			// decrement active child count
 			unsigned old_child_count = alive_child_counter.fetch_sub(1);
@@ -1362,11 +1383,14 @@ namespace reference {
 
 			// if split, print the task and its children
 			if (task.isSplit()) {
-				out << task.getId() << " : " << task.state << " = [";
+				out << task.getId() << " : " << task.state;
+				if (task.state == State::Done) return out;
+
+				out << " = " << (task.parallel ? "parallel" : "sequential") << " [";
 				if (task.left) out << *task.left; else out << "nil";
 				out << ",";
 				if (task.right) out << *task.right; else out << "nil";
-				out << "] ";
+				out << "]";
 				return out;
 			}
 
@@ -1383,7 +1407,7 @@ namespace reference {
 			numDependencies -= 1;
 
 			// print number of task dependencies
-			if (numDependencies > 0) {
+			if (task.state <= State::Blocked) {
 				out << " waiting for " << numDependencies << " task(s)";
 			}
 
@@ -1392,6 +1416,50 @@ namespace reference {
 
 		template<typename Process, typename Split, typename R>
 		friend class SplitableTask;
+
+		// --- debugging ---
+
+	private:
+
+		static std::mutex& getTaskRegisterLock() {
+			static std::mutex lock;
+			return lock;
+		}
+
+		static std::set<const TaskBase*>& getTaskRegister() {
+			static std::set<const TaskBase*> instances;
+			return instances;
+		}
+
+		static void registerTask(const TaskBase& task) {
+			std::lock_guard<std::mutex> g(getTaskRegisterLock());
+			getTaskRegister().insert(&task);
+		}
+
+		static void unregisterTask(const TaskBase& task) {
+			std::lock_guard<std::mutex> g(getTaskRegisterLock());
+			auto pos = getTaskRegister().find(&task);
+			assert_true(pos!=getTaskRegister().end());
+			getTaskRegister().erase(pos);
+		}
+
+	public:
+
+		static void dumpAllTasks(std::ostream& out) {
+			std::lock_guard<std::mutex> g(getTaskRegisterLock());
+
+			// check whether monitoring is enabled
+			if (!MONITORING_ENABLED) {
+				out << " -- task tracking disabled, enable by setting MONITORING_ENABLED to true --\n";
+				return;
+			}
+
+			// list active tasks
+			std::cout << "List of all tasks:\n";
+			for(const auto& cur : getTaskRegister()) {
+				std::cout << "\t" << *cur << "\n";
+			}
+		}
 
 	};
 
@@ -2615,9 +2683,7 @@ namespace reference {
 			queue.push_back(&task);
 
 			// signal available work
-			if (queue.size() > max_queue_length/2) {
-				pool.workAvailable();
-			}
+			pool.workAvailable();
 
 			// log new queue length
 			LOG_SCHEDULE( "Queue size after: " << queue.size() );
@@ -2720,11 +2786,22 @@ namespace reference {
 		// move to next state
 		setState(State::Blocked);
 
+		// if below the initial split limit, split this task
+		if (!isOrphan() && isSplitable() && getDepth() < runtime::WorkerPool::getInstance().getInitialSplitDepthLimit()) {
+
+			// attempt to split this task
+			split();
+
+		}
+
 		// release dummy-dependency to get task started
 		dependencyDone();
 	}
 
 	inline void TaskBase::dependencyDone() {
+
+		// keep a backup in case the object is destroyed asynchronously
+		auto substituteLocalCopy = substitute;
 
 		// decrease the number of active dependencies
 		int oldValue = num_active_dependencies.fetch_sub(1);
@@ -2753,7 +2830,7 @@ namespace reference {
 		assert_eq(1,newValue);
 
 		// handle substituted instances by ignoring the message
-		if (substituted) return;
+		if (substituteLocalCopy) return;
 
 		// make sure that at this point there is still a parent left
 		assert_eq(num_active_dependencies, 1);
@@ -2825,6 +2902,7 @@ inline void __dumpRuntimeState() {
 	std::cout << "\n ------------------------- Runtime State Dump -------------------------\n";
 	allscale::api::core::impl::reference::monitoring::ThreadState::dumpStates(std::cout);
 	allscale::api::core::impl::reference::runtime::WorkerPool::getInstance().dumpState(std::cout);
+	allscale::api::core::impl::reference::TaskBase::dumpAllTasks(std::cout);
 	std::cout << "\n ----------------------------------------------------------------------\n";
 }
 
