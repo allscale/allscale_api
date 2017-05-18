@@ -1579,7 +1579,7 @@ namespace data {
 		auto b = mb.create<Cell>();
 
 		// create the face in-between
-		auto f = mb.create<Face>();
+		const auto f = mb.create<Face>();
 
 		// create Boundary faces
 		auto bl = mb.create<BoundaryFace>();
@@ -1624,10 +1624,20 @@ namespace data {
 		EXPECT_EQ(1, (m.createNodeData<Face,double>().size()));
 		EXPECT_EQ(2, (m.createNodeData<BoundaryFace,double>().size()));
 
+		m.createNodeDataArray<Cell, double, 2, 0>();
+
+		std::vector<NodeRef<Cell, 0>> cells;
+		m.getPartitionTree().template getNodeRange<Cell, 0>().forAll([&](const auto& c) { cells.push_back(c);});
+		EXPECT_EQ(2, cells.size());
+
 		// check forAll and pforAll support
 		std::atomic<int> counter(0);
 		m.pforAll<Cell>([&](auto) { counter++; });
 		EXPECT_EQ(2,counter);
+
+		m.pforAll<Cell,0>([&](const auto& cell){
+			m.template getSources<Face2Cell>(cell);
+		});
 
 	}
 

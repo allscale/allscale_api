@@ -16,6 +16,7 @@
 #include "allscale/utils/serializer.h"
 #include "allscale/utils/static_map.h"
 #include "allscale/utils/table.h"
+#include "allscale/utils/array_utils.h"
 
 #include "allscale/utils/printer/vectors.h"
 
@@ -152,7 +153,7 @@ namespace data {
 	 * The MeshProperties container allows multiple properties to be managed
 	 * within a single, consistent entity.
 	 *
-	 * To create an instance, the factory function "createMeshProperties" of
+	 * To create an instance, the factory function "createProperties" of
 	 * the Mesh structure has to be utilized.
 	 */
 	template<unsigned Levels, typename PartitionTree, typename ... Properties>
@@ -2088,7 +2089,7 @@ namespace data {
 			}
 
 			template<typename Kind, unsigned Level = 0>
-			NodeRange<Kind,Level> getNodeRange(const SubTreeRef& ref) const {
+			NodeRange<Kind,Level> getNodeRange(const SubTreeRef& ref = SubTreeRef::root()) const {
 				assert_lt(ref.getIndex(),num_elements);
 				auto range = data[ref.getIndex()].data[Level].nodeRanges.template get<Kind>();
 				return {
@@ -2789,6 +2790,12 @@ namespace data {
 			return MeshData<NodeKind,T,Level,partition_tree_type>(partitionTree,detail::SubMeshRef::root());
 		}
 
+		template<typename NodeKind, typename T, unsigned N, unsigned Level = 0>
+		std::array<MeshData<NodeKind,T,Level,partition_tree_type>, N> createNodeDataArray() const {
+			return utils::build_array<N>([&] { return MeshData<NodeKind,T,Level,partition_tree_type>(partitionTree,detail::SubMeshRef::root()); } );
+		}
+
+
 		template<typename ... Properties>
 		MeshProperties<Levels,partition_tree_type,Properties...> createProperties() const {
 			return MeshProperties<Levels,partition_tree_type,Properties...>(*this);
@@ -3073,7 +3080,6 @@ namespace data {
 		};
 
 	}
-
 
 	template<unsigned Levels, typename PartitionTree, typename ... Properties>
 	class MeshProperties {
