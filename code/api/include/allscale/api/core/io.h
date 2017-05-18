@@ -406,7 +406,7 @@ namespace core {
 		 *
 		 *  NOTE: this method is not thread safe!
 		 *
-		 * @param name the name of the stream to be opened -- nothing happens if already opened
+		 * @param entry the name of the stream to be opened -- nothing happens if already opened
 		 */
 		InputStream openInputStream(Entry entry) {
 			return InputStream(impl.openInputStream(entry.entry));
@@ -418,7 +418,7 @@ namespace core {
 		 *
 		 *  NOTE: this method is not thread safe!
 		 *
-		 * @param name the name of the stream to be opened -- nothing happens if already opened
+		 * @param entry the name of the stream to be opened -- nothing happens if already opened
 		 */
 		OutputStream openOutputStream(Entry entry) {
 			return OutputStream(impl.openOutputStream(entry.entry));
@@ -453,7 +453,7 @@ namespace core {
 		 * The storage entry is maintained by the manager and the provided output stream
 		 * is only valid within the current thread.
 		 *
-		 * @param the name of the storage entry to be targeted -- must be open
+		 * @param entry the name of the storage entry to be targeted -- must be open
 		 * @return a stream to append data to
 		 */
 		InputStream getInputStream(Entry entry) {
@@ -465,7 +465,7 @@ namespace core {
 		 * The storage entry is maintained by the manager and the provided output stream
 		 * is only valid within the current thread.
 		 *
-		 * @param the name of the storage entry to be targeted -- must be open
+		 * @param entry the name of the storage entry to be targeted -- must be open
 		 * @return a stream to append data to
 		 */
 		OutputStream getOutputStream(Entry entry) {
@@ -477,7 +477,7 @@ namespace core {
 		 * The storage entry is maintained by the manager and the provided memory mapped
 		 * input is only valid within the current thread.
 		 *
-		 * @param the name of the storage entry to be targeted -- must be open
+		 * @param entry the name of the storage entry to be targeted -- must be open
 		 * @return a requested memory mapped input
 		 */
 		MemoryMappedInput getMemoryMappedInput(Entry entry) {
@@ -489,7 +489,7 @@ namespace core {
 		 * The storage entry is maintained by the manager and the provided memory mapped
 		 * output is only valid within the current thread.
 		 *
-		 * @param the name of the storage entry to be targeted -- must be open
+		 * @param entry the name of the storage entry to be targeted -- must be open
 		 * @return a requested memory mapped output
 		 */
 		MemoryMappedOutput getMemoryMappedOutput(Entry entry, std::size_t size) {
