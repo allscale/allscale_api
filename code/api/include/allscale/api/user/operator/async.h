@@ -2,9 +2,9 @@
 
 #include <utility>
 
-#include "allscale/api/core/prec.h"
-
 #include "allscale/utils/assert.h"
+
+#include "allscale/api/core/prec.h"
 
 namespace allscale {
 namespace api {

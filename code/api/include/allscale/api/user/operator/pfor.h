@@ -2,9 +2,10 @@
 
 #include <utility>
 
+#include "allscale/utils/assert.h"
+
 #include "allscale/api/core/prec.h"
 
-#include "allscale/utils/assert.h"
 #include "allscale/utils/vector.h"
 
 namespace allscale {
@@ -813,9 +814,8 @@ namespace user {
 				// split the longest dimension, keep the others as they are
 				auto midA = end;
 				auto midB = begin;
-				midA[maxDim] = midB[maxDim] = range_spliter<Iter>::split(
-						range<Iter>(begin[maxDim],end[maxDim])
-					).first.end();
+				auto temp = range_spliter<Iter>::split(range<Iter>(begin[maxDim],end[maxDim]));
+				midA[maxDim] = midB[maxDim] = temp.first.end();
 
 				// make sure no points got lost
 				assert_eq(volume(begin,end), volume(begin,midA) + volume(midB,end));
