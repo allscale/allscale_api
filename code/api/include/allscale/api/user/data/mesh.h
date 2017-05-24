@@ -166,7 +166,7 @@ namespace data {
 	// --------------------------------------------------------------------
 
 	// The type used for indexing nodes in meshes
-	using node_index_t = uint32_t;
+	using node_index_t = uint64_t;
 
 	// The type used for identifying nodes within meshes.
 	struct NodeID {
@@ -532,10 +532,10 @@ namespace data {
 					"For this implementation to be correct node references have to be simple node IDs."
 				);
 
-				utils::Table<uint32_t> forward_offsets;
+				utils::Table<uint64_t> forward_offsets;
 				utils::Table<NodeID> forward_targets;
 
-				utils::Table<uint32_t> backward_offsets;
+				utils::Table<uint64_t> backward_offsets;
 				utils::Table<NodeID> backward_targets;
 
 				std::vector<std::pair<NodeID,NodeID>> edges;
@@ -585,10 +585,10 @@ namespace data {
 					}
 
 					// init forward / backward vectors
-					forward_offsets = utils::Table<uint32_t>(maxSourceID + 2, 0);
+					forward_offsets = utils::Table<uint64_t>(maxSourceID + 2, 0);
 					forward_targets = utils::Table<NodeID>(edges.size());
 
-					backward_offsets = utils::Table<uint32_t>(maxTargetID + 2,0);
+					backward_offsets = utils::Table<uint64_t>(maxTargetID + 2,0);
 					backward_targets = utils::Table<NodeID>(edges.size());
 
 					// count number of sources / sinks
@@ -633,10 +633,10 @@ namespace data {
 					Relation res;
 
 					// restore edge data
-					res.forward_offsets = utils::Table<uint32_t>::load(in);
+					res.forward_offsets = utils::Table<uint64_t>::load(in);
 					res.forward_targets = utils::Table<NodeID>::load(in);
 
-					res.backward_offsets = utils::Table<uint32_t>::load(in);
+					res.backward_offsets = utils::Table<uint64_t>::load(in);
 					res.backward_targets = utils::Table<NodeID>::load(in);
 
 					// done
@@ -648,10 +648,10 @@ namespace data {
 					Relation res;
 
 					// restore edge data
-					res.forward_offsets = utils::Table<uint32_t>::interpret(buffer);
+					res.forward_offsets = utils::Table<uint64_t>::interpret(buffer);
 					res.forward_targets = utils::Table<NodeID>::interpret(buffer);
 
-					res.backward_offsets = utils::Table<uint32_t>::interpret(buffer);
+					res.backward_offsets = utils::Table<uint64_t>::interpret(buffer);
 					res.backward_targets = utils::Table<NodeID>::interpret(buffer);
 
 					// done
