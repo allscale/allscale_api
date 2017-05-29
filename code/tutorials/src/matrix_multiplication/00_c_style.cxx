@@ -1,6 +1,4 @@
-#include <iostream>
-
-#include <array>
+#include <cstdlib>
 
 const int N = 100;
 
@@ -37,7 +35,7 @@ bool equal(double** a, double** b) {
 	return true;
 }
 
-// computes the product of two matrixes
+// computes the product of two matrices
 double** mm(double** a, double** b) {
 	double** c = createMatrix();
 	for(int i=0; i<N; ++i) {
@@ -54,7 +52,7 @@ double** mm(double** a, double** b) {
 
 int main() {
 
-	// create two matrixes
+	// create two matrices
 	auto a = id();
 	auto b = id();
 
@@ -63,7 +61,7 @@ int main() {
 
 	auto res = equal(a,c);
 
-	// free matrixes
+	// free matrices
 	freeMatrix(a);
 	freeMatrix(b);
 	freeMatrix(c);

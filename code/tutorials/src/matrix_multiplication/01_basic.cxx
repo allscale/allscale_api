@@ -1,6 +1,5 @@
-#include <iostream>
-
 #include <array>
+#include <cstdlib>
 
 const int N = 100;
 
@@ -16,7 +15,7 @@ Matrix id() {
 	return res;
 }
 
-// computes the product of two matrixes
+// computes the product of two matrices
 Matrix operator*(const Matrix& a, const Matrix& b) {
 	Matrix c;
 	for(int i=0; i<N; ++i) {
@@ -33,7 +32,7 @@ Matrix operator*(const Matrix& a, const Matrix& b) {
 
 int main() {
 
-	// create two matrixes
+	// create two matrices
 	auto a = id();
 	auto b = id();
 

@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <iostream>
 
 #include "allscale/api/user/operator/pfor.h"
@@ -19,7 +20,7 @@ Matrix id() {
 	return res;
 }
 
-// computes the product of two matrixes
+// computes the product of two matrices
 Matrix operator*(const Matrix& a, const Matrix& b) {
 	Matrix c;
 	// in parallel, for each resulting element ...
@@ -37,7 +38,7 @@ Matrix operator*(const Matrix& a, const Matrix& b) {
 
 int main() {
 
-	// create two matrixes
+	// create two matrices
 	auto a = id();
 	auto b = id();
 

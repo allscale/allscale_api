@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <iostream>
 
 #include "allscale/api/user/data/static_grid.h"
@@ -18,7 +19,7 @@ Matrix id() {
 	return res;
 }
 
-// computes the product of two matrixes
+// computes the product of two matrices
 Matrix operator*(const Matrix& a, const Matrix& b) {
 	Matrix c;
 	for(int i=0; i<N; ++i) {
@@ -35,7 +36,7 @@ Matrix operator*(const Matrix& a, const Matrix& b) {
 
 int main() {
 
-	// create two matrixes
+	// create two matrices
 	auto a = id();
 	auto b = id();
 
