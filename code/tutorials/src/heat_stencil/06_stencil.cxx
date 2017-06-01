@@ -16,7 +16,7 @@ int main() {
 	const double k = 0.001;
 
 	using Grid = data::StaticGrid<double,N,N>;
-	using Point = allscale::utils::Vector<int,2>;
+	using Point = allscale::utils::Vector<std::size_t,2>;
 
 	Grid temp;
 
