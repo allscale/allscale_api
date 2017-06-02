@@ -251,6 +251,8 @@ namespace core {
 
 	}
 
+#ifndef _MSC_VER
+
 	TEST(IO, MemoryMappedFiles) {
 		static const size_t N = 1000u;
 
@@ -292,6 +294,8 @@ namespace core {
 		// delete file
 	//	mgr.remove(entry);
 	}
+
+#endif
 
 
 	TEST(DISABLED_IO, LargeFile) {

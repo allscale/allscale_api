@@ -120,8 +120,8 @@ namespace user {
 	TEST(Ops, MapReduce2D) {
 		const int N = 10;
 
-		std::array<int,2> start({{0,0}});
-		std::array<int,2> end({{N,N}});
+		std::array<int, 2> start{{0, 0}};
+		std::array<int, 2> end{{N, N}};
 
 		std::vector<int> data;
 		for(int i = 0; i<N; i++) {
@@ -146,8 +146,8 @@ namespace user {
 		const int Y = 5;
 		const int Z = 7;
 
-		std::array<int,3> start({{0,0,1}});
-		std::array<int,3> end({{X,Y,Z}});
+		std::array<int,3> start{{0,0,1}};
+		std::array<int,3> end{{X,Y,Z}};
 
 		int cnt = 0;
 
