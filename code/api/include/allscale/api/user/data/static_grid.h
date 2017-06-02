@@ -295,7 +295,7 @@ namespace data {
 		 */
 		template<typename Op>
 		auto pforEach(const Op& op) const {
-			return pfor(size(),op);
+			return pfor(coordinate_type(0), size(), [&](const auto& pos) { op((*this)[pos]); });
 		}
 
 		/**
@@ -304,7 +304,7 @@ namespace data {
 		 */
 		template<typename Op>
 		auto pforEach(const Op& op) {
-			return pfor(size(),op);
+			return pfor(coordinate_type(0), size(), [&](const auto& pos) { op((*this)[pos]); });
 		}
 
 	};
