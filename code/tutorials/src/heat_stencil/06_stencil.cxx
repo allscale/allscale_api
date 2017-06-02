@@ -10,7 +10,7 @@ using namespace allscale::api::user;
 
 int main() {
 
-	const int N = 200;
+	const std::size_t N = 200;
 	const int T = 100;
 
 	const double k = 0.001;

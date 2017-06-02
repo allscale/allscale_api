@@ -798,7 +798,7 @@ namespace data {
 		}
 
 		/**
-		 * A sequential scan over all elements within this grid, providing
+		 * A parallel scan over all elements within this grid, providing
 		 * read-only access.
 		 */
 		template<typename Op>
