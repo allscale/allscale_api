@@ -47,6 +47,44 @@ namespace user {
 
 	}
 
+	TEST(Ops, FindMaxAndAvg) {
+		const int N = 10;
+
+		struct Data {
+			int max;
+			int sum;
+			int num;
+		};
+
+		std::vector<int> data;
+		for(int i = 0; i<N; i++) {
+			data.push_back(i);
+		}
+
+		auto map = [](int i, Data& s) {
+			s.max = i;
+			s.sum = i;
+			s.num = 1;
+		};
+
+		auto reduce = [](Data a, Data b) {
+			return Data{
+				std::max(a.max, b.max),
+				a.sum + b.sum,
+				a.num + b.num};
+		};
+
+		auto init = []() { return Data(); };
+
+		auto res = preduce(data, map, reduce, init);
+
+		int max = res.max;
+		double avg = (double)res.sum / res.num;
+
+		EXPECT_EQ(N-1,max);
+		EXPECT_EQ((double)(N-1)/2, avg);
+
+	}
 
 	TEST(Ops, MapReduceDataFilter) {
 		const int N = 1000000;
