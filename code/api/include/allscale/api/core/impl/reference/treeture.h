@@ -2556,7 +2556,8 @@ namespace reference {
 				task.run();
 			} else {
 
-				logProfilerEvent(ProfileLogEntry::createTaskStartedEntry(task.getId()));
+				auto taskId = task.getId();
+				logProfilerEvent(ProfileLogEntry::createTaskStartedEntry(taskId));
 
 				// check whether this run needs to be sampled
 				auto level = task.getDepth();
@@ -2575,7 +2576,7 @@ namespace reference {
 
 				}
 
-				logProfilerEvent(ProfileLogEntry::createTaskEndedEntry(task.getId()));
+				logProfilerEvent(ProfileLogEntry::createTaskEndedEntry(taskId));
 
 			}
 
