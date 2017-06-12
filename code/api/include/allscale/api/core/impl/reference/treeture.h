@@ -319,7 +319,7 @@ namespace reference {
 		TaskDependencyManager& operator=(TaskDependencyManager&&) = delete;
 
 		std::size_t getEpoch() const {
-			return epoch.load(std::memory_order_relaxed);
+			return epoch.load();
 		}
 
 		void startEpoch(std::size_t newEpoch) {
@@ -1476,7 +1476,7 @@ namespace reference {
 		auto curEpoch = epoch.load();
 
 		// load the head
-		Entry* head = data[pos].load(std::memory_order_relaxed);
+		Entry* head = data[pos].load();
 
 		// check whether we are still in the same epoch
 		if (curEpoch != epoch.load()) {
@@ -1498,7 +1498,7 @@ namespace reference {
 		entry->next = head;
 
 		// update entry pointer lock-free
-		while (!data[pos].compare_exchange_weak(entry->next,entry, std::memory_order_relaxed, std::memory_order_relaxed)) {
+		while (!data[pos].compare_exchange_weak(entry->next,entry)) {
 
 			// check whether the task has been completed in the meanwhile
 			if (isDone(entry->next)) {
@@ -1522,7 +1522,7 @@ namespace reference {
 
 		// mark as complete and obtain head of depending list
 		auto pos = getPosition(task);
-		Entry* cur = data[pos].exchange((Entry*)0x1, std::memory_order_relaxed);
+		Entry* cur = data[pos].exchange((Entry*)0x1);
 
 		// do not process list twice (may be called multiple times due to substitutes)
 		if (isDone(cur)) return;
