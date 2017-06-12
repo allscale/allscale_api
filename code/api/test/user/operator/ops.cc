@@ -47,6 +47,44 @@ namespace user {
 
 	}
 
+	TEST(Ops, FindMaxAndAvg) {
+		const int N = 10;
+
+		struct Data {
+			int max;
+			int sum;
+			int num;
+		};
+
+		std::vector<int> data;
+		for(int i = 0; i<N; i++) {
+			data.push_back(i);
+		}
+
+		auto map = [](int i, Data& s) {
+			s.max = i;
+			s.sum = i;
+			s.num = 1;
+		};
+
+		auto reduce = [](Data a, Data b) {
+			return Data{
+				std::max(a.max, b.max),
+				a.sum + b.sum,
+				a.num + b.num};
+		};
+
+		auto init = []() { return Data(); };
+
+		auto res = preduce(data, map, reduce, init);
+
+		int max = res.max;
+		double avg = (double)res.sum / res.num;
+
+		EXPECT_EQ(N-1,max);
+		EXPECT_EQ((double)(N-1)/2, avg);
+
+	}
 
 	TEST(Ops, MapReduceDataFilter) {
 		const int N = 1000000;
@@ -120,8 +158,8 @@ namespace user {
 	TEST(Ops, MapReduce2D) {
 		const int N = 10;
 
-		std::array<int,2> start({{0,0}});
-		std::array<int,2> end({{N,N}});
+		std::array<int, 2> start{{0, 0}};
+		std::array<int, 2> end{{N, N}};
 
 		std::vector<int> data;
 		for(int i = 0; i<N; i++) {
@@ -146,8 +184,8 @@ namespace user {
 		const int Y = 5;
 		const int Z = 7;
 
-		std::array<int,3> start({{0,0,1}});
-		std::array<int,3> end({{X,Y,Z}});
+		std::array<int,3> start{{0,0,1}};
+		std::array<int,3> end{{X,Y,Z}};
 
 		int cnt = 0;
 

@@ -41,13 +41,19 @@ TEST(SaveToBinary, ArtificialVectorOfVectors) {
 	check(vecVec, loaded);
 	EXPECT_EQ(0, std::remove(filename.c_str()));
 
+#ifndef _MSC_VER
+
 	// memory mapped io
 	saveVecVecToFileMM<double>(vecVec, filename, outerSize, innerSize);
 	loaded = readVecVecFromFileMM<double>(filename, outerSize, innerSize);
 
 	check(vecVec, loaded);
 	EXPECT_EQ(0, std::remove(filename.c_str()));
+
+#endif
+
 }
+
 
 } // end namespace user
 } // end namespace api

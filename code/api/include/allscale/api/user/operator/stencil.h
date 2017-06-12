@@ -1308,7 +1308,7 @@ namespace user {
 						if(!observer.isInterestedInTime(t)) return;
 						// walk through space
 						pfor(from,to,
-							[&](const Coordinate<dims>& i) {
+							[&](const Coordinate<container_info<Container>::dimensions>& i) {
 								coordinate_converter<Container> conv;
 								if (observer.isInterestedInLocation(i)) {
 									observer.trigger(t,i,b[conv(i)]);
@@ -1329,7 +1329,7 @@ namespace user {
 						if(!observer.isInterestedInTime(t)) return;
 						// walk through space
 						pfor(from,to,
-							[&](const Coordinate<dims>& i) {
+							[&](const Coordinate<container_info<Container>::dimensions>& i) {
 								coordinate_converter<Container> conv;
 								if (observer.isInterestedInLocation(i)) {
 									observer.trigger(t,i,a[conv(i)]);
@@ -1414,7 +1414,7 @@ namespace user {
 						if(!observer.isInterestedInTime(t)) return;
 						// walk through space
 						pfor(from,to,
-							[&](const Coordinate<dims>& i) {
+							[&](const Coordinate<container_info<Container>::dimensions>& i) {
 								coordinate_converter<Container> conv;
 								if (observer.isInterestedInLocation(i)) {
 									observer.trigger(t,i,b[conv(i)]);
@@ -1435,7 +1435,7 @@ namespace user {
 						if(!observer.isInterestedInTime(t)) return;
 						// walk through space
 						pfor(from,to,
-							[&](const Coordinate<dims>& i) {
+							[&](const Coordinate<container_info<Container>::dimensions>& i) {
 								coordinate_converter<Container> conv;
 								if (observer.isInterestedInLocation(i)) {
 									observer.trigger(t,i,a[conv(i)]);
