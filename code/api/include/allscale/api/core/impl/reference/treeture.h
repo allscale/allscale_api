@@ -841,7 +841,7 @@ namespace reference {
 
 		// a flag to remember that this task got a substitute, even after the
 		// substitute got cut lose
-		bool substituted;
+		std::atomic<bool> substituted;
 
 	public:
 
@@ -2801,7 +2801,7 @@ namespace reference {
 	inline void TaskBase::dependencyDone() {
 
 		// keep a backup in case the object is destroyed asynchronously
-		auto substituteLocalCopy = substitute;
+		auto substitutedLocalCopy = substituted.load();
 
 		// decrease the number of active dependencies
 		int oldValue = num_active_dependencies.fetch_sub(1);
@@ -2830,7 +2830,7 @@ namespace reference {
 		assert_eq(1,newValue);
 
 		// handle substituted instances by ignoring the message
-		if (substituteLocalCopy) return;
+		if (substitutedLocalCopy || substituted) return;
 
 		// make sure that at this point there is still a parent left
 		assert_eq(num_active_dependencies, 1);
@@ -2840,7 +2840,7 @@ namespace reference {
 			<< "A new task must not reach a state where its last dependency is released.";
 
 		// actually, every task here must be in blocked state
-		assert_eq(State::Blocked, state);
+		assert_eq(State::Blocked, state) << *this << "\t" << substitutedLocalCopy << "\n";
 
 		// update the state to ready
 		// (this can only be reached by one thread)
