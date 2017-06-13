@@ -2556,7 +2556,7 @@ namespace reference {
 				task.run();
 			} else {
 
-				auto taskId = task.getId();
+				__unused auto taskId = task.getId();
 				logProfilerEvent(ProfileLogEntry::createTaskStartedEntry(taskId));
 
 				// check whether this run needs to be sampled
@@ -2664,18 +2664,6 @@ namespace reference {
 
 			// add task to queue
 			LOG_SCHEDULE( "Queue size before: " << queue.size() );
-
-			// if the queue is full, run task directly
-			//    NOTE: to avoid deadlocks due to invalid introduced dependencies
-			//          only non-split tasks may be processed directly
-			if (pool.getNumWorkers() == 1 || (queue.size() > max_queue_length && !task.isSplit())) {
-
-				// run task directly, avoiding to build up too long queues
-				runTask(task);
-
-				// done
-				return;
-			}
 
 			// no task that is substituted shall be scheduled
 			assert_false(task.isSubstituted());
