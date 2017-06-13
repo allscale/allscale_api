@@ -1157,13 +1157,12 @@ namespace user {
 
 		const int N = 100;
 		const int T = 10;
-		const int dT = 1;
 
 		std::atomic<int> maxTime(0);
 		std::atomic<bool> overlapDetected(false);
 
 		for(int t=0; t<T; ++t) {
-			pfor(0,N,[&,t](int){
+			pfor(0,N,[&,t](int i){
 
 				// check whether the current time is less than the encountered max
 				while(true) {
@@ -1175,8 +1174,8 @@ namespace user {
 					if (maxTime.compare_exchange_strong(curMaxTime,std::max(curMaxTime,t))) break;
 				}
 
-				// introduce some delay
-				std::this_thread::sleep_for(std::chrono::milliseconds(dT));
+				// introduce some unbalanced delay
+				std::this_thread::sleep_for(std::chrono::microseconds(i));
 			});
 		}
 
@@ -1188,7 +1187,6 @@ namespace user {
 
 		const int N = 100;
 		const int T = 10;
-		const int dT = 1;
 
 		detail::loop_reference<int> ref;
 
@@ -1196,7 +1194,7 @@ namespace user {
 		std::atomic<bool> overlapDetected(false);
 
 		for(int t=0; t<T; ++t) {
-			ref = pfor(0,N,[&,t](int){
+			ref = pfor(0,N,[&,t](int i){
 
 				// check whether the current time is less than the encountered max
 				while(true) {
@@ -1208,8 +1206,8 @@ namespace user {
 					if (maxTime.compare_exchange_strong(curMaxTime,std::max(curMaxTime,t))) break;
 				}
 
-				// introduce some delay
-				std::this_thread::sleep_for(std::chrono::milliseconds(dT));
+				// introduce some unbalanced delay
+				std::this_thread::sleep_for(std::chrono::microseconds(i));
 			},one_on_one(ref));
 		}
 
@@ -1223,7 +1221,6 @@ namespace user {
 
 		const int N = 100;
 		const int T = 10;
-		const int dT = 1;
 
 		detail::loop_reference<int> ref;
 
@@ -1231,7 +1228,7 @@ namespace user {
 		std::atomic<bool> overlapDetected(false);
 
 		for(int t=0; t<T; ++t) {
-			ref = pfor(0,N,[&,t](int){
+			ref = pfor(0,N,[&,t](int i){
 
 				// check whether the current time is less than the encountered max
 				while(true) {
@@ -1243,8 +1240,8 @@ namespace user {
 					if (maxTime.compare_exchange_strong(curMaxTime,std::max(curMaxTime,t))) break;
 				}
 
-				// introduce some delay
-				std::this_thread::sleep_for(std::chrono::milliseconds(dT));
+				// introduce some unbalanced delay
+				std::this_thread::sleep_for(std::chrono::microseconds(i));
 			},neighborhood_sync(ref));
 		}
 
