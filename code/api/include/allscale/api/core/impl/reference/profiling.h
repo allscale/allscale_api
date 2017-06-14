@@ -350,7 +350,8 @@ namespace reference {
 	inline std::string getLogFileNameForWorker(int id) {
 		// create the filename
 		char filename[17];
-		snprintf(filename,17,"profile_log.%04d", id);
+		assert_lt(id, 10000) << "Unexpectedly larger number of workers";
+		snprintf(filename, 17, "profile_log.%04d", ((unsigned)id)%10000);
 		return filename;
 	}
 

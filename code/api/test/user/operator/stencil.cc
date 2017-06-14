@@ -37,12 +37,12 @@ namespace user {
 			for(int& x : data) x = I;
 
 			// run the stencil
-			stencil<Impl>(data, T, [=](time_t time, std::size_t pos, const std::vector<int>& data){
+			stencil<Impl>(data, T, [=](time_t time, std::size_t pos, const std::vector<int>& data) {
 
 				// check that input arrays are up-to-date
-				if (pos > 0) EXPECT_EQ(I+time,data[pos-1]) << "Position: " << pos << " - 1 = " << (pos-1);
-				EXPECT_EQ(I+time,data[pos]) << "Position: " << pos;
-				if (pos < N-1) EXPECT_EQ(I+time,data[pos+1]) << "Position: " << pos << " + 1 = " << (pos+1);;
+				if(pos > 0) { EXPECT_EQ(I + time, data[pos - 1]) << "Position: " << pos << " - 1 = " << (pos - 1); }
+				EXPECT_EQ(I + time, data[pos]) << "Position: " << pos;
+				if(pos < N - 1) { EXPECT_EQ(I + time, data[pos + 1]) << "Position: " << pos << " + 1 = " << (pos + 1); }
 
 				// increase the time step of current cell
 				return data[pos] + 1;
@@ -300,9 +300,9 @@ namespace user {
 			stencil(data, T, [=](time_t time, std::size_t pos, const std::vector<int>& data){
 
 				// check that input arrays are up-to-date
-				if (pos > 0) EXPECT_EQ(time,data[pos-1]);
+				if(pos > 0) { EXPECT_EQ(time, data[pos - 1]); }
 				EXPECT_EQ(time,data[pos]);
-				if (pos < N-1) EXPECT_EQ(time,data[pos+1]);
+				if(pos < N - 1) { EXPECT_EQ(time, data[pos + 1]); }
 
 				// increase the time step of current cell
 				return data[pos] + 1;

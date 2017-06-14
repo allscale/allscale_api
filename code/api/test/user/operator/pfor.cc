@@ -295,9 +295,9 @@ namespace user {
 
 		// and a bigger one
 		auto Ds = pfor(0,N+20,[&](int i) {
-			if (i < N-2) EXPECT_EQ(2,data[i]) << "Index: " << i;
-			else if (i < N-1) EXPECT_EQ(1,data[i]) << "Index: " << i;
-			else if (i < N) EXPECT_EQ(0,data[i]) << "Index: " << i;
+			if(i < N - 2) { EXPECT_EQ(2, data[i]) << "Index: " << i; }
+			else if(i < N - 1) { EXPECT_EQ(1, data[i]) << "Index: " << i; }
+			else if(i < N) { EXPECT_EQ(0, data[i]) << "Index: " << i; }
 			data[i] = 3;
 		}, one_on_one(Cs));
 
@@ -509,16 +509,16 @@ namespace user {
 	    for(int t=0; t<T; ++t) {
 	        ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,N,t](const Point& p) {
 
-	        	if (p.x != 1   && p.y != 1  )  EXPECT_EQ(t,(*A)[p.x-1][p.y-1]);
-	        	if (              p.y != 1  )  EXPECT_EQ(t,(*A)[p.x  ][p.y-1]);
-	        	if (p.x != N-2 && p.y != 1  )  EXPECT_EQ(t,(*A)[p.x+1][p.y-1]);
+	        	if (p.x != 1   && p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x-1][p.y-1]); }
+	        	if (              p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x  ][p.y-1]); }
+	        	if (p.x != N-2 && p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x+1][p.y-1]); }
 
-	        	if (p.x != N-2 && p.y != 1  )  EXPECT_EQ(t,(*A)[p.x+1][p.y-1]);
-	        	if (p.x != N-2              )  EXPECT_EQ(t,(*A)[p.x+1][p.y  ]);
-	        	if (p.x != N-2 && p.y != N-2)  EXPECT_EQ(t,(*A)[p.x+1][p.y+1]);
+	        	if (p.x != N-2 && p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x+1][p.y-1]); }
+	        	if (p.x != N-2              )  { EXPECT_EQ(t,(*A)[p.x+1][p.y  ]); }
+	        	if (p.x != N-2 && p.y != N-2)  { EXPECT_EQ(t,(*A)[p.x+1][p.y+1]); }
 
-	        	if (p.y != 1  )  EXPECT_EQ(t,(*A)[p.x][p.y-1]);
-	        	if (p.y != N-2)  EXPECT_EQ(t,(*A)[p.x][p.y+1]);
+	        	if (p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x][p.y-1]); }
+	        	if (p.y != N-2)  { EXPECT_EQ(t,(*A)[p.x][p.y+1]); }
 
 	        	EXPECT_EQ(t,(*A)[p.x][p.y]);
 	        	EXPECT_EQ(t-1,(*B)[p.x][p.y]);
@@ -556,11 +556,11 @@ namespace user {
 
 		// run the time loop
 	    for(int t=0; t<T; ++t) {
-	        pfor(1,N-1,[A,B,t](int i) {
+			pfor(1, N - 1, [A, B, t](int i) {
 
-	        	if (i != 1)  EXPECT_EQ(t,A[i-1]);
-	        	EXPECT_EQ(t,A[i]);
-	        	if (i != N-2) EXPECT_EQ(t,A[i+1]);
+				if(i != 1) { EXPECT_EQ(t, A[i - 1]); }
+				EXPECT_EQ(t, A[i]);
+				if(i != N - 2) { EXPECT_EQ(t, A[i + 1]); }
 
 	        	EXPECT_EQ(t-1,B[i]);
 
@@ -594,9 +594,9 @@ namespace user {
 	    for(int t=0; t<T; ++t) {
 	        ref = pfor(1,N-1,[A,B,t](int i) {
 
-	        	if (i != 1)  EXPECT_EQ(t,A[i-1]);
+				if(i != 1) { EXPECT_EQ(t, A[i - 1]); }
 	        	EXPECT_EQ(t,A[i]);
-	        	if (i != N-2) EXPECT_EQ(t,A[i+1]);
+				if(i != N - 2) { EXPECT_EQ(t, A[i + 1]); }
 
 	        	EXPECT_EQ(t-1,B[i]);
 
@@ -1014,9 +1014,9 @@ namespace user {
 	    for(int t=0; t<T; ++t) {
 	        ref = pfor(1,N-1,[A,B,N,t](int i) {
 
-	        	if (i != 1)  EXPECT_EQ(t,A[i-1]);
+				if(i != 1) { EXPECT_EQ(t, A[i - 1]); }
 	        	EXPECT_EQ(t,A[i]);
-	        	if (i != N-2) EXPECT_EQ(t,A[i+1]);
+				if(i != N - 2) { EXPECT_EQ(t, A[i + 1]); }
 
 	        	EXPECT_EQ(t-1,B[i]);
 
@@ -1075,16 +1075,16 @@ namespace user {
 	    for(int t=0; t<T; ++t) {
 	        ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,N,t](const Point& p) {
 
-	        	if (p.x != 1   && p.y != 1  )  EXPECT_EQ(t,(*A)[p.x-1][p.y-1]);
-	        	if (              p.y != 1  )  EXPECT_EQ(t,(*A)[p.x  ][p.y-1]);
-	        	if (p.x != N-2 && p.y != 1  )  EXPECT_EQ(t,(*A)[p.x+1][p.y-1]);
+	        	if (p.x != 1   && p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x-1][p.y-1]); }
+	        	if (              p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x  ][p.y-1]); }
+	        	if (p.x != N-2 && p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x+1][p.y-1]); }
 
-	        	if (p.x != N-2 && p.y != 1  )  EXPECT_EQ(t,(*A)[p.x+1][p.y-1]);
-	        	if (p.x != N-2              )  EXPECT_EQ(t,(*A)[p.x+1][p.y  ]);
-	        	if (p.x != N-2 && p.y != N-2)  EXPECT_EQ(t,(*A)[p.x+1][p.y+1]);
+	        	if (p.x != N-2 && p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x+1][p.y-1]); }
+	        	if (p.x != N-2              )  { EXPECT_EQ(t,(*A)[p.x+1][p.y  ]); }
+	        	if (p.x != N-2 && p.y != N-2)  { EXPECT_EQ(t,(*A)[p.x+1][p.y+1]); }
 
-	        	if (p.y != 1  )  EXPECT_EQ(t,(*A)[p.x][p.y-1]);
-	        	if (p.y != N-2)  EXPECT_EQ(t,(*A)[p.x][p.y+1]);
+	        	if (p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x][p.y-1]); }
+	        	if (p.y != N-2)  { EXPECT_EQ(t,(*A)[p.x][p.y+1]); }
 
 	        	EXPECT_EQ(t,(*A)[p.x][p.y]);
 	        	EXPECT_EQ(t-1,(*B)[p.x][p.y]);

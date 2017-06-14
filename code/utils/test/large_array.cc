@@ -477,7 +477,7 @@ namespace utils {
 			hig -= step;
 
 			for(value_t j=low; j<hig; j+=stride) {
-				if (a[j] != j) EXPECT_TRUE(false) << "Error for j=" << j << "\n";
+				if(a[j] != j) { EXPECT_TRUE(false) << "Error for j=" << j << "\n"; }
 			}
 
 			// release old section
@@ -506,7 +506,7 @@ namespace utils {
 			hig += step;
 
 			for(int64_t j=hig; j>low; j-=stride) {
-				if (a[j-1] != (value_t)(j-1)) EXPECT_TRUE(false) << "Error for j=" << j << "\n";
+				if(a[j - 1] != (value_t)(j - 1)) { EXPECT_TRUE(false) << "Error for j=" << j << "\n"; }
 			}
 
 			// release old section
