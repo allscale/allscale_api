@@ -6,6 +6,7 @@
 namespace allscale {
 namespace api {
 namespace user {
+namespace data {
 
 	#include "data_item_test.inl"
 
@@ -144,7 +145,7 @@ namespace user {
 	}
 
 
-
+} // end namespace data
 } // end namespace user
 } // end namespace api
 } // end namespace allscale

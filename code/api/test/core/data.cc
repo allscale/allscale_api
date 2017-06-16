@@ -20,7 +20,7 @@ namespace core {
 		EXPECT_FALSE(is_region<std::string>::value);
 
 		// some positive test
-		EXPECT_TRUE(is_region<user::SetRegion<int>>::value);
+		EXPECT_TRUE(is_region<user::data::SetRegion<int>>::value);
 
 	}
 
@@ -30,10 +30,10 @@ namespace core {
 		// some negative tests
 		EXPECT_FALSE(is_fragment<int>::value);
 		EXPECT_FALSE(is_fragment<std::string>::value);
-		EXPECT_FALSE(is_fragment<user::SetRegion<int>>::value);
+		EXPECT_FALSE(is_fragment<user::data::SetRegion<int>>::value);
 
 		// some positive test
-		EXPECT_TRUE((is_fragment<user::MapFragment<int,int>>::value));
+		EXPECT_TRUE((is_fragment<user::data::MapFragment<int,int>>::value));
 	}
 
 	TEST(SharedData, IsSharedData) {

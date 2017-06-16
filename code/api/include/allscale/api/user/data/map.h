@@ -13,6 +13,7 @@
 namespace allscale {
 namespace api {
 namespace user {
+namespace data {
 
 	/**
 	 * This header file defines an example data item covering a generic map of key-value pairs.
@@ -323,6 +324,7 @@ namespace user {
 
 	};
 
+} // end namespace data
 } // end namespace user
 } // end namespace api
 } // end namespace allscale
