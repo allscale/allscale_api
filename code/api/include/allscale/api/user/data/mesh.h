@@ -237,6 +237,8 @@ namespace data {
 			assert_le(_begin.id,_end.id);
 		}
 
+		NodeRange() : _begin(), _end() {}
+
 		NodeRef<Kind,Level> getBegin() const {
 			return _begin;
 		}
