@@ -62,16 +62,17 @@ namespace user {
 		}
 
 		auto map = [](int i, Data& s) {
-			s.max = i;
-			s.sum = i;
-			s.num = 1;
+			s.max = std::max(s.max, i);
+			s.sum += i;
+			s.num += 1;
 		};
 
 		auto reduce = [](Data a, Data b) {
 			return Data{
 				std::max(a.max, b.max),
 				a.sum + b.sum,
-				a.num + b.num};
+				a.num + b.num
+			};
 		};
 
 		auto init = []() { return Data(); };

@@ -1524,6 +1524,38 @@ namespace data {
 		EXPECT_EQ(31,mask);
 	}
 
+	TEST(Mesh,Preduce) {
+
+		auto bar = createBarMesh<2,2>(5);
+
+		// check the first level
+		std::atomic<int> counter(0);
+		unsigned sum = bar.preduce<Vertex>(
+				[&](const auto& a, auto& b) {
+					counter++;
+					b += a.id;
+				},
+				[](unsigned a, unsigned b) {
+					return a + b;
+				}
+		);
+		EXPECT_EQ(10,counter);
+		EXPECT_EQ(45,sum);
+
+		// check the second level
+		counter.store(0);
+		unsigned res = bar.preduce<Vertex,1>(
+				[&](const auto& a, auto& b) {
+					counter++;
+					b |= (1<<a.id);
+				},
+				[](unsigned a, unsigned b) {
+					return a | b;
+				}
+		);
+		EXPECT_EQ(5,counter);
+		EXPECT_EQ(31,res);
+	}
 
 
 	TEST(Mesh,MeshDataDemo) {

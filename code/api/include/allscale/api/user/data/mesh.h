@@ -2783,6 +2783,79 @@ namespace data {
 			)(detail::SubTreeRef::root());
 		}
 
+		template<typename Kind,	unsigned Level = 0,
+				typename MapOp,
+				typename ReduceOp,
+				typename InitLocalState,
+				typename ReduceLocalState>
+		typename utils::lambda_traits<ReduceLocalState>::result_type preduce(
+				const MapOp& map,
+				const ReduceOp& reduce,
+				const InitLocalState& init,
+				const ReduceLocalState& exit) {
+			typedef typename utils::lambda_traits<ReduceLocalState>::result_type res_type;
+
+			using range = detail::SubTreeRef;
+
+			auto handle = [](const InitLocalState& init, const MapOp& map, const ReduceLocalState& exit, const range& a,
+					const partition_tree_type& partitionTree)->res_type {
+				auto res = init();
+				auto mapB = [map,&res](const auto& cur) {
+					return map(cur,res);
+				};
+				for(const auto& cur : partitionTree.template getNodeRange<Kind,Level>(a)) {
+					mapB(cur);
+				}
+				return exit(res);
+			};
+
+
+			// implements a binary splitting policy for iterating over the given iterator range
+			return  core::prec(
+				[](const range& a) {
+					return a.getDepth() == PartitionDepth;
+				},
+				[&](const range& a)->res_type {
+					return handle(init, map, exit, a, partitionTree);
+				},
+				core::pick(
+					[map,reduce](const range& a, const auto& nested) {
+						// here we have the splitting
+						auto left = a.getLeftChild();
+						auto right = a.getRightChild();
+
+//						return user::add(nested(left), nested(right));
+						return core::combine(std::move(nested(left)),std::move(nested(right)),reduce);
+					},
+					[&](const range& a, const auto&)->res_type {
+						return handle(init, map, exit, a, partitionTree);
+					}
+				)
+			)(detail::SubTreeRef::root()).get();
+		}
+
+		template<typename Kind,	unsigned Level = 0,
+				typename MapOp,
+				typename ReduceOp,
+				typename InitLocalState>
+		typename utils::lambda_traits<ReduceOp>::result_type preduce(
+				const MapOp& map,
+				const ReduceOp& reduce,
+				const InitLocalState& init) {
+			return preduce<Kind, Level>(map, reduce, init, [](typename utils::lambda_traits<ReduceOp>::result_type a) { return a; });
+		}
+
+		template<typename Kind,	unsigned Level = 0,
+				typename MapOp,
+				typename ReduceOp>
+		typename utils::lambda_traits<ReduceOp>::result_type preduce(
+				const MapOp& map,
+				const ReduceOp& reduce) {
+			typedef typename utils::lambda_traits<ReduceOp>::result_type res_type;
+
+			return preduce<Kind, Level>(map, reduce, [](){ return 0u; }, [](res_type a) { return a; });
+		}
+
 		// -- mesh data --
 
 		template<typename NodeKind, typename T, unsigned Level = 0>
