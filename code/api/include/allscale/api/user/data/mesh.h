@@ -2794,7 +2794,7 @@ namespace data {
 				const MapOp& map,
 				const ReduceOp& reduce,
 				const InitLocalState& init,
-				const ReduceLocalState& exit) {
+				const ReduceLocalState& exit) const {
 			typedef typename utils::lambda_traits<ReduceLocalState>::result_type res_type;
 
 			using range = detail::SubTreeRef;
@@ -2843,7 +2843,7 @@ namespace data {
 		typename utils::lambda_traits<ReduceOp>::result_type preduce(
 				const MapOp& map,
 				const ReduceOp& reduce,
-				const InitLocalState& init) {
+				const InitLocalState& init) const {
 			return preduce<Kind, Level>(map, reduce, init, [](typename utils::lambda_traits<ReduceOp>::result_type a) { return a; });
 		}
 
@@ -2852,10 +2852,10 @@ namespace data {
 				typename ReduceOp>
 		typename utils::lambda_traits<ReduceOp>::result_type preduce(
 				const MapOp& map,
-				const ReduceOp& reduce) {
+				const ReduceOp& reduce) const {
 			typedef typename utils::lambda_traits<ReduceOp>::result_type res_type;
 
-			return preduce<Kind, Level>(map, reduce, [](){ return 0u; }, [](res_type a) { return a; });
+			return preduce<Kind, Level>(map, reduce, [](){ return res_type(); }, [](res_type a) { return a; });
 		}
 
 		// -- mesh data --

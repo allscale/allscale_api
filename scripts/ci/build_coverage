@@ -1,0 +1,17 @@
+#!/bin/bash
+
+set -ex
+
+if [[ -z "${WORKSPACE+x}" ]]; then
+	cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+	source defaults.sh
+fi
+
+cd "$BUILD_DIR"
+
+cmake "$WORKSPACE/code" \
+	-DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+	-DCMAKE_CXX_FLAGS="-Werror" \
+	-DBUILD_COVERAGE=ON
+
+make -j "$NPROC"

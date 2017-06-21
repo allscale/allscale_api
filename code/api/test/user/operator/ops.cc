@@ -75,7 +75,7 @@ namespace user {
 			};
 		};
 
-		auto init = []() { return Data(); };
+		auto init = []() { return Data{0,0,0}; };
 
 		auto res = preduce(data, map, reduce, init);
 
