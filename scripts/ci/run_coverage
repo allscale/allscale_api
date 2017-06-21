@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -ex
+
+if [[ -z "${WORKSPACE+x}" ]]; then
+	cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+	source defaults.sh
+fi
+
+cd "$BUILD_DIR"
+
+# Adjust resource restriction.
+ulimit -t 14400
+
+make coverage ARGS="-j $NPROC"
