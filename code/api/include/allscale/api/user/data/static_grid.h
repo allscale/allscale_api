@@ -125,11 +125,11 @@ namespace data {
 			});
 		}
 
-		void save(utils::Archive& /*a*/, const region_type& /*keys*/) const {
+		void save(utils::ArchiveWriter& /*a*/, const region_type& /*keys*/) const {
 			assert_not_implemented();
 		}
 
-		void load(utils::Archive& /*a*/) {
+		void load(utils::ArchiveReader& /*a*/) {
 			assert_not_implemented();
 		}
 

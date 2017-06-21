@@ -79,7 +79,7 @@ namespace data {
 			/**
 			 * An operator to load an instance of this range from the given archive.
 			 */
-			static ScalarRegion load(utils::Archive&) {
+			static ScalarRegion load(utils::ArchiveReader&) {
 				assert_not_implemented();
 				return {};
 			}
@@ -87,7 +87,7 @@ namespace data {
 			/**
 			 * An operator to store an instance of this range into the given archive.
 			 */
-			void store(utils::Archive&) const {
+			void store(utils::ArchiveWriter&) const {
 				assert_not_implemented();
 				// nothing so far
 			}
@@ -137,11 +137,11 @@ namespace data {
 				value = f.value;
 			}
 
-			void save(utils::Archive&, const ScalarRegion&) const {
+			void save(utils::ArchiveWriter&, const ScalarRegion&) const {
 				assert_not_implemented();
 			}
 
-			void load(utils::Archive&) {
+			void load(utils::ArchiveReader&) {
 				assert_not_implemented();
 			}
 

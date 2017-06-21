@@ -173,11 +173,11 @@ namespace core {
 
 		// -- make it serializable --
 
-		static InputStream load(utils::Archive& a) {
+		static InputStream load(utils::ArchiveReader& a) {
 			return { RefInStream::load(a) };
 		}
 
-		void store(utils::Archive& a) const {
+		void store(utils::ArchiveWriter& a) const {
 			istream.store(a);
 		}
 	};
@@ -251,11 +251,11 @@ namespace core {
 
 		// -- make it serializable --
 
-		static OutputStream load(utils::Archive& a) {
+		static OutputStream load(utils::ArchiveReader& a) {
 			return { RefOutStream::load(a) };
 		}
 
-		void store(utils::Archive& a) const {
+		void store(utils::ArchiveWriter& a) const {
 			ostream.store(a);
 		}
 	};
@@ -311,11 +311,11 @@ namespace core {
 
 		// -- make it serializable --
 
-		static MemoryMappedInput load(utils::Archive& a) {
+		static MemoryMappedInput load(utils::ArchiveReader& a) {
 			return { Impl::load(a) };
 		}
 
-		void store(utils::Archive& a) const {
+		void store(utils::ArchiveWriter& a) const {
 			impl.store(a);
 		}
 	};
@@ -364,11 +364,11 @@ namespace core {
 
 		// -- make it serializable --
 
-		static MemoryMappedOutput load(utils::Archive& a) {
+		static MemoryMappedOutput load(utils::ArchiveReader& a) {
 			return { Impl::load(a) };
 		}
 
-		void store(utils::Archive& a) const {
+		void store(utils::ArchiveWriter& a) const {
 			impl.store(a);
 		}
 	};

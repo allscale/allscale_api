@@ -535,7 +535,7 @@ namespace data {
 		/**
 		 * An operator to load an instance of this range from the given archive.
 		 */
-		static GridRegion load(utils::Archive&) {
+		static GridRegion load(utils::ArchiveReader&) {
 			assert_not_implemented();
 			return GridRegion();
 		}
@@ -543,7 +543,7 @@ namespace data {
 		/**
 		 * An operator to store an instance of this range into the given archive.
 		 */
-		void store(utils::Archive&) const {
+		void store(utils::ArchiveWriter&) const {
 			assert_not_implemented();
 			// nothing so far
 		}

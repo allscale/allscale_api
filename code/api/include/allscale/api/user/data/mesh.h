@@ -1751,7 +1751,7 @@ namespace data {
 			/**
 			 * An operator to load an instance of this region from the given archive.
 			 */
-			static MeshRegion load(utils::Archive&) {
+			static MeshRegion load(utils::ArchiveReader&) {
 				assert_not_implemented();
 				return MeshRegion();
 			}
@@ -1759,7 +1759,7 @@ namespace data {
 			/**
 			 * An operator to store an instance of this region into the given archive.
 			 */
-			void store(utils::Archive&) const {
+			void store(utils::ArchiveWriter&) const {
 				assert_not_implemented();
 				// nothing so far
 			}

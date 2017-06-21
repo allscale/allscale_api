@@ -74,10 +74,10 @@ namespace core {
 		std::is_same<decltype((void (F::*)(const F&, const typename F::region_type&))(&F::insert)), void (F::*)(const F&, const typename F::region_type&)>::value &&
 
 		// there is a save operator
-		std::is_same<decltype((void (F::*)(utils::Archive&, const typename F::region_type&) const)(&F::save)), void (F::*)(utils::Archive&, const typename F::region_type&) const>::value &&
+		std::is_same<decltype((void (F::*)(utils::ArchiveWriter&, const typename F::region_type&) const)(&F::save)), void (F::*)(utils::ArchiveWriter&, const typename F::region_type&) const>::value &&
 
 		// there is a load operator
-		std::is_same<decltype((void (F::*)(utils::Archive&))(&F::load)), void (F::*)(utils::Archive&)>::value &&
+		std::is_same<decltype((void (F::*)(utils::ArchiveReader&))(&F::load)), void (F::*)(utils::ArchiveReader&)>::value &&
 
 		// can be concerted into a facade
 		std::is_same<decltype((typename F::facade_type (F::*)(void))(&F::mask)), typename F::facade_type(F::*)(void)>::value,

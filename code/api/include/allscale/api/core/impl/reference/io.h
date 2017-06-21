@@ -151,12 +151,12 @@ namespace reference {
 			return (bool)in.in;
 		}
 
-		static InputStream& load(utils::Archive&) {
+		static InputStream& load(utils::ArchiveReader&) {
 			assert_not_implemented();
 			exit(1); // prevent return warning
 		}
 
-		void store(utils::Archive&) const {
+		void store(utils::ArchiveWriter&) const {
 			assert_not_implemented();
 		}
 	};
@@ -223,12 +223,12 @@ namespace reference {
 			return (bool)out.out;
 		}
 
-		static OutputStream& load(utils::Archive&) {
+		static OutputStream& load(utils::ArchiveReader&) {
 			assert_not_implemented();
 			exit(1); // prevent return warning
 		}
 
-		void store(utils::Archive&) const {
+		void store(utils::ArchiveWriter&) const {
 			assert_not_implemented();
 		}
 	};
@@ -276,12 +276,12 @@ namespace reference {
 
 		// -- make it serializable --
 
-		static MemoryMappedInput load(utils::Archive&) {
+		static MemoryMappedInput load(utils::ArchiveReader&) {
 			assert_not_implemented();
 			exit(1); // prevent return warning
 		}
 
-		void store(utils::Archive&) const {
+		void store(utils::ArchiveWriter&) const {
 			assert_not_implemented();
 		}
 	};
@@ -303,12 +303,12 @@ namespace reference {
 
 		// -- make it serializable --
 
-		static MemoryMappedOutput load(utils::Archive&) {
+		static MemoryMappedOutput load(utils::ArchiveReader&) {
 			assert_not_implemented();
 			exit(1); // prevent return warning
 		}
 
-		void store(utils::Archive&) const {
+		void store(utils::ArchiveWriter&) const {
 			assert_not_implemented();
 		}
 	};
