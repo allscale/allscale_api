@@ -30,17 +30,14 @@ namespace data {
 
 		using namespace detail;
 
-		EXPECT_TRUE(utils::is_value<StaticGridRegion<0>>::value);
 		EXPECT_TRUE(utils::is_value<StaticGridRegion<1>>::value);
 		EXPECT_TRUE(utils::is_value<StaticGridRegion<2>>::value);
 		EXPECT_TRUE(utils::is_value<StaticGridRegion<3>>::value);
 
-		EXPECT_TRUE(utils::is_serializable<StaticGridRegion<0>>::value);
 		EXPECT_TRUE(utils::is_serializable<StaticGridRegion<1>>::value);
 		EXPECT_TRUE(utils::is_serializable<StaticGridRegion<2>>::value);
 		EXPECT_TRUE(utils::is_serializable<StaticGridRegion<3>>::value);
 
-		EXPECT_TRUE(core::is_region<StaticGridRegion<0>>::value);
 		EXPECT_TRUE(core::is_region<StaticGridRegion<1>>::value);
 		EXPECT_TRUE(core::is_region<StaticGridRegion<2>>::value);
 		EXPECT_TRUE(core::is_region<StaticGridRegion<3>>::value);
@@ -79,6 +76,128 @@ namespace data {
 		testFragment<StaticGridFragment<int,50,60>>(a,b);
 
 	}
+
+	TEST(StaticGridFragment1D,ExtractInsert) {
+
+		StaticGridPoint<1> size = 50;
+
+		StaticGridRegion<1> full(size,0,50);
+		StaticGridRegion<1> a(size,5,10);
+		StaticGridRegion<1> b(size,8,14);
+
+		StaticGridFragment<int,50> src(size);
+		StaticGridFragment<int,50> dst1(size);
+		StaticGridFragment<int,50> dst2(size);
+
+		EXPECT_TRUE(src.getCoveredRegion().empty());
+		EXPECT_TRUE(dst1.getCoveredRegion().empty());
+		EXPECT_TRUE(dst2.getCoveredRegion().empty());
+
+		// fix some sizes
+		src.resize(full);
+		dst1.resize(a);
+		dst2.resize(b);
+
+		EXPECT_EQ(src.getCoveredRegion(), full);
+		EXPECT_EQ(dst1.getCoveredRegion(), a);
+		EXPECT_EQ(dst2.getCoveredRegion(), b);
+
+		// fill in some data
+		auto dataSrc = src.mask();
+		full.scan([&](const GridPoint<1>& p){
+			src[p] = p[0];
+		});
+
+
+		// now, extract data
+		auto aa = extract(src,a);
+		auto ab = extract(src,b);
+
+		// insert data in destinations
+		insert(dst1,aa);
+		insert(dst2,ab);
+
+		// check the content
+		int count = 0;
+		a.scan([&](const GridPoint<1>& p){
+			EXPECT_EQ(dst1[p],p[0]) << "Position: " << p;
+			count++;
+		});
+		EXPECT_EQ(a.area(),count);
+
+		count = 0;
+		b.scan([&](const GridPoint<1>& p){
+			EXPECT_EQ(dst2[p],p[0]) << "Position: " << p;
+			count++;
+		});
+		EXPECT_EQ(b.area(),count);
+
+		// those insertions should fail, since area is not covered
+		EXPECT_DEBUG_DEATH(insert(dst1,ab),".*Targeted fragment does not cover data to be inserted!.*");
+		EXPECT_DEBUG_DEATH(insert(dst2,aa),".*Targeted fragment does not cover data to be inserted!.*");
+	}
+
+
+	TEST(StaticGridFragment2D,ExtractInsert) {
+
+		StaticGridPoint<2> size = {50,60};
+
+		StaticGridRegion<2> full(size,{0,0},{50,60});
+		StaticGridRegion<2> a(size,{5,6},{10,12});
+		StaticGridRegion<2> b(size,{8,9},{14,16});
+
+		StaticGridFragment<int,50,60> src(size);
+		StaticGridFragment<int,50,60> dst1(size);
+		StaticGridFragment<int,50,60> dst2(size);
+
+		EXPECT_TRUE(src.getCoveredRegion().empty());
+		EXPECT_TRUE(dst1.getCoveredRegion().empty());
+		EXPECT_TRUE(dst2.getCoveredRegion().empty());
+
+		// fix some sizes
+		src.resize(full);
+		dst1.resize(a);
+		dst2.resize(b);
+
+		EXPECT_EQ(src.getCoveredRegion(), full);
+		EXPECT_EQ(dst1.getCoveredRegion(), a);
+		EXPECT_EQ(dst2.getCoveredRegion(), b);
+
+		// fill in some data
+		auto dataSrc = src.mask();
+		full.scan([&](const GridPoint<2>& p){
+			src[p] = p[0] * p[1];
+		});
+
+
+		// now, extract data
+		auto aa = extract(src,a);
+		auto ab = extract(src,b);
+
+		// insert data in destinations
+		insert(dst1,aa);
+		insert(dst2,ab);
+
+		// check the content
+		int count = 0;
+		a.scan([&](const GridPoint<2>& p){
+			EXPECT_EQ(dst1[p],p[0]*p[1]) << "Position: " << p;
+			count++;
+		});
+		EXPECT_EQ(a.area(),count);
+
+		count = 0;
+		b.scan([&](const GridPoint<2>& p){
+			EXPECT_EQ(dst2[p],p[0]*p[1]) << "Position: " << p;
+			count++;
+		});
+		EXPECT_EQ(b.area(),count);
+
+		// those insertions should fail, since area is not covered
+		EXPECT_DEBUG_DEATH(insert(dst1,ab),".*Targeted fragment does not cover data to be inserted!.*");
+		EXPECT_DEBUG_DEATH(insert(dst2,aa),".*Targeted fragment does not cover data to be inserted!.*");
+	}
+
 
 
 	TEST(StaticGrid,TypeProperties) {

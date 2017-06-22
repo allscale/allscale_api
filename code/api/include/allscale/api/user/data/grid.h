@@ -187,7 +187,7 @@ namespace data {
 	template<std::size_t Dims>
 	class GridBox {
 
-		static_assert(Dims >= 1, "0-dimension Grids (=Skalars) not supported yet.");
+		static_assert(Dims >= 1, "0-dimension Grids (=Scalars) not yet supported.");
 
 		template<std::size_t I>
 		friend struct detail::difference_computer;
@@ -443,6 +443,14 @@ namespace data {
 			return regions.empty();
 		}
 
+		std::size_t area() const {
+			std::size_t res = 0;
+			for(const auto& cur : regions) {
+				res += cur.area();
+			}
+			return res;
+		}
+
 		static GridRegion merge(const GridRegion& a, const GridRegion& b) {
 
 			// if both sets are empty => done
@@ -544,6 +552,18 @@ namespace data {
 			for(const auto& cur : regions) {
 				cur.scanByLines(body);
 			}
+		}
+
+		/**
+		 * Scan the covered range, point by point.
+		 */
+		template<typename Lambda>
+		void scan(const Lambda& body) const {
+			scanByLines([&](point_type a, const point_type& b) {
+				for(; a[Dims-1]<b[Dims-1]; a[Dims-1]++) {
+					body(a);
+				}
+			});
 		}
 
 		/**
@@ -675,12 +695,34 @@ namespace data {
 			});
 		}
 
-		void extract(utils::ArchiveWriter& /*a*/, const region_type& /*keys*/) const {
-			assert_not_implemented();
+		void extract(utils::ArchiveWriter& writer, const region_type& region) const {
+
+			// make sure the region is covered
+			assert_pred2(core::isSubRegion, region, getCoveredRegion())
+				<< "This fragment does not contain all of the requested data!";
+
+			// write the requested region to the archive
+			writer.write(region);
+
+			// add the data
+			region.scan([&](const point& p){
+				writer.write((*this)[p]);
+			});
 		}
 
-		void insert(utils::ArchiveReader& /*a*/) {
-			assert_not_implemented();
+		void insert(utils::ArchiveReader& reader) {
+
+			// extract the covered region contained in the archive
+			auto region = reader.read<region_type>();
+
+			// check that it is fitting
+			assert_pred2(core::isSubRegion, region, getCoveredRegion())
+				<< "Targeted fragment does not cover data to be inserted!";
+
+			// insert the data
+			region.scan([&](const point& p){
+				(*this)[p] = reader.read<T>();
+			});
 		}
 
 	private:

@@ -125,12 +125,34 @@ namespace data {
 			});
 		}
 
-		void extract(utils::ArchiveWriter& /*a*/, const region_type& /*keys*/) const {
-			assert_not_implemented();
+		void extract(utils::ArchiveWriter& writer, const region_type& region) const {
+
+			// make sure the region is covered
+			assert_pred2(core::isSubRegion, region, getCoveredRegion())
+				<< "This fragment does not contain all of the requested data!";
+
+			// write the requested region to the archive
+			writer.write(region);
+
+			// add the data
+			region.scan([&](const point& p){
+				writer.write((*this)[p]);
+			});
 		}
 
-		void insert(utils::ArchiveReader& /*a*/) {
-			assert_not_implemented();
+		void insert(utils::ArchiveReader& reader) {
+
+			// extract the covered region contained in the archive
+			auto region = reader.read<region_type>();
+
+			// check that it is fitting
+			assert_pred2(core::isSubRegion, region, getCoveredRegion())
+				<< "Targeted fragment does not cover data to be inserted!";
+
+			// insert the data
+			region.scan([&](const point& p){
+				(*this)[p] = reader.read<T>();
+			});
 		}
 
 	private:

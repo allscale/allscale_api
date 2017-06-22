@@ -703,6 +703,127 @@ namespace data {
 	}
 
 
+	TEST(GridFragment1D,ExtractInsert) {
+
+		GridPoint<1> size = 50;
+
+		GridRegion<1> full(size,0,50);
+		GridRegion<1> a(size,5,10);
+		GridRegion<1> b(size,8,14);
+
+		GridFragment<int,1> src(size);
+		GridFragment<int,1> dst1(size);
+		GridFragment<int,1> dst2(size);
+
+		EXPECT_TRUE(src.getCoveredRegion().empty());
+		EXPECT_TRUE(dst1.getCoveredRegion().empty());
+		EXPECT_TRUE(dst2.getCoveredRegion().empty());
+
+		// fix some sizes
+		src.resize(full);
+		dst1.resize(a);
+		dst2.resize(b);
+
+		EXPECT_EQ(src.getCoveredRegion(), full);
+		EXPECT_EQ(dst1.getCoveredRegion(), a);
+		EXPECT_EQ(dst2.getCoveredRegion(), b);
+
+		// fill in some data
+		auto dataSrc = src.mask();
+		full.scan([&](const GridPoint<1>& p){
+			src[p] = p[0];
+		});
+
+
+		// now, extract data
+		auto aa = extract(src,a);
+		auto ab = extract(src,b);
+
+		// insert data in destinations
+		insert(dst1,aa);
+		insert(dst2,ab);
+
+		// check the content
+		int count = 0;
+		a.scan([&](const GridPoint<1>& p){
+			EXPECT_EQ(dst1[p],p[0]) << "Position: " << p;
+			count++;
+		});
+		EXPECT_EQ(a.area(),count);
+
+		count = 0;
+		b.scan([&](const GridPoint<1>& p){
+			EXPECT_EQ(dst2[p],p[0]) << "Position: " << p;
+			count++;
+		});
+		EXPECT_EQ(b.area(),count);
+
+		// those insertions should fail, since area is not covered
+		EXPECT_DEBUG_DEATH(insert(dst1,ab),".*Targeted fragment does not cover data to be inserted!.*");
+		EXPECT_DEBUG_DEATH(insert(dst2,aa),".*Targeted fragment does not cover data to be inserted!.*");
+	}
+
+
+	TEST(GridFragment2D,ExtractInsert) {
+
+		GridPoint<2> size = {50,60};
+
+		GridRegion<2> full(size,{0,0},{50,60});
+		GridRegion<2> a(size,{5,6},{10,12});
+		GridRegion<2> b(size,{8,9},{14,16});
+
+		GridFragment<int,2> src(size);
+		GridFragment<int,2> dst1(size);
+		GridFragment<int,2> dst2(size);
+
+		EXPECT_TRUE(src.getCoveredRegion().empty());
+		EXPECT_TRUE(dst1.getCoveredRegion().empty());
+		EXPECT_TRUE(dst2.getCoveredRegion().empty());
+
+		// fix some sizes
+		src.resize(full);
+		dst1.resize(a);
+		dst2.resize(b);
+
+		EXPECT_EQ(src.getCoveredRegion(), full);
+		EXPECT_EQ(dst1.getCoveredRegion(), a);
+		EXPECT_EQ(dst2.getCoveredRegion(), b);
+
+		// fill in some data
+		auto dataSrc = src.mask();
+		full.scan([&](const GridPoint<2>& p){
+			src[p] = p[0] * p[1];
+		});
+
+
+		// now, extract data
+		auto aa = extract(src,a);
+		auto ab = extract(src,b);
+
+		// insert data in destinations
+		insert(dst1,aa);
+		insert(dst2,ab);
+
+		// check the content
+		int count = 0;
+		a.scan([&](const GridPoint<2>& p){
+			EXPECT_EQ(dst1[p],p[0]*p[1]) << "Position: " << p;
+			count++;
+		});
+		EXPECT_EQ(a.area(),count);
+
+		count = 0;
+		b.scan([&](const GridPoint<2>& p){
+			EXPECT_EQ(dst2[p],p[0]*p[1]) << "Position: " << p;
+			count++;
+		});
+		EXPECT_EQ(b.area(),count);
+
+		// those insertions should fail, since area is not covered
+		EXPECT_DEBUG_DEATH(insert(dst1,ab),".*Targeted fragment does not cover data to be inserted!.*");
+		EXPECT_DEBUG_DEATH(insert(dst2,aa),".*Targeted fragment does not cover data to be inserted!.*");
+	}
+
 	TEST(Grid,TypeProperties) {
 
 		EXPECT_TRUE((core::is_data_item<Grid<int,1>>::value));
