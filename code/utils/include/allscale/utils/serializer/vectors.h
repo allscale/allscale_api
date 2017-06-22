@@ -47,21 +47,11 @@ namespace utils {
 
 
 	/**
-	 * Add support for serializing / de-serializing Vector instances
+	 * Add support for serializing / de-serializing Vector instances.
+	 * The implementation is simply re-using the serializing capabilities of arrays.
 	 */
 	template<typename T, std::size_t Dims>
-	struct serializer<Vector<T,Dims>,typename std::enable_if<is_serializable<T>::value,void>::type> {
-
-		static Vector<T,Dims> load(ArchiveReader& reader) {
-			// we reuse the array load
-			return serializer<std::array<T,Dims>>::load(reader);
-		}
-
-		static void store(ArchiveWriter& writer, const Vector<T,Dims>& value) {
-			// we reuse the array store
-			serializer<std::array<T,Dims>>::store(writer,value);
-		}
-	};
+	struct serializer<Vector<T,Dims>,typename std::enable_if<is_serializable<T>::value,void>::type> : public serializer<std::array<T,Dims>> {};
 
 } // end namespace utils
 } // end namespace allscale
