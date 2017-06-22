@@ -2,11 +2,14 @@
 
 #include <vector>
 
+#include "allscale/utils/vector.h"
+#include "allscale/utils/serializer/arrays.h"
+
 namespace allscale {
 namespace utils {
 
 	/**
-	 * Add support for serializing / de-serializing vectors.
+	 * Add support for serializing / de-serializing std::vectors.
 	 */
 	template<typename T, typename Allocator>
 	struct serializer<std::vector<T,Allocator>,typename std::enable_if<is_serializable<T>::value,void>::type> {
@@ -39,6 +42,24 @@ namespace utils {
 			for(const auto& cur : value) {
 				writer.write(cur);
 			}
+		}
+	};
+
+
+	/**
+	 * Add support for serializing / de-serializing Vector instances
+	 */
+	template<typename T, std::size_t Dims>
+	struct serializer<Vector<T,Dims>,typename std::enable_if<is_serializable<T>::value,void>::type> {
+
+		static Vector<T,Dims> load(ArchiveReader& reader) {
+			// we reuse the array load
+			return serializer<std::array<T,Dims>>::load(reader);
+		}
+
+		static void store(ArchiveWriter& writer, const Vector<T,Dims>& value) {
+			// we reuse the array store
+			serializer<std::array<T,Dims>>::store(writer,value);
 		}
 	};
 
