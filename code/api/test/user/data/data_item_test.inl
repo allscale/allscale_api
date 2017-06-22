@@ -135,3 +135,17 @@ void testFragment(const typename Fragment::region_type& a, const typename Fragme
 	
 	auto facada = fA.mask();
 }
+
+template<typename Fragment, typename Region>
+utils::Archive extract(const Fragment& fragment, const Region& region) {
+	utils::ArchiveWriter writer;
+	fragment.extract(writer,region);
+	return std::move(writer).toArchive();
+}
+
+template<typename Fragment>
+void insert(Fragment& fragment, const utils::Archive& archive) {
+	utils::ArchiveReader reader(archive);
+	fragment.insert(reader);
+}
+

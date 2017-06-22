@@ -79,17 +79,15 @@ namespace data {
 			/**
 			 * An operator to load an instance of this range from the given archive.
 			 */
-			static ScalarRegion load(utils::ArchiveReader&) {
-				assert_not_implemented();
-				return {};
+			static ScalarRegion load(utils::ArchiveReader& reader) {
+				return reader.read<bool>();
 			}
 
 			/**
 			 * An operator to store an instance of this range into the given archive.
 			 */
-			void store(utils::ArchiveWriter&) const {
-				assert_not_implemented();
-				// nothing so far
+			void store(utils::ArchiveWriter& writer) const {
+				writer.write(flag);
 			}
 
 			friend std::ostream& operator<<(std::ostream& out, const ScalarRegion& region) {
@@ -137,12 +135,35 @@ namespace data {
 				value = f.value;
 			}
 
-			void save(utils::ArchiveWriter&, const ScalarRegion&) const {
-				assert_not_implemented();
+			void extract(utils::ArchiveWriter& writer, const ScalarRegion& region) const {
+				// make sure the requested region is covered by this fragment
+				assert_pred2(core::isSubRegion, region, getCoveredRegion())
+					<< "The requested region is not covered by this fragment.";
+
+				// start by adding the extracted region
+				writer.write(region);
+
+				// if the requested region is empty, we are done
+				if (region.empty()) return;
+
+				// otherwise we extract the data stored in this fragment
+				writer.write(value);
 			}
 
-			void load(utils::ArchiveReader&) {
-				assert_not_implemented();
+			void insert(utils::ArchiveReader& reader) {
+
+				// start by reading the encoded region
+				auto region = reader.read<ScalarRegion>();
+
+				// make sure the inserted region is covered by this fragment (size is not changing)
+				assert_pred2(core::isSubRegion, region, getCoveredRegion())
+					<< "The region to be imported is not covered by this fragment!";
+
+				// if the imported data is empty, we are done
+				if (region.empty()) return;
+
+				// otherwise we load the data from the archive
+				value = reader.read<T>();
 			}
 
 			Scalar<T> mask() {

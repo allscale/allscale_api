@@ -23,11 +23,85 @@ namespace data {
 
 	}
 
+	TEST(ScalarRegion, LoadStore) {
+
+		using namespace detail;
+
+		// create the two region values
+		ScalarRegion off = false;
+		ScalarRegion on = true;
+
+		EXPECT_NE(on,off);
+
+		auto a1 = utils::serialize(off);
+		auto a2 = utils::serialize(on);
+
+		// restore values
+		auto off2 = utils::deserialize<ScalarRegion>(a1);
+		auto on2 = utils::deserialize<ScalarRegion>(a2);
+
+		EXPECT_EQ(off,off2);
+		EXPECT_EQ(on,on2);
+
+	}
+
 	TEST(ScalarFragment,TypeProperties) {
 
 		using namespace detail;
 
 		EXPECT_TRUE(core::is_fragment<ScalarFragment<int>>::value);
+
+	}
+
+	TEST(ScalarFragment, ExtractInsertTest) {
+
+		using namespace detail;
+
+		core::no_shared_data noSharedData;
+
+		// get the two scalar region constants
+		ScalarRegion on = true;
+		ScalarRegion off = false;
+
+		// set up three regions
+		ScalarFragment<int> src(noSharedData,on);
+		ScalarFragment<int> dst1(noSharedData,off);
+		ScalarFragment<int> dst2(noSharedData,on);
+
+		// check covered region
+		EXPECT_EQ(on, src.getCoveredRegion());
+		EXPECT_EQ(off,dst1.getCoveredRegion());
+		EXPECT_EQ(on, dst2.getCoveredRegion());
+
+
+		// set the value in source
+		src.mask().set(12);
+
+		// extract data from the source
+		auto archiveOn  = extract(src,on);		// this is actually some data
+
+		src.mask().set(14);
+		auto archiveOff = extract(src,off);		// this is no data
+
+
+		// now, import the data in the destination fragments
+
+		// this is supposed to crash, since dst1 is not big enough to accept the input
+		EXPECT_DEBUG_DEATH(insert(dst1,archiveOn),".*The region to be imported is not covered by this fragment!.*");
+
+		// but this should work, since no actual data is imported
+		insert(dst1,archiveOff);
+
+
+		// some real import -- this one should work
+		EXPECT_NE(12,dst2.mask().get());
+		insert(dst2,archiveOn);
+		EXPECT_EQ(12,dst2.mask().get());
+
+		// importing the empty data archive should not change anything
+		EXPECT_EQ(12,dst2.mask().get());
+		insert(dst2,archiveOff);
+		EXPECT_EQ(12,dst2.mask().get());
 
 	}
 

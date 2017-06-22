@@ -256,11 +256,11 @@ namespace data {
 			}
 		}
 
-		void save(utils::Archive&, const region_type&) const {
+		void extract(utils::ArchiveWriter&, const region_type&) const {
 			assert_not_implemented();
 		}
 
-		void load(utils::Archive&) {
+		void insert(utils::ArchiveReader&) {
 			assert_not_implemented();
 		}
 

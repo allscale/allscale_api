@@ -70,14 +70,14 @@ namespace core {
 		// there has to be a resize operator
 		std::is_same<decltype((void (F::*)(const typename F::region_type&))(&F::resize)), void (F::*)(const typename F::region_type&)>::value &&
 
-		// there is an insert operator
+		// there is an insert operator importing data from an existing fragment
 		std::is_same<decltype((void (F::*)(const F&, const typename F::region_type&))(&F::insert)), void (F::*)(const F&, const typename F::region_type&)>::value &&
 
-		// there is a save operator
-		std::is_same<decltype((void (F::*)(utils::ArchiveWriter&, const typename F::region_type&) const)(&F::save)), void (F::*)(utils::ArchiveWriter&, const typename F::region_type&) const>::value &&
+		// there is a extract operator extracting a region of data from the present fragment
+		std::is_same<decltype((void (F::*)(utils::ArchiveWriter&, const typename F::region_type&) const)(&F::extract)), void (F::*)(utils::ArchiveWriter&, const typename F::region_type&) const>::value &&
 
-		// there is a load operator
-		std::is_same<decltype((void (F::*)(utils::ArchiveReader&))(&F::load)), void (F::*)(utils::ArchiveReader&)>::value &&
+		// there is a insert operator, importing previously extracted data into this fragment
+		std::is_same<decltype((void (F::*)(utils::ArchiveReader&))(&F::insert)), void (F::*)(utils::ArchiveReader&)>::value &&
 
 		// can be concerted into a facade
 		std::is_same<decltype((typename F::facade_type (F::*)(void))(&F::mask)), typename F::facade_type(F::*)(void)>::value,
