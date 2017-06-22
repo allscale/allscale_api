@@ -537,16 +537,16 @@ namespace data {
 
 	TEST(GridRegion,RegionTestBasic) {
 
-		EXPECT_TRUE(utils::is_value<GridRegion<0>>::value);
-		EXPECT_TRUE(utils::is_serializable<GridRegion<0>>::value);
-		EXPECT_TRUE(core::is_region<GridRegion<0>>::value);
-
 		EXPECT_TRUE(utils::is_value<GridRegion<1>>::value);
 		EXPECT_TRUE(utils::is_serializable<GridRegion<1>>::value);
 		EXPECT_TRUE(core::is_region<GridRegion<1>>::value);
 
+		EXPECT_TRUE(utils::is_value<GridRegion<2>>::value);
+		EXPECT_TRUE(utils::is_serializable<GridRegion<2>>::value);
 		EXPECT_TRUE(core::is_region<GridRegion<2>>::value);
+
 		EXPECT_TRUE(core::is_region<GridRegion<3>>::value);
+		EXPECT_TRUE(core::is_region<GridRegion<4>>::value);
 
 	}
 
@@ -601,6 +601,73 @@ namespace data {
 		GridRegion<3> b(size,8,14);
 		testRegion(a,b);
 	}
+
+	TEST(GridRegion1D, LoadStore) {
+
+		GridPoint<1> size = 50;
+
+		GridRegion<1> a(size,5,10);
+		GridRegion<1> b(size,8,14);
+
+		EXPECT_NE(a,b);
+
+		// serialize
+		auto aa = utils::serialize(a);
+		auto ab = utils::serialize(b);
+
+		// restore value
+		auto a2 = utils::deserialize<GridRegion<1>>(aa);
+		auto b2 = utils::deserialize<GridRegion<1>>(ab);
+
+		EXPECT_EQ(a,a2);
+		EXPECT_EQ(b,b2);
+
+	}
+
+	TEST(GridRegion2D, LoadStore) {
+
+		GridPoint<2> size = 50;
+
+		GridRegion<2> a(size,5,10);
+		GridRegion<2> b(size,8,14);
+
+		EXPECT_NE(a,b);
+
+		// serialize
+		auto aa = utils::serialize(a);
+		auto ab = utils::serialize(b);
+
+		// restore value
+		auto a2 = utils::deserialize<GridRegion<2>>(aa);
+		auto b2 = utils::deserialize<GridRegion<2>>(ab);
+
+		EXPECT_EQ(a,a2);
+		EXPECT_EQ(b,b2);
+
+	}
+
+	TEST(GridRegion3D, LoadStore) {
+
+		GridPoint<3> size = 50;
+
+		GridRegion<3> a(size,5,10);
+		GridRegion<3> b(size,8,14);
+
+		EXPECT_NE(a,b);
+
+		// serialize
+		auto aa = utils::serialize(a);
+		auto ab = utils::serialize(b);
+
+		// restore value
+		auto a2 = utils::deserialize<GridRegion<3>>(aa);
+		auto b2 = utils::deserialize<GridRegion<3>>(ab);
+
+		EXPECT_EQ(a,a2);
+		EXPECT_EQ(b,b2);
+
+	}
+
 
 	TEST(GridFragment,Basic) {
 
@@ -850,74 +917,6 @@ namespace data {
 				}
 			}
 		}
-
-/*
-
-		EXPECT_TRUE(SetRegion<int>::intersect(a,b).empty());
-
-		// create fragments
-		MapFragment<int,int> fA(a);
-		MapFragment<int,int> fB(b);
-
-		// do some computation
-		for(int t = 0; t<10; t++) {
-
-			Map<int,int> a = fA.mask();
-			for(int i=0; i<5; i++) {
-				EXPECT_EQ(a[i],t);
-				a[i]++;
-			}
-
-			Map<int,int> b = fB.mask();
-			for(int i=5; i<10; i++) {
-				EXPECT_EQ(b[i],t);
-				b[i]++;
-			}
-
-		}
-
-		// ------------------------------------------------
-
-		// now re-balance fragments by introducing a new fragment C
-		SetRegion<int> c;
-		c.add(8,9);
-		MapFragment<int,int> fC(c);
-		fC.insert(fB,c);
-
-		SetRegion<int> nb;
-		nb.add(3,4,5,6,7);
-		fB.resize(nb);
-		fB.insert(fA,SetRegion<int>::intersect(a,nb));
-
-		SetRegion<int> na = SetRegion<int>::difference(a,nb);
-		fA.resize(na);
-
-		// ------------------------------------------------
-
-		// do some computation on the re-shaped distribution
-		for(int t = 10; t<20; t++) {
-
-			Map<int,int> a = fA.mask();
-			for(int i=0; i<3; i++) {
-				EXPECT_EQ(a[i],t);
-				a[i]++;
-			}
-
-			Map<int,int> b = fB.mask();
-			for(int i=3; i<8; i++) {
-				EXPECT_EQ(b[i],t);
-				b[i]++;
-			}
-
-			Map<int,int> c = fC.mask();
-			for(int i=8; i<10; i++) {
-				EXPECT_EQ(c[i],t);
-				c[i]++;
-			}
-
-		}
-
-*/
 
 	}
 

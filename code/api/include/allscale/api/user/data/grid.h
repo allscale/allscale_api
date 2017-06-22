@@ -8,8 +8,9 @@
 #include "allscale/api/user/operator/pfor.h"
 
 #include "allscale/utils/assert.h"
-#include "allscale/utils/printer/join.h"
 #include "allscale/utils/large_array.h"
+#include "allscale/utils/printer/join.h"
+#include "allscale/utils/serializer/vectors.h"
 #include "allscale/utils/vector.h"
 
 namespace allscale {
@@ -345,16 +346,29 @@ namespace data {
 			return out << "[" << box.min << " - " << box.max << "]";
 		}
 
-	};
+		/**
+		 * An operator to load an instance of this range from the given archive.
+		 */
+		static GridBox load(utils::ArchiveReader& reader) {
+			auto min = reader.read<point_type>();
+			auto max = reader.read<point_type>();
+			return { min, max };
+		}
 
-	// TODO: implement grid-boxes of 0-dimension (scalars)
-	template<>
-	class GridBox<0> {
+		/**
+		 * An operator to store an instance of this range into the given archive.
+		 */
+		void store(utils::ArchiveWriter& writer) const {
+			writer.write(min);
+			writer.write(max);
+		}
 
 	};
 
 	template<std::size_t Dims>
 	class GridRegion {
+
+		static_assert(Dims > 0, "0-dimensional grids are not supported yet");
 
 		using point_type = GridPoint<Dims>;
 		using box_type = GridBox<Dims>;
@@ -535,17 +549,25 @@ namespace data {
 		/**
 		 * An operator to load an instance of this range from the given archive.
 		 */
-		static GridRegion load(utils::ArchiveReader&) {
-			assert_not_implemented();
-			return GridRegion();
+		static GridRegion load(utils::ArchiveReader& reader) {
+			// load the total size
+			GridRegion res(reader.read<point_type>());
+
+			// read the box entries
+			res.regions = reader.read<std::vector<box_type>>();
+
+			// done
+			return res;
 		}
 
 		/**
 		 * An operator to store an instance of this range into the given archive.
 		 */
-		void store(utils::ArchiveWriter&) const {
-			assert_not_implemented();
-			// nothing so far
+		void store(utils::ArchiveWriter& writer) const {
+			// write the total size
+			writer.write(total);
+			// and the boxes
+			writer.write(regions);
 		}
 
 		friend std::ostream& operator<<(std::ostream& out, const GridRegion& region) {
