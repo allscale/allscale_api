@@ -90,7 +90,7 @@ void testRegion(const Region& a, const Region& b) {
 
 
 template<typename Fragment>
-void testFragment(const typename Fragment::region_type& a, const typename Fragment::region_type& b) {
+void testFragment(const typename Fragment::shared_data_type& shared, const typename Fragment::region_type& a, const typename Fragment::region_type& b) {
 	
 	using Region = typename Fragment::region_type;
 	
@@ -104,17 +104,17 @@ void testFragment(const typename Fragment::region_type& a, const typename Fragme
 	
 	
 	// create a few fragments
-	Fragment empty(e);
+	Fragment empty(shared,e);
 	EXPECT_EQ(e, empty.getCoveredRegion());
 	
-	Fragment fA(a);
+	Fragment fA(shared,a);
 	EXPECT_EQ(a, fA.getCoveredRegion());
 	
-	Fragment fB(b);
+	Fragment fB(shared,b);
 	EXPECT_EQ(b, fB.getCoveredRegion());
 	
 	// create an empty fragment
-	Fragment tmp(e);
+	Fragment tmp(shared,e);
 	EXPECT_EQ(e, tmp.getCoveredRegion());
 	
 	// resize fragment to size of c
@@ -135,6 +135,13 @@ void testFragment(const typename Fragment::region_type& a, const typename Fragme
 	
 	auto facada = fA.mask();
 }
+
+
+template<typename Fragment>
+void testFragment(const typename Fragment::region_type& a, const typename Fragment::region_type& b) {
+	testFragment<Fragment>(typename Fragment::shared_data_type(), a, b);
+}
+
 
 template<typename Fragment, typename Region>
 utils::Archive extract(const Fragment& fragment, const Region& region) {

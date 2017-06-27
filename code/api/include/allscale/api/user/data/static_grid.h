@@ -59,7 +59,7 @@ namespace data {
 
 	public:
 
-		StaticGridFragment(const region_type& size)
+		StaticGridFragment(const region_type& size = region_type())
 			: StaticGridFragment(core::no_shared_data(), size) {}
 
 		StaticGridFragment(const core::no_shared_data&, const region_type& size) : size(size), data(area(totalSize())) {
@@ -166,12 +166,15 @@ namespace data {
 		}
 
 		coordinate_type flatten(const StaticGridPoint<Dims>& pos) const {
+
+			static const std::array<coordinate_type,Dims> totalSize { Sizes ... };
+
 			coordinate_type res = 0;
 			coordinate_type size = 1;
 
 			for(int i=Dims-1; i>=0; i--) {
 				res += pos[i] * size;
-				size *= this->size.getTotal()[i];
+				size *= totalSize[i];
 			}
 
 			return res;
@@ -223,13 +226,13 @@ namespace data {
 		 * Creates a new map covering the given region.
 		 */
 		StaticGrid()
-			: owned(std::make_unique<StaticGridFragment<T,Sizes...>>(region_type(size(),0,size()))), base(owned.get()) {}
+			: owned(std::make_unique<StaticGridFragment<T,Sizes...>>(region_type(0,size()))), base(owned.get()) {}
 
 		/**
 		 * A constructor for static grids accepting a size parameter, to be compatible to the dynamic sized grid.
 		 */
 		StaticGrid(const StaticGridPoint<dimensions>& size)
-			: owned(std::make_unique<StaticGridFragment<T,Sizes...>>(region_type(size,0,size))), base(owned.get()) {
+			: owned(std::make_unique<StaticGridFragment<T,Sizes...>>(region_type(0,size))), base(owned.get()) {
 			assert_eq(size,this->size()) << "Initialization of invalid sized static grid.";
 		}
 

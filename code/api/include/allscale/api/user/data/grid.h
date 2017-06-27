@@ -373,35 +373,29 @@ namespace data {
 		using point_type = GridPoint<Dims>;
 		using box_type = GridBox<Dims>;
 
-		point_type total;
 		std::vector<box_type> regions;
 
 	public:
 
-		GridRegion(const point_type& total = 0) : total(total) {}
+		GridRegion() {}
 
-		GridRegion(const point_type& total, coordinate_type N)
-			: total(total), regions({box_type(N)}) {
+		GridRegion(coordinate_type N)
+			: regions({box_type(N)}) {
 			if (0 >= N) regions.clear();
-			else assert_true(regions[0].max.dominatedBy(total));
 		}
 
-		GridRegion(const point_type& total, coordinate_type A, coordinate_type B)
-			: total(total), regions({box_type(A,B)}) {
+		GridRegion(coordinate_type A, coordinate_type B)
+			: regions({box_type(A,B)}) {
 			if (A >= B) regions.clear();
-			else assert_true(regions[0].max.dominatedBy(total));
 		}
 
-		GridRegion(const point_type& total, const point_type& size)
-			: total(total), regions({box_type(0,size)}) {
+		GridRegion(const point_type& size)
+			: regions({box_type(0,size)}) {
 			if (regions[0].empty()) regions.clear();
-			else assert_true(regions[0].max.dominatedBy(total));
 		}
 
-		GridRegion(const point_type& total, const point_type& min, const point_type& max)
-			: total(total), regions({box_type(min,max)}) {
-			assert_true(min.dominatedBy(total));
-			assert_true(max.dominatedBy(total));
+		GridRegion(const point_type& min, const point_type& max)
+			: regions({box_type(min,max)}) {
 			assert_true(min.dominatedBy(max));
 		}
 
@@ -410,10 +404,6 @@ namespace data {
 
 		GridRegion& operator=(const GridRegion&) = default;
 		GridRegion& operator=(GridRegion&&) = default;
-
-		const point_type& getTotal() const {
-			return total;
-		}
 
 		box_type boundingBox() const {
 			// handle empty region
@@ -459,11 +449,6 @@ namespace data {
 			// build result
 			GridRegion res = a;
 
-			// combine total
-			if (res.total == 0) res.total = b.total;
-			assert_true(a.total == 0 || b.total == 0 || a.total == b.total);
-			assert_false(res.total == 0);
-
 			// combine regions
 			for(const auto& cur : difference(b,a).regions) {
 				res.regions.push_back(cur);
@@ -490,11 +475,6 @@ namespace data {
 			// build result
 			GridRegion res;
 
-			// combine total
-			if (res.total == 0) res.total = b.total;
-			assert_true(a.total == 0 || b.total == 0 || a.total == b.total);
-			assert_false(res.total == 0);
-
 			// combine regions
 			for(const auto& curA : a.regions) {
 				for(const auto& curB : b.regions) {
@@ -520,11 +500,6 @@ namespace data {
 
 			// build result
 			GridRegion res = a;
-
-			// combine total
-			if (res.total == 0) res.total = b.total;
-			assert_true(a.total == 0 || b.total == 0 || a.total == b.total);
-			assert_false(res.total == 0);
 
 			// combine regions
 			for(const auto& curB : b.regions) {
@@ -570,11 +545,11 @@ namespace data {
 		 * An operator to load an instance of this range from the given archive.
 		 */
 		static GridRegion load(utils::ArchiveReader& reader) {
-			// load the total size
-			GridRegion res(reader.read<point_type>());
+			// start with an empty region
+			GridRegion res;
 
 			// read the box entries
-			res.regions = reader.read<std::vector<box_type>>();
+			res.regions = std::move(reader.read<std::vector<box_type>>());
 
 			// done
 			return res;
@@ -584,9 +559,7 @@ namespace data {
 		 * An operator to store an instance of this range into the given archive.
 		 */
 		void store(utils::ArchiveWriter& writer) const {
-			// write the total size
-			writer.write(total);
-			// and the boxes
+			// just save the regions
 			writer.write(regions);
 		}
 
@@ -604,31 +577,63 @@ namespace data {
 	};
 
 
+	template<std::size_t Dims>
+	struct GridSharedData {
+
+		using size_type = GridPoint<Dims>;
+
+		size_type size;
+
+		/**
+		 * An operator to load an instance of this shared data from the given archive.
+		 */
+		static GridSharedData load(utils::ArchiveReader& reader) {
+			return { reader.read<size_type>() };
+		}
+
+		/**
+		 * An operator to store an instance of this shared data into the given archive.
+		 */
+		void store(utils::ArchiveWriter& writer) const {
+			writer.write(size);
+		}
+
+	};
+
+
 	template<typename T, std::size_t Dims>
 	class GridFragment {
 	public:
 
-		using shared_data_type = core::no_shared_data;
+		using shared_data_type = GridSharedData<Dims>;
 		using facade_type = Grid<T,Dims>;
 		using region_type = GridRegion<Dims>;
+		using size_type = GridPoint<Dims>;
 
 	private:
 
 		using point = GridPoint<Dims>;
 		using box = GridBox<Dims>;
 
-		region_type size;
+		size_type totalSize;
+		region_type coveredRegion;
 
 		utils::LargeArray<T> data;
 
 	public:
 
-		GridFragment(const region_type& size)
-			: GridFragment(core::no_shared_data(), size) {}
+		GridFragment(const size_type& size)
+			: GridFragment(shared_data_type{ size }, size) {}
 
-		GridFragment(const core::no_shared_data&, const region_type& size) : size(size), data(area(size.getTotal())) {
+		GridFragment(const size_type& size, const region_type& region)
+			: GridFragment(shared_data_type{ size }, region) {
+			assert_pred2(core::isSubRegion, region, region_type(totalSize));
+		}
+
+		GridFragment(const shared_data_type& sharedData, const region_type& region = region_type())
+				: totalSize(sharedData.size), coveredRegion(region), data(area(totalSize)) {
 			// allocate covered data space
-			size.scanByLines([&](const point& a, const point& b) {
+			region.scanByLines([&](const point& a, const point& b) {
 				data.allocate(flatten(a),flatten(b));
 			});
 		}
@@ -646,31 +651,21 @@ namespace data {
 		}
 
 		const region_type& getCoveredRegion() const {
-			return size;
+			return coveredRegion;
 		}
 
-		const point& totalSize() const {
-			return size.getTotal();
+		const size_type& getTotalSize() const {
+			return totalSize;
 		}
 
-		void resize(const region_type& newSize) {
-
-			// if the fragment is empty so far
-			if (size.getTotal() == 0) {
-				// initialize the large array
-				size = region_type(newSize.getTotal());
-				data = utils::LargeArray<T>(area(size.getTotal()));
-			}
-
-			// check that size does not change
-			assert_eq(size.getTotal(),newSize.getTotal());
+		void resize(const region_type& newCoveredRegion) {
 
 			// get the difference
-			region_type plus  = region_type::difference(newSize,size);
-			region_type minus = region_type::difference(size,newSize);
+			region_type plus  = region_type::difference(newCoveredRegion,coveredRegion);
+			region_type minus = region_type::difference(coveredRegion,newCoveredRegion);
 
 			// update the size
-			size = newSize;
+			coveredRegion = newCoveredRegion;
 
 			// allocated new data
 			plus.scanByLines([&](const point& a, const point& b){
@@ -684,8 +679,8 @@ namespace data {
 		}
 
 		void insert(const GridFragment& other, const region_type& area) {
-			assert_true(core::isSubRegion(area,other.size)) << "New data " << area << " not covered by source of size " << size << "\n";
-			assert_true(core::isSubRegion(area,size))       << "New data " << area << " not covered by target of size " << size << "\n";
+			assert_true(core::isSubRegion(area,other.coveredRegion)) << "New data " << area << " not covered by source of size " << other.coveredRegion << "\n";
+			assert_true(core::isSubRegion(area,coveredRegion))       << "New data " << area << " not covered by target of size " << coveredRegion << "\n";
 
 			// copy data line by line using memcpy
 			area.scanByLines([&](const point& a, const point& b){
@@ -741,7 +736,7 @@ namespace data {
 
 			for(int i=Dims-1; i>=0; i--) {
 				res += pos[i] * size;
-				size *= this->size.getTotal()[i];
+				size *= getTotalSize()[i];
 			}
 
 			return res;
@@ -788,7 +783,7 @@ namespace data {
 		 * Creates a new map covering the given region.
 		 */
 		Grid(const coordinate_type& size)
-			: owned(std::make_unique<GridFragment<T,Dims>>(region_type(size,0,size))), base(owned.get()) {}
+			: owned(std::make_unique<GridFragment<T,Dims>>(GridSharedData<Dims>{ size },region_type(0,size))), base(owned.get()) {}
 
 		/**
 		 * Disable copy construction.
@@ -814,7 +809,7 @@ namespace data {
 		 * Obtains the full size of this grid.
 		 */
 		coordinate_type size() const {
-			return base->totalSize();
+			return base->getTotalSize();
 		}
 
 		/**

@@ -92,39 +92,20 @@ namespace core {
 	//									SharedData
 	// ---------------------------------------------------------------------------------
 
-	template<typename S, typename T = void>
-	struct is_shared_data { };
 
-	template<typename S>
-	struct is_shared_data<S> {
+	template<typename R, typename _ = void>
+	struct is_shared_data : public std::false_type {};
 
-	private:
+	template<typename R>
+	struct is_shared_data<R,typename std::enable_if<
 
-		template<typename T>
-		static constexpr auto check(T*)
-			-> 
-			typename std::conditional<
-					// needs to be destructible
-					std::is_destructible<S>::value &&
-					// there must be a static load fuction
-					std::is_same<decltype(T::load(std::declval<utils::Archive&>())), T>::value &&
-					// there must be a save member function
-					std::is_same<decltype(std::declval<const T&>().save(std::declval<utils::Archive&>())),void>::value,
-				std::true_type,
-				std::false_type
-			>::type;
+			// regions have to be values (constructible, assignable, comparable)
+			std::is_destructible<R>::value &&
 
-		template<typename>
-		static constexpr std::false_type check(...);
+			// regions have to be serializable
+			utils::is_serializable<R>::value,
 
-		typedef decltype(check<S>(0)) type;
-
-	public:
-		
-		enum { value = type::value };
-
-	};
-
+		void>::type> : public std::true_type {};
 
 
 	// ---------------------------------------------------------------------------------
@@ -199,11 +180,11 @@ namespace core {
 	 */
 	struct no_shared_data {
 
-		void save(utils::Archive&) const {
+		void store(utils::ArchiveWriter&) const {
 			// nothing to do
 		}
 
-		static no_shared_data load(utils::Archive&) {
+		static no_shared_data load(utils::ArchiveReader&) {
 			return no_shared_data();
 		}
 

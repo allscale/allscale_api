@@ -2161,11 +2161,11 @@ namespace data {
 
 			// -- serialization support for network transferes --
 
-			void save(utils::Archive&) const {
+			void store(utils::ArchiveWriter&) const {
 				assert_not_implemented();
 			}
 
-			static PartitionTree load(utils::Archive&) {
+			static PartitionTree load(utils::ArchiveReader&) {
 				assert_not_implemented();
 				return PartitionTree();
 			}

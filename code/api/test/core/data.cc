@@ -36,10 +36,12 @@ namespace core {
 		EXPECT_TRUE((is_fragment<user::data::MapFragment<int,int>>::value));
 	}
 
+	struct no_serializable {};
+
 	TEST(SharedData, IsSharedData) {
 
 		// some negative tests
-		EXPECT_FALSE(is_shared_data<int>::value);
+		EXPECT_FALSE(is_shared_data<no_serializable>::value);
 
 		// some positive test
 		EXPECT_TRUE(is_shared_data<no_shared_data>::value);

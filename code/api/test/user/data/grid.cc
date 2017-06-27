@@ -454,33 +454,31 @@ namespace data {
 
 	TEST(GridRegion,Basic) {
 
-		GridPoint<2> size = 50;
-
 		GridRegion<2> region;
 		EXPECT_TRUE(region.empty());
 		EXPECT_EQ("{}", toString(region));
 
-		GridRegion<2> empty(size);
+		GridRegion<2> empty;
 		EXPECT_TRUE(empty.empty());
 		EXPECT_EQ("{}", toString(empty));
 
-		GridRegion<2> cube(size,10);
+		GridRegion<2> cube(10);
 		EXPECT_FALSE(cube.empty());
 		EXPECT_EQ("{[[0,0] - [10,10]]}", toString(cube));
 
-		GridRegion<2> box(size,GridPoint<2>{10,20});
+		GridRegion<2> box(GridPoint<2>{10,20});
 		EXPECT_FALSE(box.empty());
 		EXPECT_EQ("{[[0,0] - [10,20]]}", toString(box));
 
-		GridRegion<2> box2(size,GridPoint<2>{5,8},GridPoint<2>{10,20});
+		GridRegion<2> box2(GridPoint<2>{5,8},GridPoint<2>{10,20});
 		EXPECT_FALSE(box2.empty());
 		EXPECT_EQ("{[[5,8] - [10,20]]}", toString(box2));
 
-		GridRegion<2> e1(size,0);
+		GridRegion<2> e1(0);
 		EXPECT_TRUE(e1.empty());
 		EXPECT_EQ("{}", toString(e1));
 
-		GridRegion<2> e2(size,2,2);
+		GridRegion<2> e2(2,2);
 		EXPECT_TRUE(e2.empty());
 		EXPECT_EQ("{}", toString(e2));
 
@@ -490,12 +488,10 @@ namespace data {
 
 		using Region = GridRegion<2>;
 
-		GridPoint<2> size = 50;
-
-		Region a(size,{3,3},{5,5});
-		Region b(size,{5,5},{8,8});
-		Region c(size,{3,5},{5,8});
-		Region d(size,{5,3},{8,5});
+		Region a({3,3},{5,5});
+		Region b({5,5},{8,8});
+		Region c({3,5},{5,8});
+		Region d({5,3},{8,5});
 
 		Region ab = Region::merge(a,b);
 		Region cd = Region::merge(c,d);
@@ -519,12 +515,10 @@ namespace data {
 
 		using Region = GridRegion<2>;
 
-		GridPoint<2> size = 50;
-
-		Region a(size,{3,3},{5,5});
-		Region b(size,{5,5},{8,8});
-		Region c(size,{3,5},{5,8});
-		Region d(size,{5,3},{8,5});
+		Region a({3,3},{5,5});
+		Region b({5,5},{8,8});
+		Region c({3,5},{5,8});
+		Region d({5,3},{8,5});
 
 		Region ab = Region::merge(a,b);
 		Region cd = Region::merge(c,d);
@@ -552,62 +546,54 @@ namespace data {
 
 	TEST(GridRegion1D,RegionTestBasic) {
 
-		GridPoint<1> size = 50;
-
-		GridRegion<1> a(size,5,10);
-		GridRegion<1> b(size,8,14);
+		GridRegion<1> a(5,10);
+		GridRegion<1> b(8,14);
 		testRegion(a,b);
 
-		a = GridRegion<1>(size,7,10);
-		b = GridRegion<1>(size,6,8);
+		a = GridRegion<1>(7,10);
+		b = GridRegion<1>(6,8);
 		testRegion(a,b);
 	}
 
 	TEST(GridRegion2D,RegionTestBasic) {
 
-		GridPoint<2> size = 50;
-
-		GridRegion<2> a(size,5,10);
-		GridRegion<2> b(size,8,14);
+		GridRegion<2> a(5,10);
+		GridRegion<2> b(8,14);
 		testRegion(a,b);
 
 		// mirrored
-		a = GridRegion<2>(size,8,14);
-		b = GridRegion<2>(size,5,10);
+		a = GridRegion<2>(8,14);
+		b = GridRegion<2>(5,10);
 		testRegion(a,b);
 
 		// rotated left
-		a = GridRegion<2>(size,5,10);
-		b = GridRegion<2>(size,{6,3},{12,8});
+		a = GridRegion<2>(5,10);
+		b = GridRegion<2>({6,3},{12,8});
 		testRegion(a,b);
 
 		// rotated right
-		a = GridRegion<2>(size,{6,3},{12,8});
-		b = GridRegion<2>(size,5,10);
+		a = GridRegion<2>({6,3},{12,8});
+		b = GridRegion<2>(5,10);
 		testRegion(a,b);
 
 		// the cross
-		a = GridRegion<2>(size,{4,2},{10,12});
-		b = GridRegion<2>(size,{2,4},{12,10});
+		a = GridRegion<2>({4,2},{10,12});
+		b = GridRegion<2>({2,4},{12,10});
 		testRegion(a,b);
 
 	}
 
 	TEST(GridRegion3D,RegionTestBasic) {
 
-		GridPoint<3> size = 50;
-
-		GridRegion<3> a(size,5,10);
-		GridRegion<3> b(size,8,14);
+		GridRegion<3> a(5,10);
+		GridRegion<3> b(8,14);
 		testRegion(a,b);
 	}
 
 	TEST(GridRegion1D, LoadStore) {
 
-		GridPoint<1> size = 50;
-
-		GridRegion<1> a(size,5,10);
-		GridRegion<1> b(size,8,14);
+		GridRegion<1> a(5,10);
+		GridRegion<1> b(8,14);
 
 		EXPECT_NE(a,b);
 
@@ -626,10 +612,8 @@ namespace data {
 
 	TEST(GridRegion2D, LoadStore) {
 
-		GridPoint<2> size = 50;
-
-		GridRegion<2> a(size,5,10);
-		GridRegion<2> b(size,8,14);
+		GridRegion<2> a(5,10);
+		GridRegion<2> b(8,14);
 
 		EXPECT_NE(a,b);
 
@@ -648,10 +632,8 @@ namespace data {
 
 	TEST(GridRegion3D, LoadStore) {
 
-		GridPoint<3> size = 50;
-
-		GridRegion<3> a(size,5,10);
-		GridRegion<3> b(size,8,14);
+		GridRegion<3> a(5,10);
+		GridRegion<3> b(8,14);
 
 		EXPECT_NE(a,b);
 
@@ -675,8 +657,8 @@ namespace data {
 
 		GridPoint<2> size = 50;
 
-		GridRegion<2> region(size,20,30);
-		GridFragment<int,2> fA(region);
+		GridRegion<2> region(20,30);
+		GridFragment<int,2> fA({size},region);
 
 	}
 
@@ -684,10 +666,10 @@ namespace data {
 
 		GridPoint<1> size = 50;
 
-		GridRegion<1> a(size,5,10);
-		GridRegion<1> b(size,8,14);
+		GridRegion<1> a(5,10);
+		GridRegion<1> b(8,14);
 
-		testFragment<GridFragment<int,1>>(a,b);
+		testFragment<GridFragment<int,1>>({size},a,b);
 
 	}
 
@@ -695,10 +677,10 @@ namespace data {
 
 		GridPoint<2> size = {50,60};
 
-		GridRegion<2> a(size,{5,6},{10,12});
-		GridRegion<2> b(size,{8,9},{14,16});
+		GridRegion<2> a({5,6},{10,12});
+		GridRegion<2> b({8,9},{14,16});
 
-		testFragment<GridFragment<int,2>>(a,b);
+		testFragment<GridFragment<int,2>>({ size }, a,b);
 
 	}
 
@@ -707,13 +689,14 @@ namespace data {
 
 		GridPoint<1> size = 50;
 
-		GridRegion<1> full(size,0,50);
-		GridRegion<1> a(size,5,10);
-		GridRegion<1> b(size,8,14);
+		GridRegion<1> full(0,50);
+		GridRegion<1> a(5,10);
+		GridRegion<1> b(8,14);
 
-		GridFragment<int,1> src(size);
-		GridFragment<int,1> dst1(size);
-		GridFragment<int,1> dst2(size);
+		GridSharedData<1> shared { size };
+		GridFragment<int,1> src(shared);
+		GridFragment<int,1> dst1(shared);
+		GridFragment<int,1> dst2(shared);
 
 		EXPECT_TRUE(src.getCoveredRegion().empty());
 		EXPECT_TRUE(dst1.getCoveredRegion().empty());
@@ -768,13 +751,14 @@ namespace data {
 
 		GridPoint<2> size = {50,60};
 
-		GridRegion<2> full(size,{0,0},{50,60});
-		GridRegion<2> a(size,{5,6},{10,12});
-		GridRegion<2> b(size,{8,9},{14,16});
+		GridRegion<2> full({0,0},{50,60});
+		GridRegion<2> a({5,6},{10,12});
+		GridRegion<2> b({8,9},{14,16});
 
-		GridFragment<int,2> src(size);
-		GridFragment<int,2> dst1(size);
-		GridFragment<int,2> dst2(size);
+		GridSharedData<2> shared { size };
+		GridFragment<int,2> src(shared);
+		GridFragment<int,2> dst1(shared);
+		GridFragment<int,2> dst2(shared);
 
 		EXPECT_TRUE(src.getCoveredRegion().empty());
 		EXPECT_TRUE(dst1.getCoveredRegion().empty());
@@ -948,18 +932,18 @@ namespace data {
 		using Point = GridPoint<2>;
 		using Region = GridRegion<2>;
 		using Fragment = GridFragment<int,2>;
-		using SharedData = core::no_shared_data;
-
-		SharedData shared;
+		using SharedData = GridSharedData<2>;
 
 		// total size:
 		Point size = { 500, 1000 };
 
+		SharedData shared { size };
+
 		// upper half
-		Region partA(size, {0,0},{250,1000});
+		Region partA({0,0},{250,1000});
 
 		// lower half
-		Region partB(size, {250,0},{500,1000});
+		Region partB({250,0},{500,1000});
 
 		// check that the coordinates are correct
 		Region full = Region::merge(partA,partB);
@@ -997,9 +981,9 @@ namespace data {
 		// --- alter data distribution ---
 
 
-		Region newPartA = Region(size, {0,0}, {250,750});
-		Region newPartB = Region(size, {250,0}, {500,750});
-		Region newPartC = Region(size, {0,750}, {500,1000});
+		Region newPartA = Region({0,0}, {250,750});
+		Region newPartB = Region({250,0}, {500,750});
+		Region newPartC = Region({0,750}, {500,1000});
 		EXPECT_EQ(full,Region::merge(newPartA,newPartB,newPartC));
 
 		Fragment fC(shared,newPartC);
@@ -1057,7 +1041,6 @@ namespace data {
 		}
 
 	}
-
 
 
 } // end namespace data

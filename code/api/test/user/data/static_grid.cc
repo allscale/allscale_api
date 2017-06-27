@@ -19,7 +19,7 @@ namespace data {
 
 		StaticGridPoint<2> size = {100,200};
 
-		StaticGridRegion<2> region(size,20,30);
+		StaticGridRegion<2> region(20,30);
 		StaticGridFragment<int,100,200> fA(region);
 
 		EXPECT_EQ(size,fA.totalSize());
@@ -57,10 +57,8 @@ namespace data {
 
 	TEST(StaticGridFragment1D,FragmentTestBasic) {
 
-		StaticGridPoint<1> size = 50;
-
-		StaticGridRegion<1> a(size,5,10);
-		StaticGridRegion<1> b(size,8,14);
+		StaticGridRegion<1> a(5,10);
+		StaticGridRegion<1> b(8,14);
 
 		testFragment<StaticGridFragment<int,50>>(a,b);
 
@@ -68,10 +66,8 @@ namespace data {
 
 	TEST(StaticGridFragment2D,FragmentTestBasic) {
 
-		StaticGridPoint<2> size = {50,60};
-
-		StaticGridRegion<2> a(size,{5,6},{10,12});
-		StaticGridRegion<2> b(size,{8,9},{14,16});
+		StaticGridRegion<2> a({5,6},{10,12});
+		StaticGridRegion<2> b({8,9},{14,16});
 
 		testFragment<StaticGridFragment<int,50,60>>(a,b);
 
@@ -79,15 +75,13 @@ namespace data {
 
 	TEST(StaticGridFragment1D,ExtractInsert) {
 
-		StaticGridPoint<1> size = 50;
+		StaticGridRegion<1> full(0,50);
+		StaticGridRegion<1> a(5,10);
+		StaticGridRegion<1> b(8,14);
 
-		StaticGridRegion<1> full(size,0,50);
-		StaticGridRegion<1> a(size,5,10);
-		StaticGridRegion<1> b(size,8,14);
-
-		StaticGridFragment<int,50> src(size);
-		StaticGridFragment<int,50> dst1(size);
-		StaticGridFragment<int,50> dst2(size);
+		StaticGridFragment<int,50> src;
+		StaticGridFragment<int,50> dst1;
+		StaticGridFragment<int,50> dst2;
 
 		EXPECT_TRUE(src.getCoveredRegion().empty());
 		EXPECT_TRUE(dst1.getCoveredRegion().empty());
@@ -140,15 +134,13 @@ namespace data {
 
 	TEST(StaticGridFragment2D,ExtractInsert) {
 
-		StaticGridPoint<2> size = {50,60};
+		StaticGridRegion<2> full({0,0},{50,60});
+		StaticGridRegion<2> a({5,6},{10,12});
+		StaticGridRegion<2> b({8,9},{14,16});
 
-		StaticGridRegion<2> full(size,{0,0},{50,60});
-		StaticGridRegion<2> a(size,{5,6},{10,12});
-		StaticGridRegion<2> b(size,{8,9},{14,16});
-
-		StaticGridFragment<int,50,60> src(size);
-		StaticGridFragment<int,50,60> dst1(size);
-		StaticGridFragment<int,50,60> dst2(size);
+		StaticGridFragment<int,50,60> src;
+		StaticGridFragment<int,50,60> dst1;
+		StaticGridFragment<int,50,60> dst2;
 
 		EXPECT_TRUE(src.getCoveredRegion().empty());
 		EXPECT_TRUE(dst1.getCoveredRegion().empty());
@@ -321,21 +313,17 @@ namespace data {
 
 	TEST(StaticGrid2D,ExampleManagement) {
 
-		using Point = StaticGridPoint<2>;
 		using Region = StaticGridRegion<2>;
 		using Fragment = StaticGridFragment<int,500,1000>;
 		using SharedData = core::no_shared_data;
 
 		SharedData shared;
 
-		// total size:
-		Point size = { 500, 1000 };
-
 		// upper half
-		Region partA(size, {0,0},{250,1000});
+		Region partA({0,0},{250,1000});
 
 		// lower half
-		Region partB(size, {250,0},{500,1000});
+		Region partB({250,0},{500,1000});
 
 		// check that the coordinates are correct
 		Region full = Region::merge(partA,partB);
@@ -373,9 +361,9 @@ namespace data {
 		// --- alter data distribution ---
 
 
-		Region newPartA = Region(size, {0,0}, {250,750});
-		Region newPartB = Region(size, {250,0}, {500,750});
-		Region newPartC = Region(size, {0,750}, {500,1000});
+		Region newPartA = Region({0,0}, {250,750});
+		Region newPartB = Region({250,0}, {500,750});
+		Region newPartC = Region({0,750}, {500,1000});
 		EXPECT_EQ(full,Region::merge(newPartA,newPartB,newPartC));
 
 		Fragment fC(shared,newPartC);
