@@ -62,7 +62,7 @@ namespace data {
 		StaticGridFragment(const region_type& size = region_type())
 			: StaticGridFragment(core::no_shared_data(), size) {}
 
-		StaticGridFragment(const core::no_shared_data&, const region_type& size) : size(size), data(area(totalSize())) {
+		StaticGridFragment(const core::no_shared_data&, const region_type& size = region_type()) : size(size), data(area(totalSize())) {
 			// allocate covered data space
 			size.scanByLines([&](const point& a, const point& b) {
 				data.allocate(flatten(a),flatten(b));

@@ -584,6 +584,9 @@ namespace data {
 
 		size_type size;
 
+		GridSharedData(const size_type& size)
+			: size(size) {}
+
 		/**
 		 * An operator to load an instance of this shared data from the given archive.
 		 */

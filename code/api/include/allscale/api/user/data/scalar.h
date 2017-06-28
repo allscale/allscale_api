@@ -118,7 +118,7 @@ namespace data {
 			using shared_data_type = core::no_shared_data;
 			using facade_type = Scalar<T>;
 
-			ScalarFragment(const core::no_shared_data&, const ScalarRegion& region)
+			ScalarFragment(const core::no_shared_data&, const ScalarRegion& region = ScalarRegion())
 				: covered(region) {}
 
 			const ScalarRegion& getCoveredRegion() const {
@@ -190,7 +190,7 @@ namespace data {
 	public:
 
 		Scalar(const T& value = T())
-			: owned(std::make_unique<detail::ScalarFragment<T>>(value)), base(owned.get()) {}
+			: owned(std::make_unique<detail::ScalarFragment<T>>(core::no_shared_data(), value)), base(owned.get()) {}
 
 		T& get() {
 			return base->value;
