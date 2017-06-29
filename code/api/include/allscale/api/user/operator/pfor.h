@@ -814,8 +814,7 @@ namespace user {
 				// split the longest dimension, keep the others as they are
 				auto midA = end;
 				auto midB = begin;
-				auto temp = range_spliter<Iter>::split(range<Iter>(begin[maxDim],end[maxDim]));
-				midA[maxDim] = midB[maxDim] = temp.first.end();
+				midA[maxDim] = midB[maxDim] = range_spliter<Iter>::split(range<Iter>(begin[maxDim],end[maxDim])).first.end();
 
 				// make sure no points got lost
 				assert_eq(volume(begin,end), volume(begin,midA) + volume(midB,end));
