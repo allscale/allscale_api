@@ -167,7 +167,7 @@ namespace data {
 
 		coordinate_type flatten(const StaticGridPoint<Dims>& pos) const {
 
-			static const std::array<coordinate_type,Dims> totalSize { Sizes ... };
+			static const std::array<coordinate_type, Dims> totalSize{ { Sizes ... } };
 
 			coordinate_type res = 0;
 			coordinate_type size = 1;

@@ -31,7 +31,7 @@ namespace utils {
 
 	TEST(Serializer,ArraysInt) {
 		// serialize and de-serialize a string
-		std::array<int,4> in { 1, 2, 3, 4 };
+		std::array<int,4> in { { 1, 2, 3, 4 } };
 		auto archive = serialize(in);
 		auto out = deserialize<std::array<int,4>>(archive);
 
@@ -80,9 +80,9 @@ namespace utils {
 
 		// serialize and de-serialize a string
 		std::array<SerializableButNotDefaultConstructable,3> in {
-			SerializableButNotDefaultConstructable::get(1),
-			SerializableButNotDefaultConstructable::get(2),
-			SerializableButNotDefaultConstructable::get(3)
+			{ SerializableButNotDefaultConstructable::get(1),
+			  SerializableButNotDefaultConstructable::get(2),
+			  SerializableButNotDefaultConstructable::get(3) }
 		};
 
 		auto archive = serialize(in);

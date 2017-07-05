@@ -23,7 +23,7 @@ namespace utils {
 			template<typename ... Args>
 			std::array<T,len> operator()(ArchiveReader&, Args&& ... args) {
 				return std::array<T,len>{
-					args...
+					{ args... }
 				};
 			}
 
