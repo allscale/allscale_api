@@ -2821,7 +2821,7 @@ namespace data {
 					return handle(init, map, exit, a, partitionTree);
 				},
 				core::pick(
-					[map,reduce](const range& a, const auto& nested) {
+					[reduce](const range& a, const auto& nested) {
 						// here we have the splitting
 						auto left = a.getLeftChild();
 						auto right = a.getRightChild();

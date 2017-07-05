@@ -150,6 +150,7 @@ matrix:
 before_install:
   - export CXX=$CXX_EVAL
   - export CC=$CC_EVAL
+  - export CXXFLAGS="-Werror"
 
 script:
   - mkdir build
