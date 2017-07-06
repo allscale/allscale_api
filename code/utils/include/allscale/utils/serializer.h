@@ -84,6 +84,9 @@ namespace utils {
 			DataBuffer(const DataBuffer&) = delete;
 			DataBuffer(DataBuffer&&) = default;
 
+			DataBuffer(const std::vector<char>& data) : data(data) {}
+			DataBuffer(std::vector<char>&& data) : data(std::move(data)) {}
+
 			DataBuffer& operator=(const DataBuffer&) = delete;
 			DataBuffer& operator=(DataBuffer&&) = default;
 
@@ -121,17 +124,19 @@ namespace utils {
 				return &data.back() + 1;
 			}
 
+			/**
+			 * Support implicit conversion of this buffer to a vector of characters.
+			 */
+			operator const std::vector<char>&() const {
+				return data;
+			}
 
-            operator const std::vector<char>&() const {
-                   return data;
-            }
-
-
-            DataBuffer(const std::vector<char> data) : data(data) {}
-
-            operator std::vector<char>() && {
-                return std::move(data);
-            }
+			/**
+			 * Also enable the implicit hand-off of the ownership of the underlying char store.
+			 */
+			operator std::vector<char>() && {
+				return std::move(data);
+			}
 
 
 		};
@@ -157,20 +162,32 @@ namespace utils {
 		Archive(const Archive&) = delete;
 		Archive(Archive&&) = default;
 
+		Archive(const std::vector<char>& buffer) : data(buffer) {}
+		Archive(std::vector<char>&& buffer) : data(std::move(buffer)) {}
 
-
-        Archive(const std::vector<char> buffer) : data(buffer) {}
-        
-        operator std::vector<char>() && 
-        {
-            return std::move(data);
-        }
 		Archive& operator=(const Archive&) = delete;
 		Archive& operator=(Archive&&) = default;
 
-        const std::vector<char>& getBuffer() const {
-            return data;
-        }
+		/**
+		 * Support implicit conversion of this archive to a vector of characters.
+		 */
+		operator const std::vector<char>&() const {
+			return data;
+		}
+
+		/**
+		 * Also enable the implicit hand-off of the ownership of the underlying buffer.
+		 */
+		operator std::vector<char>() && {
+			return std::move(data);
+		}
+
+		/**
+		 * Provide explicit access to the underlying char buffer.
+		 */
+		const std::vector<char>& getBuffer() const {
+			return data;
+		}
 	};
 
 
