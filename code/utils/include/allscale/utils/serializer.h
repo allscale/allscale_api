@@ -121,6 +121,19 @@ namespace utils {
 				return &data.back() + 1;
 			}
 
+
+            operator const std::vector<char>&() const {
+                   return data;
+            }
+
+
+            DataBuffer(const std::vector<char> data) : data(data) {}
+
+            operator std::vector<char>() && {
+                return std::move(data);
+            }
+
+
 		};
 
 	} // end namespace detail
@@ -139,12 +152,25 @@ namespace utils {
 
 	public:
 
+
+
 		Archive(const Archive&) = delete;
 		Archive(Archive&&) = default;
 
+
+
+        Archive(const std::vector<char> buffer) : data(buffer) {}
+        
+        operator std::vector<char>() && 
+        {
+            return std::move(data);
+        }
 		Archive& operator=(const Archive&) = delete;
 		Archive& operator=(Archive&&) = default;
 
+        const std::vector<char>& getBuffer() const {
+            return data;
+        }
 	};
 
 
