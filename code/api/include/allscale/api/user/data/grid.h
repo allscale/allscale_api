@@ -783,7 +783,7 @@ namespace data {
 		using region_type = GridRegion<Dims>;
 
 		/**
-		 * Creates a new map covering the given region.
+		 * Creates a new Grid covering the given region.
 		 */
 		Grid(const coordinate_type& size)
 			: owned(std::make_unique<GridFragment<T,Dims>>(GridSharedData<Dims>{ size },region_type(0,size))), base(owned.get()) {}
