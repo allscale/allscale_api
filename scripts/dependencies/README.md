@@ -17,6 +17,9 @@ environment variable:
 
     $ PREFIX=/opt/custom-libs ./installer gcc ruby valgrind
 
+While `PREFIX` takes precedence, the environment variable `THIRD_PARTY_LIBS` is
+also considered.
+
 ## Patches
 
 The default `pkg_prepare` action will apply all patches inside the `patches`
