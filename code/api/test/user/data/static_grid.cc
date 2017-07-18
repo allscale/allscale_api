@@ -99,7 +99,7 @@ namespace data {
 		// fill in some data
 		auto dataSrc = src.mask();
 		full.scan([&](const GridPoint<1>& p){
-			src[p] = p[0];
+			src[p] = (int)p[0];
 		});
 
 
@@ -158,7 +158,7 @@ namespace data {
 		// fill in some data
 		auto dataSrc = src.mask();
 		full.scan([&](const GridPoint<2>& p){
-			src[p] = p[0] * p[1];
+			src[p] = (int)(p[0] * p[1]);
 		});
 
 
