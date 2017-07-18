@@ -81,13 +81,13 @@ namespace utils {
 
 			DataBuffer() {}
 
-			DataBuffer(const DataBuffer&) = delete;
+			DataBuffer(const DataBuffer&) = default;
 			DataBuffer(DataBuffer&&) = default;
 
 			DataBuffer(const std::vector<char>& data) : data(data) {}
 			DataBuffer(std::vector<char>&& data) : data(std::move(data)) {}
 
-			DataBuffer& operator=(const DataBuffer&) = delete;
+			DataBuffer& operator=(const DataBuffer&) = default;
 			DataBuffer& operator=(DataBuffer&&) = default;
 
 			/**
@@ -159,13 +159,13 @@ namespace utils {
 
 
 
-		Archive(const Archive&) = delete;
+		Archive(const Archive&) = default;
 		Archive(Archive&&) = default;
 
 		Archive(const std::vector<char>& buffer) : data(buffer) {}
 		Archive(std::vector<char>&& buffer) : data(std::move(buffer)) {}
 
-		Archive& operator=(const Archive&) = delete;
+		Archive& operator=(const Archive&) = default;
 		Archive& operator=(Archive&&) = default;
 
 		/**
