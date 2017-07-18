@@ -9,8 +9,8 @@
 
 #include <iostream>
 
-#define __xstr(a) __str(a)
-#define __str(a) #a
+#define __xstr_helper_(a) __str_helper_(a)
+#define __str_helper_(a) #a
 
 #include "allscale/utils/unused.h"
 
@@ -63,56 +63,56 @@ namespace utils {
 
 #define assert_true(_COND)                                                                                                                                     \
 	if(__unused auto x = insieme::utils::detail::LazyAssertion((bool)(_COND)))                                                                                 \
-	std::cerr << "\nAssertion " #_COND " of " __FILE__ ":" __xstr(__LINE__) " failed!\n"
+	std::cerr << "\nAssertion " #_COND " of " __FILE__ ":" __xstr_helper_(__LINE__) " failed!\n"
 
 #define assert_eq(_A, _B)                                                                                                                                      \
 	if(__unused auto x = insieme::utils::detail::LazyAssertion((_A) == (_B)))                                                                                  \
-	std::cerr << "\nAssertion " #_A " == " #_B " of " __FILE__ ":" __xstr(__LINE__) " failed!\n\t" #_A " = " << (_A) << "\n\t" #_B " = " << (_B) << "\n"
+	std::cerr << "\nAssertion " #_A " == " #_B " of " __FILE__ ":" __xstr_helper_(__LINE__) " failed!\n\t" #_A " = " << (_A) << "\n\t" #_B " = " << (_B) << "\n"
 
 #define assert_ne(_A, _B)                                                                                                                                      \
 	if(__unused auto x = insieme::utils::detail::LazyAssertion((_A) != (_B)))                                                                                  \
-	std::cerr << "\nAssertion " #_A " != " #_B " of " __FILE__ ":" __xstr(__LINE__) " failed!\n\t" #_A " = " << (_A) << "\n\t" #_B " = " << (_B) << "\n"
+	std::cerr << "\nAssertion " #_A " != " #_B " of " __FILE__ ":" __xstr_helper_(__LINE__) " failed!\n\t" #_A " = " << (_A) << "\n\t" #_B " = " << (_B) << "\n"
 
 #define assert_lt(_A, _B)                                                                                                                                      \
 	if(__unused auto x = insieme::utils::detail::LazyAssertion((_A) < (_B)))                                                                                   \
-	std::cerr << "\nAssertion " #_A " < " #_B " of " __FILE__ ":" __xstr(__LINE__) " failed!\n\t" #_A " = " << (_A) << "\n\t" #_B " = " << (_B) << "\n"
+	std::cerr << "\nAssertion " #_A " < " #_B " of " __FILE__ ":" __xstr_helper_(__LINE__) " failed!\n\t" #_A " = " << (_A) << "\n\t" #_B " = " << (_B) << "\n"
 
 #define assert_le(_A, _B)                                                                                                                                      \
 	if(__unused auto x = insieme::utils::detail::LazyAssertion((_A) <= (_B)))                                                                                  \
-	std::cerr << "\nAssertion " #_A " <= " #_B " of " __FILE__ ":" __xstr(__LINE__) " failed!\n\t" #_A " = " << (_A) << "\n\t" #_B " = " << (_B) << "\n"
+	std::cerr << "\nAssertion " #_A " <= " #_B " of " __FILE__ ":" __xstr_helper_(__LINE__) " failed!\n\t" #_A " = " << (_A) << "\n\t" #_B " = " << (_B) << "\n"
 
 #define assert_gt(_A, _B)                                                                                                                                      \
 	if(__unused auto x = insieme::utils::detail::LazyAssertion((_A) > (_B)))                                                                                   \
-	std::cerr << "\nAssertion " #_A " > " #_B " of " __FILE__ ":" __xstr(__LINE__) " failed!\n\t" #_A " = " << (_A) << "\n\t" #_B " = " << (_B) << "\n"
+	std::cerr << "\nAssertion " #_A " > " #_B " of " __FILE__ ":" __xstr_helper_(__LINE__) " failed!\n\t" #_A " = " << (_A) << "\n\t" #_B " = " << (_B) << "\n"
 
 #define assert_ge(_A, _B)                                                                                                                                      \
 	if(__unused auto x = insieme::utils::detail::LazyAssertion((_A) >= (_B)))                                                                                  \
-	std::cerr << "\nAssertion " #_A " >= " #_B " of " __FILE__ ":" __xstr(__LINE__) " failed!\n\t" #_A " = " << (_A) << "\n\t" #_B " = " << (_B) << "\n"
+	std::cerr << "\nAssertion " #_A " >= " #_B " of " __FILE__ ":" __xstr_helper_(__LINE__) " failed!\n\t" #_A " = " << (_A) << "\n\t" #_B " = " << (_B) << "\n"
 
 #define assert_fail()                                                                                                                                          \
-	if(__unused auto x = insieme::utils::detail::LazyAssertion(false)) std::cerr << "\nAssertion failed in " __FILE__ ":" __xstr(__LINE__) " - "
+	if(__unused auto x = insieme::utils::detail::LazyAssertion(false)) std::cerr << "\nAssertion failed in " __FILE__ ":" __xstr_helper_(__LINE__) " - "
 
 #define assert_pred1(_P, _A)                                                                                                                                   \
 	if(__unused auto x = insieme::utils::detail::LazyAssertion((bool)((_P)(_A))))                                                                              \
-	std::cerr << "\nAssertion " #_P "(" #_A ") with " #_A " = " << (_A) << " in " __FILE__ ":" __xstr(__LINE__) " failed!\n"
+	std::cerr << "\nAssertion " #_P "(" #_A ") with " #_A " = " << (_A) << " in " __FILE__ ":" __xstr_helper_(__LINE__) " failed!\n"
 
 #define assert_not_pred1(_P, _A)                                                                                                                               \
 	if(__unused auto x = insieme::utils::detail::LazyAssertion(!(bool)((_P)(_A))))                                                                             \
-	std::cerr << "\nAssertion !" #_P "(" #_A ") with " #_A " = " << (_A) << " in " __FILE__ ":" __xstr(__LINE__) " failed!\n"
+	std::cerr << "\nAssertion !" #_P "(" #_A ") with " #_A " = " << (_A) << " in " __FILE__ ":" __xstr_helper_(__LINE__) " failed!\n"
 
 #define assert_pred2(_P, _A, _B)                                                                                                                               \
 	if(__unused auto x = insieme::utils::detail::LazyAssertion((bool)((_P)(_A, _B))))                                                                          \
 	std::cerr << "\nAssertion " #_P "(" #_A ", " #_B ") with\n " #_A " = " << (_A) << "\n " #_B " = " << (_B)                                                  \
-	          << "\n in " __FILE__ ":" __xstr(__LINE__) " failed!\n"
+	          << "\n in " __FILE__ ":" __xstr_helper_(__LINE__) " failed!\n"
 
 #define assert_not_pred2(_P, _A, _B)                                                                                                                           \
 	if(__unused auto x = insieme::utils::detail::LazyAssertion(!(bool)((_P)(_A, _B))))                                                                         \
 	std::cerr << "\nAssertion !" #_P "(" #_A ", " #_B ") with\n " #_A " = " << (_A) << "\n " #_B " = " << (_B)                                                 \
-	          << "\n in " __FILE__ ":" __xstr(__LINE__) " failed!\n"
+	          << "\n in " __FILE__ ":" __xstr_helper_(__LINE__) " failed!\n"
 
 #endif
 
 // ------ derived definitions ------
 
 #define assert_false(_COND) assert_true(!(_COND))
-#define assert_not_implemented() assert_fail() << "Not implemented functionality in " __FILE__ ":" __xstr(__LINE__) "\n"
+#define assert_not_implemented() assert_fail() << "Not implemented functionality in " __FILE__ ":" __xstr_helper_(__LINE__) "\n"
