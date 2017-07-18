@@ -507,7 +507,7 @@ namespace user {
 
 		// run the time loop
 	    for(int t=0; t<T; ++t) {
-	        ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,t](const Point& p) {
+	        ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,t,N](const Point& p) {
 
 	        	if (p.x != 1   && p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x-1][p.y-1]); }
 	        	if (              p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x  ][p.y-1]); }
@@ -1012,7 +1012,7 @@ namespace user {
 
 		// run the time loop
 	    for(int t=0; t<T; ++t) {
-	        ref = pfor(1,N-1,[A,B,t](int i) {
+	        ref = pfor(1,N-1,[A,B,t,N](int i) {
 
 				if(i != 1) { EXPECT_EQ(t, A[i - 1]); }
 	        	EXPECT_EQ(t,A[i]);
@@ -1026,7 +1026,7 @@ namespace user {
 
 	        // plug in after
 	        if (t % 2 == 0) {
-	        	ref = after(ref,N/2,[B,t,&counter]{
+	        	ref = after(ref,N/2,[B,t,&counter,N]{
 	        		EXPECT_EQ(t+1,B[N/2]);
 	        		counter++;
 	        	});
@@ -1073,7 +1073,7 @@ namespace user {
 
 		// run the time loop
 	    for(int t=0; t<T; ++t) {
-	        ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,t](const Point& p) {
+	        ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,t,N](const Point& p) {
 
 	        	if (p.x != 1   && p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x-1][p.y-1]); }
 	        	if (              p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x  ][p.y-1]); }

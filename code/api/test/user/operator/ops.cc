@@ -202,7 +202,7 @@ namespace user {
 
 
 
-		auto map = [data](std::array<int,3> i, int& s) { s += data[i[0]*Y*Z + i[1]*Z + i[2]]; };
+		auto map = [data,Y,Z](std::array<int,3> i, int& s) { s += data[i[0]*Y*Z + i[1]*Z + i[2]]; };
 		auto reduce = [](double a, double b) { return a + b; };
 		auto init = []() { return 0; };
 		auto exit = [](int i) { return 0.1*i; };

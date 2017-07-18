@@ -42,6 +42,12 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU
 	# Yo Dawg, I heard you like templates!
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftemplate-depth-900")
 
+	# Disable unused lambda capture warnings for clang 5 and higher
+	# otherwise clang will correctly report some which are required to work around an MSVC bug
+	if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 4.9.9)
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-lambda-capture")
+	endif()
+
 	# \[T]/ Praise the sun. There be dragons ahead.
 	if(NOT USE_ASSERT)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNDEBUG")
