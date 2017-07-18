@@ -1,3 +1,5 @@
+#pragma once
+
 #include "allscale/utils/serializer.h"
 
 #include <vector>
