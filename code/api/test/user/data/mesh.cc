@@ -1533,7 +1533,7 @@ namespace data {
 		unsigned sum = bar.preduce<Vertex>(
 				[&](const auto& a, auto& b) {
 					counter++;
-					b += decltype(b)(a.id);
+					b += (unsigned)(a.id);
 				},
 				[](unsigned a, unsigned b) {
 					return a + b;
