@@ -62,8 +62,8 @@ namespace utils {
 
 		// it should only be move-able
 		EXPECT_FALSE(std::is_default_constructible<Archive>::value);
-		EXPECT_FALSE(std::is_copy_constructible<Archive>::value);
-		EXPECT_FALSE(std::is_copy_assignable<Archive>::value);
+		EXPECT_TRUE(std::is_copy_constructible<Archive>::value);
+		EXPECT_TRUE(std::is_copy_assignable<Archive>::value);
 
 		EXPECT_TRUE(std::is_move_constructible<Archive>::value);
 		EXPECT_TRUE(std::is_move_assignable<Archive>::value);
