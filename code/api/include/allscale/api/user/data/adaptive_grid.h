@@ -257,13 +257,12 @@ namespace data {
 				auto indexer = [&](const auto& index) { return utils::elementwiseProduct(index, utils::elementwiseDivision(nested.data.size(), data.size())); };
 
 				// iterate over cells on this layer
+				utils::StaticGrid<T, Dims...> param;
 				api::user::detail::forEach({ 0 }, data.size(), [&](const auto& index) {
-					utils::StaticGrid<T, Dims...> param;
-					
 					// iterate over subset of cells on nested layer, to be projected to the current cell pointed to by index
 					auto begin = indexer(index);
 					auto end = indexer(index + decltype(index){1});
-					api::user::detail::forEach(begin, end, [&](const auto& i) {
+					api::user::detail::forEach(begin, end, [&](const decltype(index)& i) {
 						param[i - indexer(index)] = nested.data[i];
 					});
 					data[index] = coarsener(param);

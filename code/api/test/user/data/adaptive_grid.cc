@@ -89,8 +89,8 @@ namespace data {
 
 		cell.coarsenGrid([](const auto& grid) {
 			int res = 0;
-			grid.forEach([&](const auto& element) { res += element / 5; });
-			return res / (grid.size().x * grid.size().y);
+			grid.forEach([&](const int& element) { res += element / 5; });
+			return res / (int)(grid.size().x * grid.size().y);
 		});
 		EXPECT_EQ(1, cell.getActiveLayer());
 		cell.forAllActiveNodes([](const int& element) { EXPECT_EQ(15, element); });
@@ -119,7 +119,7 @@ namespace data {
 		});
 		cell.setActiveLayer(0);
 
-		cell.forAllActiveNodes([&count](int& element) { element = 1; });
+		cell.forAllActiveNodes([](int& element) { element = 1; });
 		const std::vector<int> xRef(2*2, 1);
 		const std::vector<int> yRef(3*5, 1);
 
@@ -357,7 +357,7 @@ namespace data {
 		full.scan([&](const AdaptiveGridPoint<1>& p) {
 			dataSrc[p].setActiveLayer(2);
 			dataSrc[p].forAllActiveNodes([p](int& element) {
-				element = p[0] * 2;
+				element = (int)p[0] * 2;
 			});
 		});
 
@@ -427,7 +427,7 @@ namespace data {
 		full.scan([&](const AdaptiveGridPoint<2>& p) {
 			dataSrc[p].setActiveLayer(2);
 			dataSrc[p].forAllActiveNodes([p](int& element) {
-				element = p[0] * 2;
+				element = (int)p[0] * 2;
 			});
 		});
 
