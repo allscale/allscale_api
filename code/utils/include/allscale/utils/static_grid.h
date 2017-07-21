@@ -145,7 +145,7 @@ namespace utils {
 
 		static StaticGrid load(utils::ArchiveReader& reader) {
 			StaticGrid grid;
-			grid.data = reader.read<data_type>();
+			grid.data = std::move(reader.read<data_type>());
 			return grid;
 		}
 

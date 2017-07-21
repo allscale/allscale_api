@@ -293,10 +293,78 @@ namespace data {
 		}
 
 		static GridLayerData load(utils::ArchiveReader& reader) {
-			GridLayerData grid;
+			auto data = std::move(reader.read<data_type>());
+			auto nested = std::move(reader.read<nested_type>());
+			return { data, nested };
+		}
 
-			grid.data = reader.read<data_type>();
-			grid.nested = reader.read<nested_type>();
+	};
+
+	template <typename T, typename Size, typename Layers>
+	struct GridLayerData;
+
+	template <typename T, unsigned... Sizes>
+	struct GridLayerData<T, size<Sizes...>, layers<>> {
+		using data_type = utils::StaticGrid<T, Sizes...>;
+
+		// the values to be stored on this last layer
+		data_type data;
+
+		unsigned getLayerNumber() const { return 0; }
+
+		template <unsigned Layer>
+		typename std::enable_if<Layer == 0, data_type&>::type getLayer() {
+			return data;
+		}
+
+		template <unsigned Layer>
+		typename std::enable_if<Layer == 0, const data_type&>::type getLayer() const {
+			return data;
+		}
+
+		template <typename Op>
+		void forAllOnLayer(unsigned layer, const Op& op) {
+			assert_eq(layer, 0) << "Error: trying to access layer " << layer << " --no such layer!";
+			data.forEach(op);
+		}
+
+		template <typename Refiner>
+		void refineFromLayer(unsigned layer, const Refiner&) {
+			assert_fail() << "Error: trying to access layer " << layer << " --no such layer!";
+		}
+
+		template <typename Refiner>
+		void refineFromLayerGrid(unsigned layer, const Refiner&) {
+			assert_fail() << "Error: trying to access layer " << layer << " --no such layer!";
+		}
+
+		template <typename Coarsener>
+		void coarsenToLayer(unsigned layer, const Coarsener&) {
+			assert_fail() << "Error: trying to access layer " << layer << " --no such layer!";
+		}
+
+		template <typename Coarsener>
+		void coarsenToLayerGrid(unsigned layer, const Coarsener&) {
+			assert_fail() << "Error: trying to access layer " << layer << " --no such layer!";
+		}
+
+		std::vector<T> getBoundary(unsigned layer, Direction dir) const {
+			assert_eq(0, layer) << "No such layer";
+			return detail::getBoundary(dir, data);
+		}
+
+		void setBoundary(unsigned layer, Direction dir, const std::vector<T>& boundary) {
+			assert_eq(0, layer) << "No such layer";
+			detail::setBoundary(dir, data, boundary);
+		}
+
+		void store(utils::ArchiveWriter& writer) const {
+			writer.write(data);
+		}
+
+		static GridLayerData<T, size<Sizes...>, layers<>> load(utils::ArchiveReader& reader) {
+			GridLayerData<T, size<Sizes...>, layers<>> grid;
+			grid.data = std::move(reader.read<data_type>());
 
 			return grid;
 		}
@@ -324,13 +392,7 @@ namespace data {
 		AdaptiveGridCell& operator=(const AdaptiveGridCell& other) {
 			if(this == &other) return *this;
 			active_layer = other.active_layer;
-			switch(active_layer) {
-				case 0: getLayer<0>() = other.getLayer<0>(); return *this;
-				case 1: getLayer<1>() = other.getLayer<1>(); return *this;
-				case 2: getLayer<2>() = other.getLayer<2>(); return *this;
-				case 3: getLayer<3>() = other.getLayer<3>(); return *this;
-				default: assert_fail() << "Unsupported layer number: " << active_layer;
-			}
+			data = other.data;
 			return *this;
 		}
 
@@ -400,82 +462,9 @@ namespace data {
 
 		static AdaptiveGridCell load(utils::ArchiveReader& reader) {
 			AdaptiveGridCell cell;
-			cell.active_layer = reader.read<unsigned>();
+			cell.active_layer = std::move(reader.read<unsigned>());
 			cell.data = reader.read<GridLayerData<T, size<1, 1>, Layers>>();
 			return cell;
-		}
-
-	};
-
-
-	template <typename T, typename Size, typename Layers>
-	struct GridLayerData;
-
-	template <typename T, unsigned... Sizes>
-	struct GridLayerData<T, size<Sizes...>, layers<>> {
-		using data_type = utils::StaticGrid<T, Sizes...>;
-
-		// the values to be stored on this last layer
-		data_type data;
-
-		unsigned getLayerNumber() const { return 0; }
-
-		template <unsigned Layer>
-		typename std::enable_if<Layer == 0, data_type&>::type getLayer() {
-			return data;
-		}
-
-		template <unsigned Layer>
-		typename std::enable_if<Layer == 0, const data_type&>::type getLayer() const {
-			return data;
-		}
-
-		template <typename Op>
-		void forAllOnLayer(unsigned layer, const Op& op) {
-			assert_eq(layer, 0) << "Error: trying to access layer " << layer << " --no such layer!";
-			data.forEach(op);
-		}
-
-		template <typename Refiner>
-		void refineFromLayer(unsigned layer, const Refiner&) {
-			assert_fail() << "Error: trying to access layer " << layer << " --no such layer!";
-		}
-
-		template <typename Refiner>
-		void refineFromLayerGrid(unsigned layer, const Refiner&) {
-			assert_fail() << "Error: trying to access layer " << layer << " --no such layer!";
-		}
-
-		template <typename Coarsener>
-		void coarsenToLayer(unsigned layer, const Coarsener&) {
-			assert_fail() << "Error: trying to access layer " << layer << " --no such layer!";
-		}
-
-		template <typename Coarsener>
-		void coarsenToLayerGrid(unsigned layer, const Coarsener&) {
-			assert_fail() << "Error: trying to access layer " << layer << " --no such layer!";
-		}
-
-		std::vector<T> getBoundary(unsigned layer, Direction dir) const {
-			assert_eq(0, layer) << "No such layer";
-			return detail::getBoundary(dir, data);
-		}
-
-		void setBoundary(unsigned layer, Direction dir, const std::vector<T>& boundary) {
-			assert_eq(0, layer) << "No such layer";
-			detail::setBoundary(dir, data, boundary);
-		}
-
-		void store(utils::ArchiveWriter& writer) const {
-			writer.write(data);
-		}
-
-		static GridLayerData load(utils::ArchiveReader& reader) {
-			GridLayerData grid;
-
-			grid.data = reader.read<data_type>();
-
-			return grid;
 		}
 
 	};

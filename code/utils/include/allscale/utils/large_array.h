@@ -3,6 +3,10 @@
 #ifndef _MSC_VER
 	#include <sys/mman.h>
 	#include <unistd.h>
+#else
+	#include<stdlib.h>
+	#include<malloc.h>
+
 #endif
 
 #include <cstddef>
@@ -388,6 +392,7 @@ namespace utils {
 			// allocate the address space
 			#ifdef _MSC_VER
 				data = (T*)malloc(sizeof(T)*size);
+				assert_true(data != nullptr) << "Failed to allocate memory of size" << sizeof(T)*size;
 			#else
 				data = (T*)mmap(nullptr,sizeof(T)*size,
 						PROT_READ | PROT_WRITE,
@@ -448,7 +453,6 @@ namespace utils {
 			if (data) {
 			#ifdef _MSC_VER
 				::free(data);
-				//delete data;
 			#else
 				munmap(data, sizeof(T)*size);
 			#endif

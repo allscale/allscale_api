@@ -15,7 +15,7 @@ namespace data {
 	#include "data_item_test.inl"
 
 	// test config frequently used throughout this test
-	using FourLayerCellConfig = CellConfig<layers<layer<10, 10>, layer<5, 5>, layer<5, 5>>>;
+	using FourLayerCellConfig = CellConfig<layers<layer<5, 5>, layer<2, 2>, layer<3, 3>>>;
 
 	TEST(AdaptiveGridCell, TypeProperties) {
 
@@ -39,19 +39,19 @@ namespace data {
 		EXPECT_EQ(0, cell.getActiveLayer());
 		cellCount = 0;
 		cell.forAllActiveNodes([&cellCount](const double&) { cellCount++; });
-		EXPECT_EQ(10*10*5*5*5*5, cellCount);
+		EXPECT_EQ(5*5*2*2*3*3, cellCount);
 
 		cell.setActiveLayer(1);
 		EXPECT_EQ(1, cell.getActiveLayer());
 		cellCount = 0;
 		cell.forAllActiveNodes([&cellCount](const double&) { cellCount++; });
-		EXPECT_EQ(10*10*5*5, cellCount);
+		EXPECT_EQ(5*5*2*2, cellCount);
 
 		cell.setActiveLayer(2);
 		EXPECT_EQ(2, cell.getActiveLayer());
 		cellCount = 0;
 		cell.forAllActiveNodes([&cellCount](const double&) { cellCount++; });
-		EXPECT_EQ(10*10, cellCount);
+		EXPECT_EQ(5*5, cellCount);
 
 		cell.setActiveLayer(3);
 		EXPECT_EQ(3, cell.getActiveLayer());
@@ -287,7 +287,7 @@ namespace data {
 
 		EXPECT_TRUE((core::is_fragment<AdaptiveGridFragment<double, FourLayerCellConfig, 2>>::value));
 
-		AdaptiveGridPoint<2> size = { 100,200 };
+		AdaptiveGridPoint<2> size = { 30,50 };
 
 		AdaptiveGridRegion<2> region(20, 30);
 		AdaptiveGridFragment<int, FourLayerCellConfig, 2> fA({size},region);
@@ -548,9 +548,9 @@ namespace data {
 
 			EXPECT_EQ(0, cell.getActiveLayer());
 
-			EXPECT_EQ((AdaptiveGridPoint<2>{250, 250}), cell.getLayer<0>().size());
-			EXPECT_EQ((AdaptiveGridPoint<2>{50, 50}), cell.getLayer<1>().size());
-			EXPECT_EQ((AdaptiveGridPoint<2>{10, 10}), cell.getLayer<2>().size());
+			EXPECT_EQ((AdaptiveGridPoint<2>{30, 30}), cell.getLayer<0>().size());
+			EXPECT_EQ((AdaptiveGridPoint<2>{10, 10}), cell.getLayer<1>().size());
+			EXPECT_EQ((AdaptiveGridPoint<2>{5, 5}), cell.getLayer<2>().size());
 			EXPECT_EQ((AdaptiveGridPoint<2>{1, 1}), cell.getLayer<3>().size());
 
 			cell.setActiveLayer(3);
