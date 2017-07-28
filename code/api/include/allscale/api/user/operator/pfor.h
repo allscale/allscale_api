@@ -1005,7 +1005,7 @@ namespace user {
 		one_on_one_dependency(const detail::iteration_reference<Iter>& loop)
 			: loop(loop) {}
 
-		auto toCoreDependencies() const {
+		core::impl::reference::dependencies<core::impl::reference::fixed_sized<1>> toCoreDependencies() const {
 			return core::after(loop.getHandle());
 		}
 
@@ -1047,7 +1047,7 @@ namespace user {
 		neighborhood_sync_dependency(const detail::iteration_reference<Iter>& loop)
 			: deps({{ loop }}), size(1) {}
 
-		auto toCoreDependencies() const {
+		core::impl::reference::dependencies<core::impl::reference::fixed_sized<3>> toCoreDependencies() const {
 			return core::after(deps[0],deps[1],deps[2]);
 		}
 
