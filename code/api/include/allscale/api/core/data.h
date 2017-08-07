@@ -9,6 +9,21 @@ namespace allscale {
 namespace api {
 namespace core {
 
+	namespace sema {
+
+		// c++ versions of the data item element access helper functions, facilitating compiler analysis
+		template<typename DataItem, typename T>
+		T& data_item_element_access(DataItem&, const typename DataItem::region_type&, T& ref) {
+			return ref;
+		}
+
+		template<typename DataItem, typename T>
+		const T& data_item_element_access(const DataItem&, const typename DataItem::region_type&, const T& ref) {
+			return ref;
+		}
+
+	}
+
 	// ---------------------------------------------------------------------------------
 	//									  Regions
 	// ---------------------------------------------------------------------------------
