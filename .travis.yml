@@ -57,7 +57,10 @@ matrix:
       env: BUILD_TYPE=Debug CXX_EVAL="clang++-5.0" CC_EVAL="clang-5.0"
       addons:
         apt:
-          sources: [ llvm-toolchain-trusty, ubuntu-toolchain-r-test ]
+          sources:
+            - sourceline: 'deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-5.0 main' 
+              key_url: 'https://apt.llvm.org/llvm-snapshot.gpg.key'
+            - ubuntu-toolchain-r-test
           packages: [ clang-5.0, g++-5 ]
     # ------------- OS X ------------- #
     - os: osx
@@ -127,7 +130,10 @@ matrix:
       env: BUILD_TYPE=Release CXX_EVAL="clang++-5.0" CC_EVAL="clang-5.0"
       addons:
         apt:
-          sources: [ llvm-toolchain-trusty, ubuntu-toolchain-r-test ]
+          sources:
+            - sourceline: 'deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-5.0 main' 
+              key_url: 'https://apt.llvm.org/llvm-snapshot.gpg.key'
+            - ubuntu-toolchain-r-test
           packages: [ clang-5.0, g++-5 ]
     # ------------- OS X ------------- #
     - os: osx
