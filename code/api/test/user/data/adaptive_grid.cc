@@ -643,6 +643,49 @@ namespace data {
 
 	}
 
+	TEST(AdaptiveGrid, RefinementAssertions) {
+
+		using TwoLayerConfig = CellConfig<layers<layer<2, 2>>>;
+
+		AdaptiveGrid<int, TwoLayerConfig, 2> aGrid({ 2,2 });
+
+		aGrid.forEach([](AdaptiveGridCell<int, TwoLayerConfig>& cell) {
+
+			ASSERT_EQ(0, cell.getActiveLayer());
+
+			ASSERT_DEATH_IF_SUPPORTED(cell.refine([&](const int& element) { return element; }), ".*Cannot refine.*");
+
+			ASSERT_EQ(0, cell.getActiveLayer());
+
+			ASSERT_DEATH_IF_SUPPORTED(cell.refineGrid([](const int&) { return utils::StaticGrid<int,2,2>(); }), ".*Cannot refine.*");
+
+			cell.coarsen([&](const int& element) {
+				return element;
+			});
+
+			ASSERT_EQ(1, cell.getActiveLayer());
+
+			ASSERT_DEATH_IF_SUPPORTED(cell.coarsen([&](const int& element) { return element; }), ".*Cannot coarsen.*");
+
+			ASSERT_EQ(1, cell.getActiveLayer());
+
+			ASSERT_DEATH_IF_SUPPORTED(cell.coarsenGrid([](const auto&) { return 0; }), ".*Cannot coarsen.*");
+
+			ASSERT_EQ(1, cell.getActiveLayer());
+
+		});
+
+		AdaptiveGrid<int, CellConfig<layers<>>,2> smallGrid({1,1});
+
+		auto& cell = smallGrid[{0, 0}].data;
+
+		ASSERT_DEATH_IF_SUPPORTED(cell.refineFromLayer(0, [&](const int& element) { return element; }), "Error.*no such layer.*");
+		ASSERT_DEATH_IF_SUPPORTED(cell.refineFromLayerGrid(0, [](const int&) { return utils::StaticGrid<int, 2, 2>(); }), "Error.*no such layer.*");
+		ASSERT_DEATH_IF_SUPPORTED(cell.coarsenToLayer(0, [&](const int& element) { return element; }), "Error.*no such layer.*");
+		ASSERT_DEATH_IF_SUPPORTED(cell.coarsenToLayerGrid(0, [](const auto&) { return 0; }), "Error.*no such layer.*");
+
+	}
+
 
 
 

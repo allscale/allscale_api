@@ -104,5 +104,31 @@ namespace utils {
 
 	}
 
+	TEST(StaticGrid2D, NonTrivialElements) {
+
+		struct A {
+			int x;
+			A() = default;
+			A(const A& other) { x = other.x; }
+		};
+
+		EXPECT_FALSE(std::is_trivially_copyable<A>());
+
+		StaticGrid<A, 2, 2> grid;
+
+		grid.forEach([](A& a) {
+			a.x = 2;
+		});
+
+		StaticGrid<A, 2, 2> newGrid = grid;
+
+		int count = 0;
+		newGrid.forEach([&count](const A& a) {
+			count += a.x;
+		});
+
+		EXPECT_EQ(8, count);
+	}
+
 } // end namespace utils
 } // end namespace allscale

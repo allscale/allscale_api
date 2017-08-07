@@ -421,28 +421,28 @@ namespace data {
 
 		template<typename Refiner>
 		void refine(const Refiner& refiner) {
-			assert_ge(active_layer, 0) << "Cannot refine any further";
+			assert_gt(active_layer, 0) << "Cannot refine any further";
 			data.refineFromLayer(active_layer, refiner);
 			active_layer--;
 		}
 
 		template<typename Refiner>
 		void refineGrid(const Refiner& refiner) {
-			assert_ge(active_layer, 0) << "Cannot refine any further";
+			assert_gt(active_layer, 0) << "Cannot refine any further";
 			data.refineFromLayerGrid(active_layer, refiner);
 			active_layer--;
 		}
 
 		template<typename Coarsener>
 		void coarsen(const Coarsener& coarsener) {
-			assert_gt(Layers::num_layers, active_layer) << "Cannot refine any further";
+			assert_gt(Layers::num_layers, active_layer) << "Cannot coarsen any further";
 			active_layer++;
 			data.coarsenToLayer(active_layer, coarsener);
 		}
 
 		template<typename Coarsener>
 		void coarsenGrid(const Coarsener& coarsener) {
-			assert_gt(Layers::num_layers, active_layer) << "Cannot refine any further";
+			assert_gt(Layers::num_layers, active_layer) << "Cannot coarsen any further";
 			active_layer++;
 			data.coarsenToLayerGrid(active_layer, coarsener);
 		}
