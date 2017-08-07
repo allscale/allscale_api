@@ -256,14 +256,13 @@ namespace user {
 						for(int dz = -1; dz <= 1; ++dz) {
 							for(int dw = -1; dw <= 1; ++dw) {
 								for(int dv = -1; dv <= 1; ++dv) {
-									data::GridPoint<5> offset{dx,dy,dz,dw,dv};
-									auto p = pos + offset;
+									data::GridPoint<5> p{pos[0] + dx, pos[1] + dy, pos[2] + dz, pos[3] + dw, pos[4] + dv};
 									if (p[0] < 0 || p[0] >= N) continue;
 									if (p[1] < 0 || p[1] >= N) continue;
 									if (p[2] < 0 || p[2] >= N) continue;
 									if (p[3] < 0 || p[3] >= N) continue;
 									if (p[4] < 0 || p[4] >= N) continue;
-									EXPECT_EQ(time,data[p]) << "Position " << pos << " + " << offset << " = " << p;
+									EXPECT_EQ(time,data[p]) << "Position = " << p;
 								}
 							}
 						}
