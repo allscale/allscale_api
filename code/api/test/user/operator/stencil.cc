@@ -14,8 +14,6 @@ namespace user {
 
 	// --- basic parallel stencil usage ---
 
-	// TODO: type-parameterize this test over the implementations
-
 	template <typename T>
 	class Stencil : public ::testing::Test {
 	};
@@ -26,7 +24,7 @@ namespace user {
 
 		using Impl = TypeParam;
 
-		const std::size_t N = 1000;
+		const std::size_t N = 500;
 		const int I = 10;
 
 		// test for an even and an odd number of time steps
@@ -61,13 +59,14 @@ namespace user {
 
 		using Impl = TypeParam;
 
-		const int N = 1000;
+		const int N = 500;
 
 		// test for an even and an odd number of time steps
 		for(int T : { 40 , 41 , (int)(2.5 * N) }) {
 
 			// initialize the data buffer
 			data::Grid<int,1> data(N);
+			
 			data.forEach([](int& x){
 				x = 0;
 			});
@@ -146,7 +145,7 @@ namespace user {
 		const int N = 20;
 
 		// test for an even and an odd number of time steps
-		for(int T : { 40 , 41 , (int)(2.5 * N) }) {
+		for(int T : { 20 , 21 , (int)(2.5 * N) }) {
 
 			// initialize the data buffer
 			data::Grid<int,3> data({N,N+2,N+3});
@@ -192,7 +191,7 @@ namespace user {
 		const int N = 8;
 
 		// test for an even and an odd number of time steps
-		for(int T : { 40 , 41 , (int)(2.5 * N) }) {
+		for(int T : { 20 , 21 , (int)(2.5 * N) }) {
 
 			// initialize the data buffer
 			data::Grid<int,4> data({N,N+1,N+2,N+3});
@@ -240,7 +239,7 @@ namespace user {
 		const int N = 4;
 
 		// test for an even and an odd number of time steps
-		for(int T : { 40 , 41 , (int)(2.5 * N) }) {
+		for(int T : { 20 , 21 , (int)(2.5 * N) }) {
 
 			// initialize the data buffer
 			data::Grid<int,5> data({N,N+1,N+2,N+3,N+4});
@@ -287,7 +286,7 @@ namespace user {
 
 	TYPED_TEST_P(Stencil,DefaultImpl) {
 
-		const int N = 1000;
+		const int N = 500;
 
 		// test for an even and an odd number of time steps
 		for(int T : { 40 , 41 , (int)(2.5 * N) }) {
@@ -406,7 +405,6 @@ namespace user {
 
 		using Impl = TypeParam;
 
-//		const int N = 1000;
 		const int N = 20;
 
 		// run one layer of iterations
