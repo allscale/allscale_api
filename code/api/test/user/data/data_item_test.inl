@@ -35,7 +35,7 @@ void testRegion(const Region& a, const Region& b) {
 	Region d = Region::merge(a,b);
 	
 	// so, we have: 
-	//		region a and b -- neighter a subset of the other
+	//		region a and b -- neither a subset of the other
 	//		region c - a non-empty sub-set of region a and b
 	//      region d - the union of a and b
 	
