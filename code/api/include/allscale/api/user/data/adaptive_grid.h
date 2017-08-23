@@ -9,7 +9,6 @@
 #include "allscale/api/user/operator/pfor.h"
 
 #include "allscale/utils/assert.h"
-#include "allscale/utils/printer/join.h"
 #include "allscale/utils/serializer.h"
 #include "allscale/utils/static_grid.h"
 
@@ -283,8 +282,9 @@ namespace data {
 		void setBoundary(unsigned layer, Direction dir, const std::vector<T>& boundary) {
 			if(layer == getLayerNumber()) {
 				detail::setBoundary(dir, data, boundary);
+			} else {
+				nested.setBoundary(layer, dir, boundary);
 			}
-			nested.setBoundary(layer, dir, boundary);
 		}
 
 		void store(utils::ArchiveWriter& writer) const {

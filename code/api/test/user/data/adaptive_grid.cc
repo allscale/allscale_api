@@ -70,11 +70,7 @@ namespace data {
 		EXPECT_EQ(3, cell.getActiveLayer());
 		cell.forAllActiveNodes([](int& element) { element = 3; });
 
-		cell.refineGrid([](const int& element) {
-			utils::StaticGrid<int, 10, 10> newGrid;
-			newGrid.forEach([element](auto& e) { e = element * 5; });
-			return newGrid;
-		});
+		cell.refine([](const int& element) { return element * 5; });
 
 		EXPECT_EQ(2, cell.getActiveLayer());
 		cell.forAllActiveNodes([](const int& element) { EXPECT_EQ(15, element); });
@@ -82,8 +78,55 @@ namespace data {
 		cell.refine([](const int& element) { return element * 10; });
 		EXPECT_EQ(1, cell.getActiveLayer());
 		cell.forAllActiveNodes([](const int& element) { EXPECT_EQ(150, element); });
-		
+
 		cell.refine([](const int& element) { return element / 2; });
+		EXPECT_EQ(0, cell.getActiveLayer());
+		cell.forAllActiveNodes([](const int& element) { EXPECT_EQ(75, element); });
+
+		cell.coarsen([](const int& element) { return element / 5; });
+		EXPECT_EQ(1, cell.getActiveLayer());
+		cell.forAllActiveNodes([](const int& element) { EXPECT_EQ(15, element); });
+
+		cell.coarsen([](const int& element) { return element / 3; });
+		EXPECT_EQ(2, cell.getActiveLayer());
+		cell.forAllActiveNodes([](const int& element) { EXPECT_EQ(5, element); });
+
+		cell.coarsen([](const int&) { return 0; });
+		EXPECT_EQ(3, cell.getActiveLayer());
+		cell.forAllActiveNodes([](const int& element) { EXPECT_EQ(0, element); });
+
+	}
+
+	TEST(AdaptiveGridCell, RefinementCoarseningGrid) {
+
+		AdaptiveGridCell<int, FourLayerCellConfig> cell;
+
+		cell.setActiveLayer(3);
+		EXPECT_EQ(3, cell.getActiveLayer());
+		cell.forAllActiveNodes([](int& element) { element = 3; });
+
+		cell.refineGrid([](const int& element) {
+			utils::StaticGrid<int, 5, 5> newGrid;
+			newGrid.forEach([element](auto& e) { e = element * 5; });
+			return newGrid;
+		});
+
+		EXPECT_EQ(2, cell.getActiveLayer());
+		cell.forAllActiveNodes([](const int& element) { EXPECT_EQ(15, element); });
+
+		cell.refineGrid([](const int& element) { 			
+			utils::StaticGrid<int, 2, 2> newGrid;
+			newGrid.forEach([element](auto& e) { e = element * 10; });
+			return newGrid; 
+		});
+		EXPECT_EQ(1, cell.getActiveLayer());
+		cell.forAllActiveNodes([](const int& element) { EXPECT_EQ(150, element); });
+		
+		cell.refineGrid([](const int& element) {
+			utils::StaticGrid<int, 3, 3> newGrid;
+			newGrid.forEach([element](auto& e) { e = element / 2; });
+			return newGrid;
+		});
 		EXPECT_EQ(0, cell.getActiveLayer());
 		cell.forAllActiveNodes([](const int& element) { EXPECT_EQ(75, element); });
 
@@ -95,11 +138,17 @@ namespace data {
 		EXPECT_EQ(1, cell.getActiveLayer());
 		cell.forAllActiveNodes([](const int& element) { EXPECT_EQ(15, element); });
 
-		cell.coarsen([](const int& element) { return element / 3; });
+		cell.coarsenGrid([](const auto& grid) {
+			int res = 0;
+			grid.forEach([&](const int& element) { res += element / 3; });
+			return res / (int)(grid.size().x * grid.size().y);
+		});		
 		EXPECT_EQ(2, cell.getActiveLayer());
 		cell.forAllActiveNodes([](const int& element) { EXPECT_EQ(5, element); });
 
-		cell.coarsen([](const int&) { return 0; });
+		cell.coarsenGrid([](__unused const auto& grid) {
+			return 0;
+		});		
 		EXPECT_EQ(3, cell.getActiveLayer());
 		cell.forAllActiveNodes([](const int& element) { EXPECT_EQ(0, element); });
 
@@ -123,19 +172,19 @@ namespace data {
 		const std::vector<int> xRef(2*2, 1);
 		const std::vector<int> yRef(3*5, 1);
 
-		auto leftBoundary = cell.getBoundary(allscale::api::user::data::Direction::Left);
+		auto leftBoundary = cell.getBoundary(Direction::Left);
 		ASSERT_EQ(3*5, leftBoundary.size());
 		EXPECT_EQ(yRef, leftBoundary);
 
-		auto rightBoundary = cell.getBoundary(allscale::api::user::data::Direction::Right);
+		auto rightBoundary = cell.getBoundary(Direction::Right);
 		ASSERT_EQ(3*5, rightBoundary.size());
 		EXPECT_EQ(yRef, rightBoundary);
 
-		auto upperBoundary = cell.getBoundary(allscale::api::user::data::Direction::Up);
+		auto upperBoundary = cell.getBoundary(Direction::Up);
 		ASSERT_EQ(2*2, upperBoundary.size());
 		EXPECT_EQ(xRef, upperBoundary);
 		
-		auto lowerBoundary = cell.getBoundary(allscale::api::user::data::Direction::Down);
+		auto lowerBoundary = cell.getBoundary(Direction::Down);
 		ASSERT_EQ(2*2, lowerBoundary.size());
 		EXPECT_EQ(xRef, lowerBoundary);
 
@@ -144,33 +193,62 @@ namespace data {
 		const std::vector<int> xUpdate(2*2, 5);
 		const std::vector<int> yUpdate(3*5, 5);
 
-		cell.setBoundary(api::user::data::Direction::Left, yUpdate);
-		EXPECT_EQ((rT{ 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5 }), cell.getBoundary(api::user::data::Direction::Left));
-		EXPECT_EQ((rT{ 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1 }), cell.getBoundary(api::user::data::Direction::Right));
-		EXPECT_EQ((rT{ 5,1,1,1 }), cell.getBoundary(api::user::data::Direction::Up));
-		EXPECT_EQ((rT{ 5,1,1,1 }), cell.getBoundary(api::user::data::Direction::Down));
+		cell.setBoundary(Direction::Left, yUpdate);
+		EXPECT_EQ((rT{ 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5 }), cell.getBoundary(Direction::Left));
+		EXPECT_EQ((rT{ 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1 }), cell.getBoundary(Direction::Right));
+		EXPECT_EQ((rT{ 5,1,1,1 }), cell.getBoundary(Direction::Up));
+		EXPECT_EQ((rT{ 5,1,1,1 }), cell.getBoundary(Direction::Down));
 
-		cell.setBoundary(api::user::data::Direction::Right, yUpdate);
-		EXPECT_EQ((rT{ 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5 }), cell.getBoundary(api::user::data::Direction::Left));
-		EXPECT_EQ((rT{ 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5 }), cell.getBoundary(api::user::data::Direction::Right));
-		EXPECT_EQ((rT{ 5,1,1,5 }), cell.getBoundary(api::user::data::Direction::Up));
-		EXPECT_EQ((rT{ 5,1,1,5 }), cell.getBoundary(api::user::data::Direction::Down));
+		cell.setBoundary(Direction::Right, yUpdate);
+		EXPECT_EQ((rT{ 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5 }), cell.getBoundary(Direction::Left));
+		EXPECT_EQ((rT{ 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5 }), cell.getBoundary(Direction::Right));
+		EXPECT_EQ((rT{ 5,1,1,5 }), cell.getBoundary(Direction::Up));
+		EXPECT_EQ((rT{ 5,1,1,5 }), cell.getBoundary(Direction::Down));
 
-		cell.setBoundary(api::user::data::Direction::Up, xUpdate);
-		EXPECT_EQ((rT{ 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5 }), cell.getBoundary(api::user::data::Direction::Left));
-		EXPECT_EQ((rT{ 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5 }), cell.getBoundary(api::user::data::Direction::Right));
-		EXPECT_EQ((rT{ 5,5,5,5 }), cell.getBoundary(api::user::data::Direction::Up));
-		EXPECT_EQ((rT{ 5,1,1,5 }), cell.getBoundary(api::user::data::Direction::Down));
+		cell.setBoundary(Direction::Up, xUpdate);
+		EXPECT_EQ((rT{ 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5 }), cell.getBoundary(Direction::Left));
+		EXPECT_EQ((rT{ 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5 }), cell.getBoundary(Direction::Right));
+		EXPECT_EQ((rT{ 5,5,5,5 }), cell.getBoundary(Direction::Up));
+		EXPECT_EQ((rT{ 5,1,1,5 }), cell.getBoundary(Direction::Down));
 
-		cell.setBoundary(api::user::data::Direction::Down, xUpdate);
-		EXPECT_EQ((rT{ 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5 }), cell.getBoundary(api::user::data::Direction::Left));
-		EXPECT_EQ((rT{ 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5 }), cell.getBoundary(api::user::data::Direction::Right));
-		EXPECT_EQ((rT{ 5,5,5,5 }), cell.getBoundary(api::user::data::Direction::Up));
-		EXPECT_EQ((rT{ 5,5,5,5 }), cell.getBoundary(api::user::data::Direction::Down));
+		cell.setBoundary(Direction::Down, xUpdate);
+		EXPECT_EQ((rT{ 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5 }), cell.getBoundary(Direction::Left));
+		EXPECT_EQ((rT{ 5,5,5,5,5,5,5,5,5,5,5,5,5,5,5 }), cell.getBoundary(Direction::Right));
+		EXPECT_EQ((rT{ 5,5,5,5 }), cell.getBoundary(Direction::Up));
+		EXPECT_EQ((rT{ 5,5,5,5 }), cell.getBoundary(Direction::Down));
 
 		int sum = 0;
 		cell.forAllActiveNodes([&sum](const int& element) { sum += element; });
 		EXPECT_EQ(196, sum);
+
+		// check different layer
+		cell.setActiveLayer(1);
+
+		cell.forAllActiveNodes([](int& element) { element = 0; });
+
+		cell.setBoundary(Direction::Left, (rT{ 1, 2, 3 }));
+		EXPECT_EQ((rT{ 1, 2, 3 }), cell.getBoundary(Direction::Left));
+		EXPECT_EQ((rT{ 0, 0, 0 }), cell.getBoundary(Direction::Right));
+		EXPECT_EQ((rT{ 3, 0 }), cell.getBoundary(Direction::Up));
+		EXPECT_EQ((rT{ 1, 0 }), cell.getBoundary(Direction::Down));
+
+		cell.setBoundary(Direction::Right, (rT{ 4, 5, 6 }));
+		EXPECT_EQ((rT{ 1, 2, 3 }), cell.getBoundary(Direction::Left));
+		EXPECT_EQ((rT{ 4, 5, 6 }), cell.getBoundary(Direction::Right));
+		EXPECT_EQ((rT{ 3, 6 }), cell.getBoundary(Direction::Up));
+		EXPECT_EQ((rT{ 1, 4 }), cell.getBoundary(Direction::Down));
+
+		cell.setBoundary(Direction::Up, (rT{ 7, 8 }));
+		EXPECT_EQ((rT{ 1, 2, 7 }), cell.getBoundary(Direction::Left));
+		EXPECT_EQ((rT{ 4, 5, 8 }), cell.getBoundary(Direction::Right));
+		EXPECT_EQ((rT{ 7, 8 }), cell.getBoundary(Direction::Up));
+		EXPECT_EQ((rT{ 1, 4 }), cell.getBoundary(Direction::Down));
+
+		cell.setBoundary(Direction::Down, (rT{ 9, 10 }));
+		EXPECT_EQ((rT{ 9, 2, 7 }), cell.getBoundary(Direction::Left));
+		EXPECT_EQ((rT{ 10, 5, 8 }), cell.getBoundary(Direction::Right));
+		EXPECT_EQ((rT{ 7, 8 }), cell.getBoundary(Direction::Up));
+		EXPECT_EQ((rT{ 9, 10 }), cell.getBoundary(Direction::Down));
 		
 	}
 
@@ -643,7 +721,7 @@ namespace data {
 
 	}
 
-	TEST(DISABLED_AdaptiveGrid, RefinementAssertions) {
+	TEST(AdaptiveGrid, RefinementAssertions) {
 
 		using TwoLayerConfig = CellConfig<layers<layer<2, 2>>>;
 
@@ -655,9 +733,19 @@ namespace data {
 
 			ASSERT_DEBUG_DEATH(cell.refine([&](const int& element) { return element; }), ".*Cannot refine.*");
 
-			ASSERT_EQ(0, cell.getActiveLayer());
+		});
 
-			ASSERT_DEBUG_DEATH(cell.refineGrid([](const int&) { return utils::StaticGrid<int,2,2>(); }), ".*Cannot refine.*");
+	}
+
+	TEST(AdaptiveGrid, CoarseningAssertions) {
+
+		using TwoLayerConfig = CellConfig<layers<layer<2, 2>>>;
+
+		AdaptiveGrid<int, TwoLayerConfig, 2> aGrid({ 2,2 });
+
+		aGrid.forEach([](AdaptiveGridCell<int, TwoLayerConfig>& cell) {
+
+			ASSERT_EQ(0, cell.getActiveLayer());
 
 			cell.coarsen([&](const int& element) {
 				return element;
@@ -667,27 +755,29 @@ namespace data {
 
 			ASSERT_DEBUG_DEATH(cell.coarsen([&](const int& element) { return element; }), ".*Cannot coarsen.*");
 
-			ASSERT_EQ(1, cell.getActiveLayer());
-
-			ASSERT_DEBUG_DEATH(cell.coarsenGrid([](const auto&) { return 0; }), ".*Cannot coarsen.*");
-
-			ASSERT_EQ(1, cell.getActiveLayer());
-
 		});
 
-		AdaptiveGrid<int, CellConfig<layers<>>,2> smallGrid({1,1});
+	}
+
+	TEST(AdaptiveGrid, CellRefinementAssertions) {
+
+		AdaptiveGrid<int, CellConfig<layers<>>, 2> smallGrid({ 1,1 });
 
 		auto& cell = smallGrid[{0, 0}].data;
 
 		ASSERT_DEBUG_DEATH(cell.refineFromLayer(0, [&](const int& element) { return element; }), "Error.*no such layer.*");
-		ASSERT_DEBUG_DEATH(cell.refineFromLayerGrid(0, [](const int&) { return utils::StaticGrid<int, 2, 2>(); }), "Error.*no such layer.*");
-		ASSERT_DEBUG_DEATH(cell.coarsenToLayer(0, [&](const int& element) { return element; }), "Error.*no such layer.*");
-		ASSERT_DEBUG_DEATH(cell.coarsenToLayerGrid(0, [](const auto&) { return 0; }), "Error.*no such layer.*");
 
 	}
 
+	TEST(AdaptiveGrid, CellCoarseningAssertions) {
 
+		AdaptiveGrid<int, CellConfig<layers<>>, 2> smallGrid({ 1,1 });
 
+		auto& cell = smallGrid[{0, 0}].data;
+
+		ASSERT_DEBUG_DEATH(cell.coarsenToLayer(0, [&](const int& element) { return element; }), "Error.*no such layer.*");
+
+	}
 
 } // end namespace data
 } // end namespace user
