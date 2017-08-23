@@ -1,6 +1,6 @@
 #pragma once
 
-#include "allscale/api/core/prec.h"
+#include "allscale/api/user/operator/async.h"
 #include "allscale/api/core/treeture.h"
 #include "allscale/api/user/operator/internal/operation_reference.h"
 
@@ -212,24 +212,12 @@ namespace user {
 		VCycle(const mesh_type& mesh) : topStage(mesh), mesh(mesh) {}
 
 		vcycle_reference run(std::size_t numCycles = 1) {
-
-			// start as async task -- TODO: use async when available
-			return core::prec(
-					[](int){ return true; },
-					[&,numCycles](int){
-						// run the given number of cycles
-						for(std::size_t i=0; i<numCycles; ++i ) {
-							topStage.run();
-						}
-					},
-					[&,numCycles](int,const auto&){
-						// run the given number of cycles
-						for(std::size_t i=0; i<numCycles; ++i ) {
-							topStage.run();
-						}
-					}
-			)(0);
-
+			return async([&, numCycles]() {
+				// run the given number of cycles
+				for(std::size_t i = 0; i<numCycles; ++i) {
+					topStage.run();
+				}
+			});
 		}
 
 		template<unsigned Level = 0>
