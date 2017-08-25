@@ -1719,6 +1719,11 @@ namespace data {
 				return intersect(a,complement(b));
 			}
 
+			static MeshRegion span(const MeshRegion& a, const MeshRegion& b) {
+				assert_not_implemented() << "Span operation not yet implemented!";
+				return a;
+			}
+
 			MeshRegion complement() const {
 
 				MeshRegion res = SubMeshRef::root();

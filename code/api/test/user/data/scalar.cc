@@ -45,6 +45,50 @@ namespace data {
 
 	}
 
+	TEST(ScalarRegion, Merge) {
+
+		using namespace detail;
+
+		// create the two region values
+		ScalarRegion off = false;
+		ScalarRegion on = true;
+
+		// test span operation
+		EXPECT_EQ(off,ScalarRegion::merge(off,off));
+		EXPECT_EQ( on,ScalarRegion::merge(off,on));
+		EXPECT_EQ( on,ScalarRegion::merge(on,off));
+		EXPECT_EQ( on,ScalarRegion::merge(on,on));
+
+		// also check generic support
+		EXPECT_EQ(off,allscale::api::core::merge(off,off));
+		EXPECT_EQ( on,allscale::api::core::merge(off,on));
+		EXPECT_EQ( on,allscale::api::core::merge(on,off));
+		EXPECT_EQ( on,allscale::api::core::merge(on,on));
+
+	}
+
+	TEST(ScalarRegion, Span) {
+
+		using namespace detail;
+
+		// create the two region values
+		ScalarRegion off = false;
+		ScalarRegion on = true;
+
+		// test span operation
+		EXPECT_EQ(off,ScalarRegion::span(off,off));
+		EXPECT_EQ( on,ScalarRegion::span(off,on));
+		EXPECT_EQ( on,ScalarRegion::span(on,off));
+		EXPECT_EQ( on,ScalarRegion::span(on,on));
+
+		// also check generic support
+		EXPECT_EQ(off,allscale::api::core::span(off,off));
+		EXPECT_EQ( on,allscale::api::core::span(off,on));
+		EXPECT_EQ( on,allscale::api::core::span(on,off));
+		EXPECT_EQ( on,allscale::api::core::span(on,on));
+
+	}
+
 	TEST(ScalarFragment,TypeProperties) {
 
 		using namespace detail;

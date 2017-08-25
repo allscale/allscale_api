@@ -138,6 +138,11 @@ namespace data {
 			return res;
 		}
 
+		static SetRegion span(const SetRegion&, const SetRegion&) {
+			std::cout << "Unsupported operation: cannot computed span on set regions!";
+			exit(1);
+		}
+
 		/**
 		 * An operator to load an instance of this range from the given archive.
 		 */

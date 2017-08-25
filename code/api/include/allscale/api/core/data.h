@@ -51,7 +51,10 @@ namespace core {
 			std::is_same<decltype((R(*)(const R&, const R&))(&R::intersect)), R(*)(const R&, const R&)>::value &&
 
 			// there has to be a set difference operation
-			std::is_same<decltype((R(*)(const R&, const R&))(&R::difference)), R(*)(const R&, const R&)>::value,
+			std::is_same<decltype((R(*)(const R&, const R&))(&R::difference)), R(*)(const R&, const R&)>::value &&
+
+			// there has to be a span operator, computing the hull of two regions
+			std::is_same<decltype((R(*)(const R&, const R&))(&R::span)), R(*)(const R&, const R&)>::value,
 
 		void>::type> : public std::true_type {};
 
@@ -188,6 +191,33 @@ namespace core {
 	typename std::enable_if<is_region<R>::value,bool>::type
 	isSubRegion(const R& a, const R& b) {
 		return R::difference(a,b).empty();
+	}
+
+	/**
+	 * A convenience wrapper for computing the span (e.g. convex hull) between two data regions.
+	 */
+	template<typename R>
+	typename std::enable_if<is_region<R>::value,R>::type
+	span(const R& a, const R& b) {
+		return R::span(a,b);
+	}
+
+	/**
+	 * A convince wrapper for merging a number of regions (single element base-case).
+	 */
+	template<typename R>
+	typename std::enable_if<is_region<R>::value,R>::type
+	merge(const R& a) {
+		return a;
+	}
+
+	/**
+	 * A convince wrapper for merging a number of regions (multiple element step-case).
+	 */
+	template<typename R, typename ... Rs>
+	typename std::enable_if<is_region<R>::value,R>::type
+	merge(const R& a, const Rs& ... rest) {
+		return R::merge(a,merge(rest...));
 	}
 
 	/**

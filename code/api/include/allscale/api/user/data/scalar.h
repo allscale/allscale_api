@@ -76,6 +76,10 @@ namespace data {
 				return  a.flag && !b.flag;
 			}
 
+			static ScalarRegion span(const ScalarRegion& a, const ScalarRegion& b) {
+				return merge(a,b);
+			}
+
 			/**
 			 * An operator to load an instance of this range from the given archive.
 			 */

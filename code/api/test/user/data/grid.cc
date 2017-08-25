@@ -650,6 +650,42 @@ namespace data {
 
 	}
 
+	TEST(GridRegion1D, Span) {
+
+		// test a simple grid region
+		{
+			GridRegion<1> a(5,6);
+			GridRegion<1> b(10,11);
+			EXPECT_EQ(GridRegion<1>(5,11), GridRegion<1>::span(a,b));
+		}
+
+		// test a composed grid region
+		{
+			auto a = allscale::api::core::merge(GridRegion<1>(5,6),GridRegion<1>(8,9));
+			auto b = allscale::api::core::merge(GridRegion<1>(10,11),GridRegion<1>(19,20));
+			EXPECT_EQ(GridRegion<1>(5,20), GridRegion<1>::span(a,b));
+		}
+
+	}
+
+	TEST(GridRegion2D, Span) {
+
+		// test a simple grid region
+		{
+			GridRegion<2> a(5,6);
+			GridRegion<2> b(10,11);
+			EXPECT_EQ(GridRegion<2>(5,11), GridRegion<2>::span(a,b));
+		}
+
+		// test a composed grid region
+		{
+			auto a = allscale::api::core::merge(GridRegion<2>(5,6),GridRegion<2>(8,9));
+			auto b = allscale::api::core::merge(GridRegion<2>(10,11),GridRegion<2>(19,20));
+			EXPECT_EQ(GridRegion<2>(5,20), GridRegion<2>::span(a,b));
+		}
+
+	}
+
 
 	TEST(GridFragment,Basic) {
 
