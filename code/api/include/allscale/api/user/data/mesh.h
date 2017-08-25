@@ -1719,9 +1719,9 @@ namespace data {
 				return intersect(a,complement(b));
 			}
 
-			static MeshRegion span(const MeshRegion& a, const MeshRegion& b) {
-				assert_not_implemented() << "Span operation not yet implemented!";
-				return a;
+			static MeshRegion span(const MeshRegion&, const MeshRegion&) {
+				std::cout << "Scan operation not yet implemented!";
+				exit(1);
 			}
 
 			MeshRegion complement() const {
