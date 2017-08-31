@@ -524,6 +524,10 @@ namespace reference {
 			return (!family || family->isComplete(path));
 		}
 
+		bool valid() const {
+			return family;
+		}
+
 		void wait() const;
 
 		task_reference getLeft() const {

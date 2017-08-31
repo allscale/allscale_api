@@ -68,8 +68,8 @@ namespace internal {
 		 * task if it is still owned.
 		 */
 		~operation_reference() {
-			// non-active will always be done
-			handle.wait();
+			// if handle is still valid, wait for its completion
+			if (handle.isValid()) handle.wait();
 		}
 
 		/**

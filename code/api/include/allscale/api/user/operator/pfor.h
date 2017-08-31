@@ -865,7 +865,7 @@ namespace user {
 			iteration_reference& operator=(iteration_reference&&) = default;
 
 			void wait() const {
-				handle.wait();
+				if (handle.valid()) handle.wait();
 			}
 
 			iteration_reference<Iter> getLeft() const {
