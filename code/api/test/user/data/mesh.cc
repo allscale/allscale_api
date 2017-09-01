@@ -1775,6 +1775,68 @@ namespace data {
 
 	}
 
+
+	TEST(MeshData,IO) {
+
+		std::stringstream buffer(std::ios_base::in | std::ios_base::out | std::ios_base::binary);
+
+		// create a mesh
+		auto bar = createBarMesh<2,2>(50);
+
+		{ // -- creation --
+
+			// create some mesh data
+			auto data = bar.createNodeData<Vertex,int>();
+
+			// fill in some property data
+			int c = 0;
+			bar.forAll<Vertex>([&](const NodeRef<Vertex>& node){
+				data[node] = c;
+				c++;
+			});
+
+			// convert to buffer
+			data.store(buffer);
+
+			// let mesh data be destroyed
+		}
+
+		{ // -- reload mesh data from a stream --
+
+			// load from stream
+			auto data = bar.loadNodeData<Vertex,int>(buffer);
+
+			// check the content of the restored properties
+			int c = 0;
+			bar.forAll<Vertex>([&](const NodeRef<Vertex>& node){
+				EXPECT_EQ(c,data[node]);
+				c++;
+			});
+
+		}
+
+		{ // -- reload mesh node data using reinterpretation of in-memory buffer --
+
+			// extract data buffer
+			auto str = buffer.str();
+
+			// interpret content
+			utils::RawBuffer raw(const_cast<char*>(str.c_str()));
+			auto data = bar.interpretNodeData<Vertex,int>(raw);
+
+			// check the content of the restored data field
+			int c = 0;
+			bar.forAll<Vertex>([&](const NodeRef<Vertex>& node){
+				EXPECT_EQ(c,data[node]);
+				c++;
+			});
+
+		}
+
+	}
+
+
+
 #ifndef _MSC_VER
 
 	TEST(MeshProperties,Basic) {
@@ -1824,6 +1886,71 @@ namespace data {
 	}
 
 #endif
+
+	TEST(MeshProperties,IO) {
+
+		struct PropertyA : public mesh_property<Vertex,int> {};
+		struct PropertyB : public mesh_property<Vertex,double> {};
+
+		std::stringstream buffer(std::ios_base::in | std::ios_base::out | std::ios_base::binary);
+
+		// create a mesh
+		auto bar = createBarMesh<2,2>(50);
+
+		{ // -- creation --
+
+			// create some properties
+			auto props = bar.createProperties<PropertyA,PropertyB>();
+
+			// fill in some property data
+			int c = 0;
+			bar.forAll<Vertex>([&](const NodeRef<Vertex>& node){
+				props.get<PropertyA>()[node] = c;
+				props.get<PropertyB>()[node] = c + 0.5;
+				c++;
+			});
+
+			// convert to buffer
+			props.store(buffer);
+
+			// let properties be destroyed
+		}
+
+		{ // -- reload properties from a stream --
+
+			// load from stream
+			auto props = bar.loadProperties<PropertyA,PropertyB>(buffer);
+
+			// check the content of the restored properties
+			int c = 0;
+			bar.forAll<Vertex>([&](const NodeRef<Vertex>& node){
+				EXPECT_EQ(c,props.get<PropertyA>()[node]);
+				EXPECT_DOUBLE_EQ(c + 0.5,props.get<PropertyB>()[node]);
+				c++;
+			});
+
+		}
+
+		{ // -- reload mesh properties using reinterpretation of in-memory buffer --
+
+			// extract data buffer
+			auto str = buffer.str();
+
+			// interpret content
+			utils::RawBuffer raw(const_cast<char*>(str.c_str()));
+			auto props = bar.interpretProperties<PropertyA,PropertyB>(raw);
+
+			// check the content of the restored properties
+			int c = 0;
+			bar.forAll<Vertex>([&](const NodeRef<Vertex>& node){
+				EXPECT_EQ(c,props.get<PropertyA>()[node]);
+				EXPECT_DOUBLE_EQ(c + 0.5,props.get<PropertyB>()[node]);
+				c++;
+			});
+
+		}
+
+	}
 
 } // end namespace data
 } // end namespace user

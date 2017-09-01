@@ -52,6 +52,44 @@ namespace utils {
 		detail::tuple_for_each_helper<sizeof...(Args)>()(op,tuple);
 	}
 
+	namespace detail {
+
+		template<typename Op, typename ... Args, std::size_t ... Index>
+		auto map_helper(const std::tuple<Args...>& in, const Op& op, std::integer_sequence<std::size_t,Index...>) {
+			return std::make_tuple(op(std::get<Index>(in))...);
+		}
+
+		template<typename Op, typename ... Args, std::size_t ... Index>
+		auto map_helper(std::tuple<Args...>& in, const Op& op, std::integer_sequence<std::size_t,Index...>) {
+			return std::make_tuple(op(std::get<Index>(in))...);
+		}
+
+	}
+
+	/**
+	 * A utility to apply a transformation on each element of a given tuple and return a a tuple containing
+	 * the results.
+	 *
+	 * @param tuple the (constant) input tuple
+	 * @param op the operation to be applied on each element of the tuple
+	 */
+	template<typename Op, typename ... Args>
+	auto map(const std::tuple<Args...>& tuple, const Op& op) {
+		return detail::map_helper(tuple,op,std::make_integer_sequence<std::size_t,sizeof...(Args)>());
+	}
+
+	/**
+	 * A utility to apply a transformation on each element of a given tuple and return a a tuple containing
+	 * the results.
+	 *
+	 * @param tuple the (mutable) input tuple
+	 * @param op the operation to be applied on each element of the tuple
+	 */
+	template<typename Op, typename ... Args>
+	auto map(std::tuple<Args...>& tuple, const Op& op) {
+		return detail::map_helper(tuple,op,std::make_integer_sequence<std::size_t,sizeof...(Args)>());
+	}
+
 } // end namespace utils
 } // end namespace allscale
 

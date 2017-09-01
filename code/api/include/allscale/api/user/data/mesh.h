@@ -17,6 +17,7 @@
 #include "allscale/utils/static_map.h"
 #include "allscale/utils/table.h"
 #include "allscale/utils/array_utils.h"
+#include "allscale/utils/tuple_utils.h"
 
 #include "allscale/utils/printer/vectors.h"
 
@@ -2405,6 +2406,13 @@ namespace data {
 
 			}
 
+		private:
+
+			MeshDataFragment(const partition_tree_type& ptree, std::vector<ElementType>&& data)
+				: partitionTree(ptree), coveredRegion(SubMeshRef::root()), data(std::move(data)) {}
+
+		public:
+
 			MeshDataFragment(const MeshDataFragment&) = delete;
 			MeshDataFragment(MeshDataFragment&&) = default;
 
@@ -2458,6 +2466,48 @@ namespace data {
 			void insert(utils::ArchiveReader&) {
 				assert_not_implemented();
 			}
+
+
+			// -- load / store for files --
+
+			void store(std::ostream& out) const {
+
+				// check that the element type is an arithmetic type (TODO: extend support)
+				assert_true(std::is_arithmetic<ElementType>::value)
+						<< "Sorry, only supported for arithmetic types a the moment.";
+
+				// this fragment is required to cover the entire mesh
+				assert_eq(coveredRegion, SubMeshRef::root());
+
+				// write covered data to output stream
+				utils::write<std::size_t>(out,data.size());
+				utils::write(out,data.begin(),data.end());
+			}
+
+			static MeshDataFragment load(const partition_tree_type& ptree, std::istream& in) {
+				// restore the data buffer
+				std::size_t size = utils::read<std::size_t>(in);
+				std::vector<ElementType> data(size);
+				utils::read(in,data.begin(),data.end());
+
+				// create the data fragment
+				return MeshDataFragment(ptree,std::move(data));
+			}
+
+			static MeshDataFragment interpret(const partition_tree_type& ptree, utils::RawBuffer& raw) {
+
+				// TODO: when exchanging the vector by some manageable structure, replace this
+				// For now: we copy the data
+
+				// copy the data buffer
+				std::size_t size = raw.consume<std::size_t>();
+				auto start = raw.consumeArray<ElementType>(size);
+				std::vector<ElementType> data(start, start + size);
+
+				// create the data fragment
+				return MeshDataFragment(ptree,std::move(data));
+			}
+
 		};
 
 
@@ -2500,6 +2550,10 @@ namespace data {
 
 	public:
 
+		using node_kind = NodeKind;
+
+		using element_type = ElementType;
+
 		using fragment_type = detail::MeshDataFragment<NodeKind,ElementType,Level,PartitionTree>;
 
 	private:
@@ -2512,6 +2566,8 @@ namespace data {
 		friend fragment_type;
 
 		MeshData(fragment_type& data) : data(&data) {}
+
+		MeshData(std::unique_ptr<fragment_type>&& data) : owned(std::move(data)), data(owned.get()) {}
 
 		MeshData(const PartitionTree& ptree, const detail::MeshRegion& region)
 			: owned(std::make_unique<fragment_type>(ptree,region)), data(owned.get()) {}
@@ -2530,6 +2586,20 @@ namespace data {
 			return (*data).size();
 		}
 
+
+		void store(std::ostream& out) const {
+			// ensure that the data is owned
+			assert_true(owned) << "Only supported when data is owned (not managed by some Data Item Manager)";
+			owned->store(out);
+		}
+
+		static MeshData load(const PartitionTree& ptree, std::istream& in) {
+			return std::make_unique<fragment_type>(fragment_type::load(ptree,in));
+		}
+
+		static MeshData interpret(const PartitionTree& ptree, utils::RawBuffer& raw) {
+			return std::make_unique<fragment_type>(fragment_type::interpret(ptree,raw));
+		}
 	};
 
 
@@ -2739,6 +2809,28 @@ namespace data {
 		}
 
 		/**
+		 * A sequential operation calling the given body for each node of the given kind
+		 * on the given level in parallel.
+		 *
+		 * NOTE: this operation is processed sequentially, and can thus not be distributed
+		 * among multiple nodes. Use pforAll instead
+		 *
+		 * @tparam Kind the kind of node to be visited
+		 * @tparam Level the level of the mesh to be addressed
+		 * @tparam Body the type of operation to be applied on each node
+		 *
+		 * @param body the operation to be applied on each node of the selected kind and level
+		 * @return a scan reference for synchronizing upon the asynchronously processed operation
+		 */
+		template<typename Kind, unsigned Level = 0, typename Body>
+		void forAll(const Body& body) const {
+			// iterate over all selected elements
+			for(const auto& cur : partitionTree.template getNodeRange<Kind,Level>(detail::SubTreeRef::root())) {
+				body(cur);
+			}
+		}
+
+		/**
 		 * A parallel operation calling the given body for each node of the given kind
 		 * on the given level in parallel.
 		 *
@@ -2875,12 +2967,33 @@ namespace data {
 			return utils::build_array<N>([&] { return MeshData<NodeKind,T,Level,partition_tree_type>(partitionTree,detail::SubMeshRef::root()); } );
 		}
 
+		template<typename NodeKind, typename T, unsigned Level = 0>
+		MeshData<NodeKind,T,Level,partition_tree_type> loadNodeData(std::istream& in) const {
+			return MeshData<NodeKind,T,Level,partition_tree_type>::load(partitionTree,in);
+		}
+
+		template<typename NodeKind, typename T, unsigned Level = 0>
+		MeshData<NodeKind,T,Level,partition_tree_type> interpretNodeData(utils::RawBuffer& raw) const {
+			return MeshData<NodeKind,T,Level,partition_tree_type>::interpret(partitionTree,raw);
+		}
+
+
+		// -- mesh property handling --
 
 		template<typename ... Properties>
 		MeshProperties<Levels,partition_tree_type,Properties...> createProperties() const {
 			return MeshProperties<Levels,partition_tree_type,Properties...>(*this);
 		}
 
+		template<typename ... Properties>
+		MeshProperties<Levels,partition_tree_type,Properties...> loadProperties(std::istream& in) const {
+			return MeshProperties<Levels,partition_tree_type,Properties...>::load(*this,in);
+		}
+
+		template<typename ... Properties>
+		MeshProperties<Levels,partition_tree_type,Properties...> interpretProperties(utils::RawBuffer& raw) const {
+			return MeshProperties<Levels,partition_tree_type,Properties...>::interpret(*this,raw);
+		}
 
 		// -- load / store for files --
 
@@ -3071,6 +3184,8 @@ namespace data {
 
 			data_t data;
 
+			MeshPropertiesData(data_t&& data) : data(std::move(data)) {}
+
 		public:
 
 			template<typename Mesh>
@@ -3087,6 +3202,55 @@ namespace data {
 				return std::get<utils::type_index<Property,property_list>::value>(data);
 			}
 
+			void store(std::ostream& out) const {
+				// write property data
+				utils::forEach(data,[&](const auto& entry){
+					entry.store(out);
+				});
+			}
+
+			template<typename Mesh>
+			static MeshPropertiesData load(const Mesh& mesh, std::istream& in) {
+				// a temporary tuple type to be filled with temporary results
+				using tmp_data_type = std::tuple<std::unique_ptr<mesh_data_type<Properties>>...>;
+
+				// load property data
+				tmp_data_type data;
+				utils::forEach(data,[&](auto& entry){
+					// load data
+					using data_type = typename std::remove_reference_t<decltype(entry)>::element_type;
+					using node_kind = typename data_type::node_kind;
+					using value_type = typename data_type::element_type;
+					entry = std::make_unique<data_type>(mesh.template loadNodeData<node_kind,value_type,Level>(in));
+				});
+
+				// move data to tuple
+				return MeshPropertiesData(utils::map(data,[&](auto& entry){
+					return std::move(*entry.release());
+				}));
+			}
+
+			template<typename Mesh>
+			static MeshPropertiesData interpret(const Mesh& mesh, utils::RawBuffer& raw) {
+				// a temporary tuple type to be filled with temporary results
+				using tmp_data_type = std::tuple<std::unique_ptr<mesh_data_type<Properties>>...>;
+
+				// load property data
+				tmp_data_type data;
+				utils::forEach(data,[&](auto& entry){
+					// load data
+					using data_type = typename std::remove_reference_t<decltype(entry)>::element_type;
+					using node_kind = typename data_type::node_kind;
+					using value_type = typename data_type::element_type;
+					entry = std::make_unique<data_type>(mesh.template interpretNodeData<node_kind,value_type,Level>(raw));
+				});
+
+				// move data to tuple
+				return MeshPropertiesData(utils::map(data,[&](auto& entry){
+					return std::move(*entry.release());
+				}));
+			}
+
 		};
 
 		template<typename PartitionTree, unsigned Level, typename ... Properties>
@@ -3095,9 +3259,14 @@ namespace data {
 			template<unsigned Lvl>
 			using level_data = MeshPropertiesData<PartitionTree,Lvl,Properties...>;
 
+			using nested_level_type = MeshPropertiesLevels<PartitionTree,Level-1,Properties...>;
+
 			level_data<Level> data;
 
-			MeshPropertiesLevels<PartitionTree,Level-1,Properties...> nested;
+			nested_level_type nested;
+
+			MeshPropertiesLevels(level_data<Level>&& data, nested_level_type&& nested)
+				: data(std::move(data)), nested(std::move(nested)) {}
 
 		public:
 
@@ -3129,6 +3298,34 @@ namespace data {
 				return nested.template get<Lvl>();
 			}
 
+			void store(std::ostream& out) const {
+				// write property data
+				data.store(out);
+				// write nested data
+				nested.store(out);
+			}
+
+
+			template<typename Mesh>
+			static MeshPropertiesLevels load(const Mesh& mesh, std::istream& in) {
+				// load property data
+				auto data = level_data<Level>::load(mesh,in);
+				// load nested data
+				auto nested = nested_level_type::load(mesh,in);
+				// build level data
+				return MeshPropertiesLevels(std::move(data),std::move(nested));
+			}
+
+			template<typename Mesh>
+			static MeshPropertiesLevels interpret(const Mesh& mesh, utils::RawBuffer& raw) {
+				// interpret property data
+				auto data = level_data<Level>::interpret(mesh,raw);
+				// interpret nested data
+				auto nested = nested_level_type::interpret(mesh,raw);
+				// build level data
+				return MeshPropertiesLevels(std::move(data),std::move(nested));
+			}
+
 		};
 
 
@@ -3138,6 +3335,8 @@ namespace data {
 			using level_data = MeshPropertiesData<PartitionTree,0,Properties...>;
 
 			level_data data;
+
+			MeshPropertiesLevels(level_data&& data) : data(std::move(data)) {}
 
 		public:
 
@@ -3157,6 +3356,23 @@ namespace data {
 				return data;
 			}
 
+			void store(std::ostream& out) const {
+				// write property data
+				data.store(out);
+			}
+
+			template<typename Mesh>
+			static MeshPropertiesLevels load(const Mesh& mesh, std::istream& in) {
+				// load property data
+				return level_data::load(mesh,in);
+			}
+
+			template<typename Mesh>
+			static MeshPropertiesLevels interpret(const Mesh& mesh, utils::RawBuffer& raw) {
+				// interpret property data
+				return level_data::interpret(mesh,raw);
+			}
+
 		};
 
 	}
@@ -3173,6 +3389,8 @@ namespace data {
 
 		template<typename Mesh>
 		MeshProperties(const Mesh& mesh) : data(mesh) {}
+
+		MeshProperties(DataStore&& data) : data(std::move(data)) {}
 
 	public:
 
@@ -3198,6 +3416,24 @@ namespace data {
 			return get<Property,Level>()[node];
 		}
 
+		// -- load / store for files --
+
+		void store(std::ostream& out) const {
+			// write property data
+			data.store(out);
+		}
+
+		template<typename Mesh>
+		static MeshProperties load(const Mesh& mesh, std::istream& in) {
+			// forward call to data store
+			return MeshProperties(DataStore::load(mesh,in));
+		}
+
+		template<typename Mesh>
+		static MeshProperties interpret(const Mesh& mesh, utils::RawBuffer& raw) {
+			// forward call to data store
+			return MeshProperties(DataStore::interpret(mesh,raw));
+		}
 	};
 
 } // end namespace data
