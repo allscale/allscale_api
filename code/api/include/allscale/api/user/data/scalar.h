@@ -197,15 +197,15 @@ namespace data {
 			: owned(std::make_unique<detail::ScalarFragment<T>>(core::no_shared_data(), value)), base(owned.get()) {}
 
 		T& get() {
-			return core::sema::data_item_element_access(*this, detail::ScalarRegion(true), base->value);
+			return data_item_element_access(*this, detail::ScalarRegion(true), base->value);
 		}
 
 		const T& get() const {
-			return core::sema::data_item_element_access(*this, detail::ScalarRegion(true), base->value);
+			return data_item_element_access(*this, detail::ScalarRegion(true), base->value);
 		}
 
 		void set(const T& newValue) {
-			core::sema::data_item_element_access(*this, detail::ScalarRegion(true), base->value) = newValue;
+			data_item_element_access(*this, detail::ScalarRegion(true), base->value) = newValue;
 		}
 
 	};

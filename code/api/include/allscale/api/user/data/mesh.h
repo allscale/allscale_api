@@ -3226,7 +3226,7 @@ namespace data {
 
 				// move data to tuple
 				return MeshPropertiesData(utils::map(data,[&](auto& entry){
-					return std::move(*entry.release());
+					return std::move(*entry.get());
 				}));
 			}
 
@@ -3247,7 +3247,7 @@ namespace data {
 
 				// move data to tuple
 				return MeshPropertiesData(utils::map(data,[&](auto& entry){
-					return std::move(*entry.release());
+					return std::move(*entry.get());
 				}));
 			}
 
