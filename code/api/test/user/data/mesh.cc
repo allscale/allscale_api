@@ -1835,8 +1835,6 @@ namespace data {
 
 	}
 
-
-
 #ifndef _MSC_VER
 
 	TEST(MeshProperties,Basic) {
@@ -1884,8 +1882,6 @@ namespace data {
 		});
 
 	}
-
-#endif
 
 	TEST(MeshProperties,IO) {
 
@@ -1951,6 +1947,8 @@ namespace data {
 		}
 
 	}
+
+#endif
 
 } // end namespace data
 } // end namespace user
