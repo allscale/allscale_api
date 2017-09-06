@@ -26,9 +26,12 @@ namespace core {
 
 	// a macro to wrap up data_item_element_access calls,
 	// eliminating the overhead of creating a region instance on every access
-	#ifndef data_item_element_access
+	// the ternary operation enforces type checks even on reference compilations
+	#ifndef ALLSCALECC
 		#define data_item_element_access(DataItem,Region,Res) \
 			((false) ? allscale::api::core::sema::_data_item_element_access(DataItem,Region,Res) : Res)
+	#else
+		#define data_item_element_access(DataItem,Region,Res) allscale::api::core::sema::_data_item_element_access(DataItem,Region,Res)
 	#endif
 
 	// ---------------------------------------------------------------------------------
@@ -73,7 +76,7 @@ namespace core {
 	// ---------------------------------------------------------------------------------
 
 
-	
+
 	template<typename F, typename _ = void>
 	struct is_fragment : public std::false_type {};
 
