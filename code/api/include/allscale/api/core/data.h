@@ -13,16 +13,23 @@ namespace core {
 
 		// c++ versions of the data item element access helper functions, facilitating compiler analysis
 		template<typename DataItem, typename T>
-		T& data_item_element_access(DataItem&, const typename DataItem::region_type&, T& ref) {
+		T& _data_item_element_access(DataItem&, const typename DataItem::region_type&, T& ref) {
 			return ref;
 		}
 
 		template<typename DataItem, typename T>
-		const T& data_item_element_access(const DataItem&, const typename DataItem::region_type&, const T& ref) {
+		const T& _data_item_element_access(const DataItem&, const typename DataItem::region_type&, const T& ref) {
 			return ref;
 		}
 
 	}
+
+	// a macro to wrap up data_item_element_access calls,
+	// eliminating the overhead of creating a region instance on every access
+	#ifndef data_item_element_access
+		#define data_item_element_access(DataItem,Region,Res) \
+			((false) ? allscale::api::core::sema::_data_item_element_access(DataItem,Region,Res) : Res)
+	#endif
 
 	// ---------------------------------------------------------------------------------
 	//									  Regions
