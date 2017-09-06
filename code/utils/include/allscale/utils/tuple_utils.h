@@ -99,10 +99,11 @@ namespace std {
 	std::ostream& operator<<(std::ostream& out, const std::tuple<Elements...>& tuple) {
 		out << "(";
 		std::size_t count = 0;
+		const std::size_t numElements = sizeof...(Elements);
 		allscale::utils::forEach(tuple,[&](const auto& cur) {
 			out << cur;
 			count++;
-			if (count != sizeof...(Elements)) out << ",";
+			if (count != numElements) out << ",";
 		});
 		return out << ")";
 	}
