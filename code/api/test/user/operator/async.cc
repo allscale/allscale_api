@@ -2,6 +2,9 @@
 
 #include <atomic>
 
+#include <chrono>
+#include <thread>
+
 #include "allscale/api/user/operator/async.h"
 #include "allscale/api/core/io.h"
 
@@ -45,13 +48,13 @@ namespace user {
 		std::atomic<int> counter(0);
 
 		auto a = async([&]() {
-			sleep(1);
+			std::this_thread::sleep_for(std::chrono::seconds(1));
 			counter = 0;
 		});
 
 		auto b = async(allscale::api::core::after(a), [&]() {
 			ASSERT_EQ(0, counter.load());
-			sleep(1);
+			std::this_thread::sleep_for(std::chrono::seconds(1));
 			counter = 1;
 		});
 
