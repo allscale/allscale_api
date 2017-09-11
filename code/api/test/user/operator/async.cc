@@ -41,6 +41,31 @@ namespace user {
 	}
 
 
+	TEST(Async, Dependencies) {
+		std::atomic<int> counter(0);
+
+		auto a = async([&]() {
+			sleep(1);
+			counter = 0;
+		});
+
+		auto b = async(allscale::api::core::after(a), [&]() {
+			ASSERT_EQ(0, counter.load());
+			sleep(1);
+			counter = 1;
+		});
+
+		auto c = async(allscale::api::core::after(b), [&]() {
+			ASSERT_EQ(1, counter.load());
+			counter = 2;
+		});
+
+		c.wait();
+
+		EXPECT_EQ(2, counter.load());
+	}
+
+
 	TEST(Async,ExecuteOnce) {
 
 		std::atomic<int> counter(0);
