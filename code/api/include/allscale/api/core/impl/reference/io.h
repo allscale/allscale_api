@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include <sys/types.h>
+
 #ifdef _MSC_VER
 	// includes
 	#include <io.h>
@@ -22,6 +24,7 @@
 #else
 	// includes
 	#include <sys/mman.h>
+	#include <unistd.h>
 	// marcos for function identifiers
 	#define CLOSE_WRAPPER close
 	#define LSEEK_WRAPPER lseek
@@ -30,7 +33,6 @@
 	#define WRITE_WRAPPER write
 #endif
 
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
