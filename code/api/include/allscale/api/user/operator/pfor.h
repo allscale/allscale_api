@@ -794,7 +794,7 @@ namespace user {
 
 			static std::pair<rng,rng> split(const rng& r) {
 
-				__unused const auto volume = detail::volume<Container<Iter,dims>>();
+				__allscale_unused const auto volume = detail::volume<Container<Iter,dims>>();
 				const auto distance = detail::volume<Iter>();
 
 				const auto& begin = r.begin();

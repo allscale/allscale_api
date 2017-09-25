@@ -178,7 +178,7 @@ namespace reference {
 				eventStack.push_back(e);
 			}
 
-			void popEvent(__unused const Event& e) {
+			void popEvent(__allscale_unused const Event& e) {
 				guard g(lock);
 				assert_eq(e,eventStack.back());
 				eventStack.pop_back();
@@ -2560,7 +2560,7 @@ namespace reference {
 				task.run();
 			} else {
 
-				__unused auto taskId = task.getId();
+				__allscale_unused auto taskId = task.getId();
 				logProfilerEvent(ProfileLogEntry::createTaskStartedEntry(taskId));
 
 				// check whether this run needs to be sampled

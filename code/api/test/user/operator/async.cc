@@ -2,6 +2,9 @@
 
 #include <atomic>
 
+#include <chrono>
+#include <thread>
+
 #include "allscale/api/user/operator/async.h"
 #include "allscale/api/core/io.h"
 
@@ -38,6 +41,31 @@ namespace user {
 		EXPECT_EQ(1,counter.load());
 		EXPECT_TRUE(task.isDone());
 
+	}
+
+
+	TEST(Async, Dependencies) {
+		std::atomic<int> counter(0);
+
+		auto a = async([&]() {
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+			counter = 0;
+		});
+
+		auto b = async(allscale::api::core::after(a), [&]() {
+			ASSERT_EQ(0, counter.load());
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+			counter = 1;
+		});
+
+		auto c = async(allscale::api::core::after(b), [&]() {
+			ASSERT_EQ(1, counter.load());
+			counter = 2;
+		});
+
+		c.wait();
+
+		EXPECT_EQ(2, counter.load());
 	}
 
 

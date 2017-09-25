@@ -30,6 +30,20 @@ namespace user {
 	core::treeture<std::result_of_t<Action()>> async(const Action& action);
 
 
+	/**
+	 * A simple job wrapper processing a given task asynchronously after the
+	 * given dependencies are satisfied. The task is wrapped to a simple recursion
+	 * where there is a single base case step.
+	 *
+	 * @tparam Dependencies the dependencies to await
+	 * @tparam Action the type of action
+	 * @param action the action to be processed
+	 * @return a treeture providing a reference the the result
+	 */
+	template<typename Dependencies, typename Action>
+	core::treeture<std::result_of_t<Action()>> async(Dependencies&& deps, const Action& action);
+
+
 
 
 	// ---------------------------------------------------------------------------------------------
@@ -39,6 +53,12 @@ namespace user {
 
 	template<typename Action>
 	core::treeture<std::result_of_t<Action()>> async(const Action& action) {
+		return async(core::after(), action);
+	}
+
+
+	template<typename Dependencies, typename Action>
+	core::treeture<std::result_of_t<Action()>> async(Dependencies&& deps, const Action& action) {
 		struct empty {};
 		return core::prec(
 			[](empty){ return true; },
@@ -49,7 +69,7 @@ namespace user {
 				assert_fail() << "Should not be reached!";
 				return action();
 			}
-		)(empty());
+		)(std::move(deps), empty());
 	}
 
 

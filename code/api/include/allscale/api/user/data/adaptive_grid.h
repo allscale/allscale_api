@@ -348,12 +348,12 @@ namespace data {
 			assert_fail() << "Error: trying to access layer " << layer << " --no such layer!";
 		}
 
-		std::vector<T> getBoundary(__unused unsigned layer, Direction dir) const {
+		std::vector<T> getBoundary(__allscale_unused unsigned layer, Direction dir) const {
 			assert_eq(0, layer) << "No such layer";
 			return detail::getBoundary(dir, data);
 		}
 
-		void setBoundary(__unused unsigned layer, Direction dir, const std::vector<T>& boundary) {
+		void setBoundary(__allscale_unused unsigned layer, Direction dir, const std::vector<T>& boundary) {
 			assert_eq(0, layer) << "No such layer";
 			detail::setBoundary(dir, data, boundary);
 		}

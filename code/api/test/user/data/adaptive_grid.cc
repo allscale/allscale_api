@@ -146,7 +146,7 @@ namespace data {
 		EXPECT_EQ(2, cell.getActiveLayer());
 		cell.forAllActiveNodes([](const int& element) { EXPECT_EQ(5, element); });
 
-		cell.coarsenGrid([](__unused const auto& grid) {
+		cell.coarsenGrid([](__allscale_unused const auto& grid) {
 			return 0;
 		});		
 		EXPECT_EQ(3, cell.getActiveLayer());

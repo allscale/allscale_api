@@ -1303,7 +1303,7 @@ namespace user {
 				auto evenObserver = [&](const Coordinate<dims>& from, const Coordinate<dims>& to, time_t t){
 
 					// create a operation handling one observer
-					__unused auto handler = [&](const auto& observer){
+					__allscale_unused auto handler = [&](const auto& observer){
 						// check whether this time step is of interest
 						if(!observer.isInterestedInTime(t)) return;
 						// walk through space
@@ -1318,13 +1318,13 @@ namespace user {
 					};
 
 					// process all observers
-					__unused auto l = { 0,(handler(observers),0)... };
+					__allscale_unused auto l = { 0,(handler(observers),0)... };
 				};
 
 				auto oddObserver = [&](const Coordinate<dims>& from, const Coordinate<dims>& to, time_t t){
 
 					// create a operation handling one observer
-					__unused auto handler = [&](const auto& observer){
+					__allscale_unused auto handler = [&](const auto& observer){
 						// check whether this time step is of interest
 						if(!observer.isInterestedInTime(t)) return;
 						// walk through space
@@ -1339,7 +1339,7 @@ namespace user {
 					};
 
 					// process all observers
-					__unused auto l = { 0,(handler(observers),0)... };
+					__allscale_unused auto l = { 0,(handler(observers),0)... };
 				};
 
 				// get the execution plan
@@ -1409,7 +1409,7 @@ namespace user {
 				auto evenObserver = [&](const Coordinate<dims>& from, const Coordinate<dims>& to, time_t t){
 
 					// create a operation handling one observer
-					__unused auto handler = [&](const auto& observer){
+					__allscale_unused auto handler = [&](const auto& observer){
 						// check whether this time step is of interest
 						if(!observer.isInterestedInTime(t)) return;
 						// walk through space
@@ -1424,13 +1424,13 @@ namespace user {
 					};
 
 					// process all observers
-					__unused auto l = { 0,(handler(observers),0)... };
+					__allscale_unused auto l = { 0,(handler(observers),0)... };
 				};
 
 				auto oddObserver = [&](const Coordinate<dims>& from, const Coordinate<dims>& to, time_t t){
 
 					// create a operation handling one observer
-					__unused auto handler = [&](const auto& observer){
+					__allscale_unused auto handler = [&](const auto& observer){
 						// check whether this time step is of interest
 						if(!observer.isInterestedInTime(t)) return;
 						// walk through space
@@ -1445,7 +1445,7 @@ namespace user {
 					};
 
 					// process all observers
-					__unused auto l = { 0,(handler(observers),0)... };
+					__allscale_unused auto l = { 0,(handler(observers),0)... };
 				};
 
 				// get the execution plan
