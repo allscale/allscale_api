@@ -2472,9 +2472,9 @@ namespace data {
 
 			void store(std::ostream& out) const {
 
-				// check that the element type is an arithmetic type (TODO: extend support)
-				assert_true(std::is_arithmetic<ElementType>::value)
-						<< "Sorry, only supported for arithmetic types a the moment.";
+				// check that the element type is a trivial type
+				assert_true(std::is_trivial<ElementType>::value)
+						<< "Sorry, only trivial types may be stored through this infrastructure.";
 
 				// this fragment is required to cover the entire mesh
 				assert_eq(coveredRegion, SubMeshRef::root());
