@@ -1,5 +1,6 @@
 #pragma once
 
+#if !defined(ALLSCALE_WITH_HPX)
 #include "allscale/utils/serializer.h"
 
 #include <vector>
@@ -57,3 +58,9 @@ namespace utils {
 
 } // end namespace utils
 } // end namespace allscale
+
+#else
+
+#include <hpx/runtime/serialization/vector.hpp>
+
+#endif
