@@ -130,5 +130,155 @@ namespace utils {
 		EXPECT_EQ(8, count);
 	}
 
+	TEST(StaticGrid0D, ForEachWithCoordinates) {
+
+		using grid_t = StaticGrid<int>;
+		using addr_t = typename grid_t::addr_type;
+		grid_t grid;
+
+		// fill the grid
+		int i = 0;
+		grid.forEach([&](int& cur) {
+			cur = i; i++;
+		});
+		EXPECT_EQ(1,i);
+
+		// check iteration order
+		i = 0;
+		grid.forEach([&](const int& cur){
+			EXPECT_EQ(i,cur); i++;
+		});
+		EXPECT_EQ(1,i);
+
+		i = 0;
+		addr_t last = { };
+		grid.forEach([&](const auto& pos, int& cur) {
+			if (i == 0) {
+				EXPECT_EQ(last,pos);
+			} else {
+				EXPECT_LT(last,pos);
+			}
+			EXPECT_EQ(i,cur);
+			EXPECT_EQ(i,grid[pos]);
+			last = pos;
+			i++;
+		});
+		EXPECT_EQ(1,i);
+		EXPECT_EQ(last,(addr_t{}));
+	}
+
+
+	TEST(StaticGrid1D, ForEachWithCoordinates) {
+
+		using grid_t = StaticGrid<int,5>;
+		using addr_t = typename grid_t::addr_type;
+		grid_t grid;
+
+		// fill the grid
+		int i = 0;
+		grid.forEach([&](int& cur) {
+			cur = i; i++;
+		});
+		EXPECT_EQ(5,i);
+
+		// check iteration order
+		i = 0;
+		grid.forEach([&](const int& cur){
+			EXPECT_EQ(i,cur); i++;
+		});
+		EXPECT_EQ(5,i);
+
+		i = 0;
+		addr_t last = { 0 };
+		grid.forEach([&](const auto& pos, int& cur) {
+			if (i == 0) {
+				EXPECT_EQ(last,pos);
+			} else {
+				EXPECT_LT(last,pos);
+			}
+			EXPECT_EQ(i,cur);
+			EXPECT_EQ(i,grid[pos]);
+			last = pos;
+			i++;
+		});
+		EXPECT_EQ(5,i);
+		EXPECT_EQ(last,(addr_t{4}));
+	}
+
+	TEST(StaticGrid2D, ForEachWithCoordinates) {
+
+		using grid_t = StaticGrid<int,2,4>;
+		using addr_t = typename grid_t::addr_type;
+		grid_t grid;
+
+		// fill the grid
+		int i = 0;
+		grid.forEach([&](int& cur) {
+			cur = i; i++;
+		});
+		EXPECT_EQ(2*4,i);
+
+		// check iteration order
+		i = 0;
+		grid.forEach([&](const int& cur){
+			EXPECT_EQ(i,cur); i++;
+		});
+		EXPECT_EQ(2*4,i);
+
+		i = 0;
+		addr_t last = { 0, 0 };
+		grid.forEach([&](const auto& pos, int& cur) {
+			if (i == 0) {
+				EXPECT_EQ(last,pos);
+			} else {
+				EXPECT_LT(last,pos);
+			}
+			EXPECT_EQ(i,cur);
+			EXPECT_EQ(i,grid[pos]);
+			last = pos;
+			i++;
+		});
+		EXPECT_EQ(2*4,i);
+		EXPECT_EQ(last,(addr_t{1,3}));
+	}
+
+	TEST(StaticGrid3D, ForEachWithCoordinates) {
+
+		using grid_t = StaticGrid<int,2,4,8>;
+		using addr_t = typename grid_t::addr_type;
+		grid_t grid;
+
+		// fill the grid
+		int i = 0;
+		grid.forEach([&](int& cur) {
+			cur = i; i++;
+		});
+		EXPECT_EQ(2*4*8,i);
+
+		// check iteration order
+		i = 0;
+		grid.forEach([&](const int& cur){
+			EXPECT_EQ(i,cur); i++;
+		});
+		EXPECT_EQ(2*4*8,i);
+
+		i = 0;
+		addr_t last = { 0, 0, 0 };
+		grid.forEach([&](const auto& pos, int& cur) {
+			if (i == 0) {
+				EXPECT_EQ(last,pos);
+			} else {
+				EXPECT_LT(last,pos);
+			}
+			EXPECT_EQ(i,cur);
+			EXPECT_EQ(i,grid[pos]);
+			last = pos;
+			i++;
+		});
+		EXPECT_EQ(2*4*8,i);
+		EXPECT_EQ(last,(addr_t{1,3,7}));
+	}
+
+
 } // end namespace utils
 } // end namespace allscale

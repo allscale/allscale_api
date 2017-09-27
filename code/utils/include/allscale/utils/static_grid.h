@@ -3,6 +3,7 @@
 #include <cstring>
 #include <type_traits>
 
+#include "allscale/utils/functional_utils.h"
 #include "allscale/utils/serializer.h"
 #include "allscale/utils/vector.h"
 
@@ -16,15 +17,10 @@ namespace utils {
 	struct StaticGrid<Cell,a,rest...> {
 		using data_type = std::array<StaticGrid<Cell,rest...>,a>;
 		using addr_type = utils::Vector<int64_t,sizeof...(rest)+1>;
-		data_type data;
-
-		StaticGrid& operator=(const StaticGrid& other) {
-			if (this == &other) return *this;
-			assignInternal<Cell>(other);
-			return *this;
-		}
 
 	private:
+
+		data_type data;
 
 		template<typename T>
 		typename std::enable_if<std::is_trivially_copyable<T>::value,void>::type
@@ -40,18 +36,28 @@ namespace utils {
 
 	public:
 
+		StaticGrid& operator=(const StaticGrid& other) {
+			if (this == &other) return *this;
+			assignInternal<Cell>(other);
+			return *this;
+		}
+
 		Cell& operator[](const addr_type& addr) {
-			std::array<int64_t, sizeof...(rest)+1> index = addr;
-			std::array<int64_t, sizeof...(rest)> nested;
-			std::copy(index.rbegin(), index.rend()-1, nested.begin());
-			return data[index.front()][nested];
+			return this->template operator[]<sizeof...(rest)+1>(addr);
 		}
 
 		const Cell& operator[](const addr_type& addr) const {
-			std::array<int64_t, sizeof...(rest)+1> index = addr;
-			std::array<int64_t, sizeof...(rest)> nested;
-			std::copy(index.rbegin(), index.rend()-1, nested.begin());
-			return data[index.front()][nested];
+			return this->template operator[]<sizeof...(rest)+1>(addr);
+		}
+
+		template<std::size_t D>
+		Cell& operator[](const utils::Vector<int64_t,D>& addr) {
+			return data[addr[D-sizeof...(rest)-1]][addr];
+		}
+
+		template<std::size_t D>
+		const Cell& operator[](const utils::Vector<int64_t,D>& addr) const {
+			return data[addr[D-sizeof...(rest)-1]][addr];
 		}
 
 		utils::Vector<std::size_t, sizeof...(rest)+1> size() const {
@@ -59,17 +65,33 @@ namespace utils {
 		}
 
 		template<typename Lambda>
-		void forEach(const Lambda& lambda) const {
+		std::enable_if_t<lambda_traits<Lambda>::arity == 1, void>
+		forEach(const Lambda& lambda) const {
 			for(const auto& cur : data) {
 				cur.forEach(lambda);
 			}
 		}
 
 		template<typename Lambda>
-		void forEach(const Lambda& lambda) {
+		std::enable_if_t<lambda_traits<Lambda>::arity == 1, void>
+		forEach(const Lambda& lambda) {
 			for(auto& cur : data) {
 				cur.forEach(lambda);
 			}
+		}
+
+		template<typename Lambda>
+		std::enable_if_t<lambda_traits<Lambda>::arity == 2, void>
+		forEach(const Lambda& lambda) const {
+			addr_type pos;
+			_forEachInternal(pos,lambda);
+		}
+
+		template<typename Lambda>
+		std::enable_if_t<lambda_traits<Lambda>::arity == 2, void>
+		forEach(const Lambda& lambda) {
+			addr_type pos;
+			_forEachInternal(pos,lambda);
 		}
 
 		void store(utils::ArchiveWriter& writer) const {
@@ -86,6 +108,33 @@ namespace utils {
 			return grid;
 		}
 
+	private:
+
+		template<typename T, size_t ... s>
+		friend struct StaticGrid;
+
+		template<typename Lambda, std::size_t D>
+		std::enable_if_t<lambda_traits<Lambda>::arity == 2, void>
+		_forEachInternal(utils::Vector<int64_t,D>& pos, const Lambda& lambda) const {
+			auto& i = pos[D-sizeof...(rest)-1];
+			i = 0;
+			for(const auto& cur : data) {
+				cur._forEachInternal(pos,lambda);
+				i++;
+			}
+		}
+
+		template<typename Lambda, std::size_t D>
+		std::enable_if_t<lambda_traits<Lambda>::arity == 2, void>
+		_forEachInternal(utils::Vector<int64_t,D>& pos, const Lambda& lambda) {
+			auto& i = pos[D-sizeof...(rest)-1];
+			i = 0;
+			for(auto& cur : data) {
+				cur._forEachInternal(pos,lambda);
+				i++;
+			}
+		}
+
 	};
 
 	template<typename Cell>
@@ -93,15 +142,9 @@ namespace utils {
 		using data_type = Cell;
 		using addr_type = utils::Vector<int64_t, 0>;
 
-		data_type data;
-
-		StaticGrid& operator=(const StaticGrid& other) {
-			if (this == &other) return *this;
-			assignInternal<Cell>(other);
-			return *this;
-		}
-
 	private:
+
+		data_type data;
 
 		template<typename T>
 		typename std::enable_if<std::is_trivially_copyable<T>::value,void>::type
@@ -117,11 +160,27 @@ namespace utils {
 
 	public:
 
-		Cell& operator[](const addr_type&) {
+		StaticGrid& operator=(const StaticGrid& other) {
+			if (this == &other) return *this;
+			assignInternal<Cell>(other);
+			return *this;
+		}
+
+		Cell& operator[](const addr_type& addr) {
+			return this->template operator[]<0>(addr);
+		}
+
+		const Cell& operator[](const addr_type& addr) const {
+			return this->template operator[]<0>(addr);
+		}
+
+		template<std::size_t D>
+		Cell& operator[](const utils::Vector<int64_t,D>&) {
 			return data;
 		}
 
-		const Cell& operator[](const addr_type&) const {
+		template<std::size_t D>
+		const Cell& operator[](const utils::Vector<int64_t,D>&) const {
 			return data;
 		}
 
@@ -130,13 +189,27 @@ namespace utils {
 		}
 
 		template<typename Lambda>
-		void forEach(const Lambda& lambda) const {
+		std::enable_if_t<lambda_traits<Lambda>::arity == 1, void>
+		forEach(const Lambda& lambda) const {
 			lambda(data);
 		}
 
 		template<typename Lambda>
-		void forEach(const Lambda& lambda) {
+		std::enable_if_t<lambda_traits<Lambda>::arity == 1, void>
+		forEach(const Lambda& lambda) {
 			lambda(data);
+		}
+
+		template<typename Lambda>
+		std::enable_if_t<lambda_traits<Lambda>::arity == 2, void>
+		forEach(const Lambda& lambda) const {
+			lambda(addr_type(),data);
+		}
+
+		template<typename Lambda>
+		std::enable_if_t<lambda_traits<Lambda>::arity == 2, void>
+		forEach(const Lambda& lambda) {
+			lambda(addr_type(),data);
 		}
 
 		void store(utils::ArchiveWriter& writer) const {
@@ -147,6 +220,23 @@ namespace utils {
 			StaticGrid grid;
 			grid.data = std::move(reader.read<data_type>());
 			return grid;
+		}
+
+	private:
+
+		template<typename T, size_t ... s>
+		friend struct StaticGrid;
+
+		template<typename Lambda, std::size_t D>
+		std::enable_if_t<lambda_traits<Lambda>::arity == 2, void>
+		_forEachInternal(utils::Vector<int64_t,D>& pos, const Lambda& lambda) const {
+			lambda(const_cast<const utils::Vector<int64_t,D>&>(pos),data);
+		}
+
+		template<typename Lambda, std::size_t D>
+		std::enable_if_t<lambda_traits<Lambda>::arity == 2, void>
+		_forEachInternal(utils::Vector<int64_t,D>& pos, const Lambda& lambda) {
+			lambda(const_cast<const utils::Vector<int64_t,D>&>(pos),data);
 		}
 
 	};
