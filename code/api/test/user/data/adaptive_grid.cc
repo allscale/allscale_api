@@ -779,6 +779,82 @@ namespace data {
 
 	}
 
+	TEST(AdaptiveGrid, ForAllWithCoordinates) {
+
+		AdaptiveGrid<int, CellConfig<layers<layer<2,2>,layer<3,3>>>, 2> grid({ 1, 1 });
+
+		auto& cell = grid[{0,0}];
+		int i = 0;
+
+		// test first level
+		cell.setActiveLayer(0);
+		cell.forAllActiveNodes([&](int& cur){
+			cur = i;
+			i++;
+		});
+		EXPECT_EQ(i,2*2*3*3);
+
+		// check coordinates
+		utils::Vector<int64_t,2> last;
+		i = 0;
+		cell.forAllActiveNodes([&](const auto& pos, int& cur){
+			if (i == 0) last = pos;
+			else EXPECT_LT(last,pos);
+			EXPECT_EQ(i,cur);
+			cur = i;
+			i++;
+			last = pos;
+		});
+		EXPECT_EQ(i,2*2*3*3);
+		EXPECT_EQ(last,(utils::Vector<int64_t,2>{5,5}));
+
+
+		// check another level
+		cell.setActiveLayer(1);
+		i = 0;
+		cell.forAllActiveNodes([&](int& cur){
+			cur = i;
+			i++;
+		});
+		EXPECT_EQ(i,2*2);
+
+		// check coordinates
+		i = 0;
+		cell.forAllActiveNodes([&](const auto& pos, int& cur){
+			if (i == 0) last = pos;
+			else EXPECT_LT(last,pos);
+			EXPECT_EQ(i,cur);
+			cur = i;
+			i++;
+			last = pos;
+		});
+		EXPECT_EQ(i,2*2);
+		EXPECT_EQ(last,(utils::Vector<int64_t,2>{1,1}));
+
+		// and check the final level
+		cell.setActiveLayer(2);
+		i = 0;
+		cell.forAllActiveNodes([&](int& cur){
+			cur = i;
+			i++;
+		});
+		EXPECT_EQ(i,1);
+
+		// check coordinates
+		i = 0;
+		cell.forAllActiveNodes([&](const auto& pos, int& cur){
+			if (i == 0) last = pos;
+			else EXPECT_LT(last,pos);
+			EXPECT_EQ(i,cur);
+			cur = i;
+			i++;
+			last = pos;
+		});
+		EXPECT_EQ(i,1);
+		EXPECT_EQ(last,(utils::Vector<int64_t,2>{0,0}));
+
+	}
+
 } // end namespace data
 } // end namespace user
 } // end namespace api
