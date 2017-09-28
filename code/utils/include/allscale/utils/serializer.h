@@ -7,6 +7,13 @@
 
 #include "allscale/utils/assert.h"
 
+#if defined(ALLSCALE_WITH_HPX)
+#include <hpx/runtime/serialization/serialize.hpp>
+#include <hpx/runtime/serialization/input_archive.hpp>
+#include <hpx/runtime/serialization/output_archive.hpp>
+#include <hpx/runtime/serialization/array.hpp>
+#endif
+
 namespace allscale {
 namespace utils {
 
@@ -190,7 +197,7 @@ namespace utils {
 		}
 	};
 
-
+#if !defined(ALLSCALE_WITH_HPX)
 	class ArchiveWriter {
 
 		// the buffer targeted by this archive writer
@@ -232,7 +239,39 @@ namespace utils {
 		}
 
 	};
+#else
+    class ArchiveWriter {
+        hpx::serialization::output_archive &ar_;
 
+    public:
+        ArchiveWriter(hpx::serialization::output_archive &ar) : ar_(ar) {}
+
+        /**
+		 * Appends a given number of bytes to the end of the underlying data buffer.
+		 */
+		void write(const char* src, std::size_t count) {
+            ar_ & hpx::serialization::make_array(src, count);
+		}
+
+		/**
+		 * A utility function wrapping the invocation of the serialization mechanism.
+		 */
+		template<typename T>
+		std::enable_if_t<is_serializable<T>::value,void>
+		write(const T& value) {
+// 			// use serializer to store object of this type
+			serializer<T>::store(*this,value);
+		}
+
+        template<typename T>
+		std::enable_if_t<!is_serializable<T>::value,void>
+		write(const T& value) {
+            ar_ & value;
+		}
+    };
+#endif
+
+#if !defined(ALLSCALE_WITH_HPX)
 	class ArchiveReader {
 
 		// the current point of the reader
@@ -280,6 +319,41 @@ namespace utils {
 		}
 
 	};
+#else
+	class ArchiveReader {
+        hpx::serialization::input_archive &ar_;
+
+    public:
+        ArchiveReader(hpx::serialization::input_archive &ar) : ar_(ar) {}
+
+		/**
+		 * Reads a number of bytes from the underlying buffer.
+		 */
+		void read(char* dst, std::size_t count) {
+            ar_ & hpx::serialization::make_array(dst, count);
+		}
+
+		/**
+		 * A utility function wrapping up the de-serialization of an object
+		 * of type T from the underlying buffer.
+		 */
+		template<typename T>
+		std::enable_if_t<is_serializable<T>::value,T>
+		read() {
+			// use serializer to restore object of this type
+			return serializer<T>::load(*this);
+		}
+
+		template<typename T>
+		std::enable_if_t<!is_serializable<T>::value,T>
+		read() {
+			// use serializer to restore object of this type
+            T t;
+            ar_ & t;
+            return t;
+		}
+	};
+#endif
 
 
 	/**
@@ -375,7 +449,7 @@ namespace utils {
 
 
 	// -- facade functions --
-
+#if !defined(ALLSCALE_WITH_HPX)
 	template<typename T>
 	typename std::enable_if<is_serializable<T>::value,Archive>::type
 	serialize(const T& value) {
@@ -389,6 +463,38 @@ namespace utils {
 	deserialize(Archive& a) {
 		return ArchiveReader(a).read<T>();
 	}
+#endif
 
 } // end namespace utils
 } // end namespace allscale
+
+#if defined(ALLSCALE_WITH_HPX)
+namespace hpx {
+namespace serialization {
+    template <typename T>
+    typename std::enable_if<
+        ::allscale::utils::is_serializable<T>::value &&
+        !(std::is_integral<T>::value || std::is_floating_point<T>::value),
+        output_archive&
+    >::type
+    serialize(output_archive & ar, T const & t, int) {
+        allscale::utils::ArchiveWriter writer(ar);
+        writer.write(t);
+        return ar;
+    }
+
+    template <typename T>
+    typename std::enable_if<
+        ::allscale::utils::is_serializable<T>::value &&
+        !(std::is_integral<T>::value || std::is_floating_point<T>::value),
+        input_archive&
+    >::type
+    serialize(input_archive & ar, T & t, int) {
+
+        allscale::utils::ArchiveReader reader(ar);
+        t = reader.read<T>();
+        return ar;
+    }
+} // end namespace serialization
+} // end namespace allscale
+#endif
