@@ -206,6 +206,17 @@ namespace reference {
 	};
 
 
+	/**
+	 * A global singleton dispatcher associating to each task type
+	 * a thread local runtime predictor.
+	 */
+	template<typename TaskType>
+	inline RuntimePredictor& getRuntimePredictor() {
+		static thread_local RuntimePredictor predictor = RuntimePredictor();
+		return predictor;
+	}
+
+
 } // end namespace reference
 } // end namespace impl
 } // end namespace core
