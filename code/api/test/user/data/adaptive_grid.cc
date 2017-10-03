@@ -15,7 +15,8 @@ namespace data {
 	#include "data_item_test.inl"
 
 	// test config frequently used throughout this test
-	using FourLayerCellConfig = CellConfig<layers<layer<5, 5>, layer<2, 2>, layer<3, 3>>>;
+	using FourLayerCellConfig = CellConfig<2, layers<layer<5, 5>, layer<2, 2>, layer<3, 3>>>;
+	using FourLayerCellConfig1D = CellConfig<1, layers<layer<5>, layer<2>, layer<3>>>;
 
 	TEST(AdaptiveGridCell, TypeProperties) {
 
@@ -156,7 +157,7 @@ namespace data {
 
 	TEST(AdaptiveGridCell, BoundaryExchange) {
 
-		using SpecialLayerCellConfig = CellConfig<layers<layer<2, 3>, layer<2, 5>>>;
+		using SpecialLayerCellConfig = CellConfig<2, layers<layer<2, 3>, layer<2, 5>>>;
 
 		AdaptiveGridCell<int, SpecialLayerCellConfig> cell;
 
@@ -254,7 +255,7 @@ namespace data {
 
 	TEST(AdaptiveGridCell, LoadStore) {
 
-		using TwoLayerCellConfig = CellConfig<layers<layer<2, 2>>>;
+		using TwoLayerCellConfig = CellConfig<2, layers<layer<2, 2>>>;
 		using CellType = AdaptiveGridCell<double, TwoLayerCellConfig>;
 
 		CellType aGrid;
@@ -284,6 +285,190 @@ namespace data {
 		});
 	}
 	
+	TEST(AdaptiveGridCell, SubscriptWrite) {
+
+		using ThreeLayerCellConfig = CellConfig<2, layers<layer<2, 2>,layer<3, 3>>>;
+		using CellType = AdaptiveGridCell<double, ThreeLayerCellConfig>;
+
+		CellType aGrid;
+
+		aGrid.setActiveLayer(0);
+		int i = 0;
+		aGrid.forAllActiveNodes([&](const auto& pos, double& element) {
+			aGrid[pos] = i;
+			i++;
+			EXPECT_EQ(aGrid[pos], element);
+		});
+
+		aGrid.setActiveLayer(1);
+		i = 0;
+		aGrid.forAllActiveNodes([&](const auto& pos, double& element) {
+			aGrid[pos] = i;
+			i++;
+			EXPECT_EQ(aGrid[pos], element);
+		});
+
+		aGrid.setActiveLayer(2);
+		i = 0;
+		aGrid.forAllActiveNodes([&](const auto& pos, double& element) {
+			aGrid[pos] = i;
+			i++;
+			EXPECT_EQ(aGrid[pos], element);
+		});
+
+	}
+
+	TEST(AdaptiveGridCell, SubscriptRead) {
+
+		using TwoLayerCellConfig = CellConfig<2, layers<layer<2, 2>>>;
+		using CellType = AdaptiveGridCell<double, TwoLayerCellConfig>;
+
+		CellType aGrid;
+
+		aGrid.setActiveLayer(0);
+		int i = 0;
+		aGrid.forAllActiveNodes([&](const auto& pos, double& element) {
+			element = i;
+			i++;
+			EXPECT_EQ(aGrid[pos], element);
+		});
+
+		i = 0;
+		aGrid.forAllActiveNodes([&](const auto& pos, double& element) {
+			element = i;
+			i++;
+			EXPECT_EQ(aGrid[pos], element);
+		});
+
+	}
+
+	TEST(AdaptiveGridCell, ActiveLayerSize) {
+
+		using ThreeLayerCellConfig = CellConfig<2, layers<layer<2, 2>,layer<3, 3>>>;
+		using CellType = AdaptiveGridCell<double, ThreeLayerCellConfig>;
+
+		CellType aGrid;
+
+		aGrid.setActiveLayer(0);
+
+		EXPECT_EQ(6, aGrid.getActiveLayerSize()[0]);
+		EXPECT_EQ(6, aGrid.getActiveLayerSize()[1]);
+
+		aGrid.setActiveLayer(1);
+
+		EXPECT_EQ(2, aGrid.getActiveLayerSize()[0]);
+		EXPECT_EQ(2, aGrid.getActiveLayerSize()[1]);
+
+		aGrid.setActiveLayer(2);
+
+		EXPECT_EQ(1, aGrid.getActiveLayerSize()[0]);
+		EXPECT_EQ(1, aGrid.getActiveLayerSize()[1]);
+
+		aGrid.setActiveLayer(0);
+
+		EXPECT_EQ(6, aGrid.getActiveLayerSize()[0]);
+		EXPECT_EQ(6, aGrid.getActiveLayerSize()[1]);
+
+	}
+
+	TEST(AdaptiveGridCell, AdaptiveGridCell1D) {
+
+		using ThreeLayerCellConfig = CellConfig<1, layers<layer<2>,layer<3>>>;
+		using CellType = AdaptiveGridCell<double, ThreeLayerCellConfig>;
+
+		CellType aGrid;
+
+		aGrid.setActiveLayer(0);
+
+		EXPECT_EQ(6, aGrid.getActiveLayerSize()[0]);
+
+		aGrid.setActiveLayer(1);
+
+		EXPECT_EQ(2, aGrid.getActiveLayerSize()[0]);
+
+		aGrid.setActiveLayer(2);
+
+		EXPECT_EQ(1, aGrid.getActiveLayerSize()[0]);
+
+		aGrid.setActiveLayer(0);
+
+		EXPECT_EQ(6, aGrid.getActiveLayerSize()[0]);
+
+	}
+
+	TEST(AdaptiveGridCell, AdaptiveGridCell3D) {
+
+		using ThreeLayerCellConfig = CellConfig<3, layers<layer<2,3,4>,layer<4,3,2>>>;
+		using CellType = AdaptiveGridCell<double, ThreeLayerCellConfig>;
+
+		CellType aGrid;
+
+		aGrid.setActiveLayer(0);
+
+		EXPECT_EQ(8, aGrid.getActiveLayerSize()[0]);
+		EXPECT_EQ(9, aGrid.getActiveLayerSize()[1]);
+		EXPECT_EQ(8, aGrid.getActiveLayerSize()[2]);
+
+		aGrid.setActiveLayer(1);
+
+		EXPECT_EQ(2, aGrid.getActiveLayerSize()[0]);
+		EXPECT_EQ(3, aGrid.getActiveLayerSize()[1]);
+		EXPECT_EQ(4, aGrid.getActiveLayerSize()[2]);
+
+		aGrid.setActiveLayer(2);
+
+		EXPECT_EQ(1, aGrid.getActiveLayerSize()[0]);
+		EXPECT_EQ(1, aGrid.getActiveLayerSize()[1]);
+		EXPECT_EQ(1, aGrid.getActiveLayerSize()[2]);
+
+		aGrid.setActiveLayer(0);
+
+		EXPECT_EQ(8, aGrid.getActiveLayerSize()[0]);
+		EXPECT_EQ(9, aGrid.getActiveLayerSize()[1]);
+		EXPECT_EQ(8, aGrid.getActiveLayerSize()[2]);
+
+	}
+
+
+	TEST(AdaptiveGridCell, NoLayer) {
+
+		using NoLayerCellConfig = CellConfig<3, layers<>>;
+		using CellType = AdaptiveGridCell<double, NoLayerCellConfig>;
+
+		CellType aGrid;
+
+		EXPECT_EQ(1, aGrid.getActiveLayerSize()[0]);
+		EXPECT_EQ(1, aGrid.getActiveLayerSize()[1]);
+		EXPECT_EQ(1, aGrid.getActiveLayerSize()[2]);
+
+	}
+
+	TEST(AdaptiveGrid, SizeInvalidLayerAssertions) {
+
+		using CellType = AdaptiveGridCell<double, FourLayerCellConfig>;
+
+		CellType cell;
+
+		cell.setActiveLayer(42);
+
+
+		ASSERT_DEBUG_DEATH((cell.getActiveLayerSize()), "Error.*no such layer.*");
+
+	}
+
+	TEST(AdaptiveGrid, SubscriptInvalidLayerAssertions) {
+
+		using CellType = AdaptiveGridCell<double, FourLayerCellConfig>;
+
+		CellType cell;
+
+		cell.setActiveLayer(42);
+
+
+		ASSERT_DEBUG_DEATH((cell[{0, 0}]), "Error.*no such layer.*");
+
+	}
+
 	TEST(AdaptiveGridRegion, TypeProperties) {
 
 		using namespace detail;
@@ -389,7 +574,7 @@ namespace data {
 		AdaptiveGridRegion<1> a(5, 10);
 		AdaptiveGridRegion<1> b(8, 14);
 
-		testFragment<AdaptiveGridFragment<int, FourLayerCellConfig, 1>>({ size }, a, b);
+		testFragment<AdaptiveGridFragment<int, FourLayerCellConfig1D, 1>>({ size }, a, b);
 
 	}
 
@@ -413,9 +598,9 @@ namespace data {
 		AdaptiveGridRegion<1> b(8, 14);
 
 		AdaptiveGridSharedData<1> shared{ size };
-		AdaptiveGridFragment<int, FourLayerCellConfig, 1> src(shared);
-		AdaptiveGridFragment<int, FourLayerCellConfig, 1> dst1(shared);
-		AdaptiveGridFragment<int, FourLayerCellConfig, 1> dst2(shared);
+		AdaptiveGridFragment<int, FourLayerCellConfig1D, 1> src(shared);
+		AdaptiveGridFragment<int, FourLayerCellConfig1D, 1> dst1(shared);
+		AdaptiveGridFragment<int, FourLayerCellConfig1D, 1> dst2(shared);
 
 		EXPECT_TRUE(src.getCoveredRegion().empty());
 		EXPECT_TRUE(dst1.getCoveredRegion().empty());
@@ -545,16 +730,17 @@ namespace data {
 	}
 
 	TEST(AdaptiveGrid,TypeProperties) {
+		using FourLayerCellConfig3D = CellConfig<3, layers<layer<5, 5, 5>, layer<2, 2, 2>, layer<3, 3, 3>>>;
 
-		EXPECT_TRUE((core::is_data_item<AdaptiveGrid<int,FourLayerCellConfig,1>>::value));
-		EXPECT_TRUE((core::is_data_item<AdaptiveGrid<int,FourLayerCellConfig,2>>::value));
-		EXPECT_TRUE((core::is_data_item<AdaptiveGrid<int,FourLayerCellConfig,3>>::value));
+		EXPECT_TRUE((core::is_data_item<AdaptiveGrid<int,FourLayerCellConfig1D>>::value));
+		EXPECT_TRUE((core::is_data_item<AdaptiveGrid<int,FourLayerCellConfig>>::value));
+		EXPECT_TRUE((core::is_data_item<AdaptiveGrid<int,FourLayerCellConfig3D>>::value));
 
 	}
 
 	TEST(AdaptiveGrid, Size) {
 
-		AdaptiveGrid<int,FourLayerCellConfig,2> grid({10,20});
+		AdaptiveGrid<int,FourLayerCellConfig> grid({10,20});
 
 		EXPECT_EQ("[10,20]",toString(grid.size()));
 
@@ -563,9 +749,9 @@ namespace data {
 
 	TEST(AdaptiveGrid, OneLayer) {
 
-		using OneLayerCellConfig = CellConfig<layers<>>;
+		using OneLayerCellConfig = CellConfig<2, layers<>>;
 
-		AdaptiveGrid<int, OneLayerCellConfig, 2> aGrid({ 2,2 });
+		AdaptiveGrid<int, OneLayerCellConfig> aGrid({ 2,2 });
 
 		aGrid.forEach([](AdaptiveGridCell<int, OneLayerCellConfig>& cell) {
 
@@ -579,9 +765,9 @@ namespace data {
 
 	TEST(AdaptiveGrid, TwoLayers) {
 
-		using TwoLayerCellConfig = CellConfig<layers<layer<2, 2>>>;
+		using TwoLayerCellConfig = CellConfig<2, layers<layer<2, 2>>>;
 
-		AdaptiveGrid<int, TwoLayerCellConfig, 2> aGrid({ 2,2 });
+		AdaptiveGrid<int, TwoLayerCellConfig> aGrid({ 2,2 });
 
 		aGrid.forEach([](AdaptiveGridCell<int, TwoLayerCellConfig>& cell) {
 
@@ -599,9 +785,9 @@ namespace data {
 
 	TEST(AdaptiveGrid, ThreeLayers) {
 
-		using ThreeLayerCellConfig = CellConfig<layers<layer<2, 2>, layer<3, 3>>>;
+		using ThreeLayerCellConfig = CellConfig<2, layers<layer<2, 2>, layer<3, 3>>>;
 
-		AdaptiveGrid<int, ThreeLayerCellConfig, 2> aGrid({ 2,2 });
+		AdaptiveGrid<int, ThreeLayerCellConfig> aGrid({ 2,2 });
 
 		aGrid.forEach([](AdaptiveGridCell<int, ThreeLayerCellConfig>& cell) {
 
@@ -620,7 +806,7 @@ namespace data {
 
 	TEST(AdaptiveGrid, FourLayers) {
 
-		AdaptiveGrid<int, FourLayerCellConfig, 2> aGrid({ 2,2 });
+		AdaptiveGrid<int, FourLayerCellConfig> aGrid({ 2,2 });
 
 		aGrid.forEach([](AdaptiveGridCell<int, FourLayerCellConfig>& cell) {
 
@@ -640,9 +826,9 @@ namespace data {
 
 	TEST(AdaptiveGrid, FiveLayers) {
 
-		using FiveLayerCellConfig = CellConfig<layers<layer<2, 2>, layer<3, 3>, layer<4, 4>, layer<5, 5>>>;
+		using FiveLayerCellConfig = CellConfig<2, layers<layer<2, 2>, layer<3, 3>, layer<4, 4>, layer<5, 5>>>;
 
-		AdaptiveGrid<int, FiveLayerCellConfig, 2> aGrid({ 2,2 });
+		AdaptiveGrid<int, FiveLayerCellConfig> aGrid({ 2,2 });
 
 		aGrid.forEach([](AdaptiveGridCell<int, FiveLayerCellConfig>& cell) {
 
@@ -663,7 +849,7 @@ namespace data {
 	
  	TEST(AdaptiveGrid, Refinement) {
  
- 		AdaptiveGrid<int, FourLayerCellConfig, 2> aGrid({ 2,2 });
+ 		AdaptiveGrid<int, FourLayerCellConfig> aGrid({ 2,2 });
  
  		aGrid.forEach([](AdaptiveGridCell<int, FourLayerCellConfig>& cell) {
  
@@ -693,7 +879,7 @@ namespace data {
  
  	TEST(AdaptiveGrid, Coarsening) {
  
- 		AdaptiveGrid<int, FourLayerCellConfig, 2> aGrid({ 2,2 });
+ 		AdaptiveGrid<int, FourLayerCellConfig> aGrid({ 2,2 });
  
  		aGrid.forEach([](AdaptiveGridCell<int, FourLayerCellConfig>& cell) {
  
@@ -723,9 +909,9 @@ namespace data {
 
 	TEST(AdaptiveGrid, RefinementAssertions) {
 
-		using TwoLayerConfig = CellConfig<layers<layer<2, 2>>>;
+		using TwoLayerConfig = CellConfig<2, layers<layer<2, 2>>>;
 
-		AdaptiveGrid<int, TwoLayerConfig, 2> aGrid({ 2,2 });
+		AdaptiveGrid<int, TwoLayerConfig> aGrid({ 2,2 });
 
 		aGrid.forEach([](AdaptiveGridCell<int, TwoLayerConfig>& cell) {
 
@@ -739,9 +925,9 @@ namespace data {
 
 	TEST(AdaptiveGrid, CoarseningAssertions) {
 
-		using TwoLayerConfig = CellConfig<layers<layer<2, 2>>>;
+		using TwoLayerConfig = CellConfig<2, layers<layer<2, 2>>>;
 
-		AdaptiveGrid<int, TwoLayerConfig, 2> aGrid({ 2,2 });
+		AdaptiveGrid<int, TwoLayerConfig> aGrid({ 2,2 });
 
 		aGrid.forEach([](AdaptiveGridCell<int, TwoLayerConfig>& cell) {
 
@@ -761,7 +947,7 @@ namespace data {
 
 	TEST(AdaptiveGrid, CellRefinementAssertions) {
 
-		AdaptiveGrid<int, CellConfig<layers<>>, 2> smallGrid({ 1,1 });
+		AdaptiveGrid<int, CellConfig<2, layers<>>> smallGrid({ 1,1 });
 
 		auto& cell = smallGrid[{0, 0}].data;
 
@@ -771,7 +957,7 @@ namespace data {
 
 	TEST(AdaptiveGrid, CellCoarseningAssertions) {
 
-		AdaptiveGrid<int, CellConfig<layers<>>, 2> smallGrid({ 1,1 });
+		AdaptiveGrid<int, CellConfig<2, layers<>>> smallGrid({ 1,1 });
 
 		auto& cell = smallGrid[{0, 0}].data;
 
@@ -781,7 +967,7 @@ namespace data {
 
 	TEST(AdaptiveGrid, ForAllWithCoordinates) {
 
-		AdaptiveGrid<int, CellConfig<layers<layer<2,2>,layer<3,3>>>, 2> grid({ 1, 1 });
+		AdaptiveGrid<int, CellConfig<2, layers<layer<2,2>,layer<3,3>>>> grid({ 1, 1 });
 
 		auto& cell = grid[{0,0}];
 		int i = 0;
@@ -852,6 +1038,114 @@ namespace data {
 		});
 		EXPECT_EQ(i,1);
 		EXPECT_EQ(last,(utils::Vector<int64_t,2>{0,0}));
+
+	}
+
+	TEST(AdaptiveGrid, AdaptiveGrid1D) {
+
+		AdaptiveGrid<int, CellConfig<1, layers<layer<2>, layer<3>>>> aGrid(10);
+
+		aGrid.forEach([](auto& cell) {
+			EXPECT_EQ(0, cell.getActiveLayer());
+
+			EXPECT_EQ(6, cell.getActiveLayerSize()[0]);
+
+			cell.setActiveLayer(1);
+
+		});
+
+		aGrid.forEach([](auto& cell) {
+			EXPECT_EQ(1, cell.getActiveLayer());
+
+			EXPECT_EQ(2, cell.getActiveLayerSize()[0]);
+
+			cell.setActiveLayer(2);
+
+		});
+
+		aGrid.forEach([](auto& cell) {
+			EXPECT_EQ(2, cell.getActiveLayer());
+
+			EXPECT_EQ(1, cell.getActiveLayerSize()[0]);
+
+		});
+
+	}
+
+	TEST(AdaptiveGrid, AdaptiveGrid3D) {
+
+		AdaptiveGrid<int, CellConfig<3, layers<layer<2,2,2>, layer<3,3,3>>>> aGrid({ 10, 10, 10 });
+
+		aGrid.forEach([](auto& cell) {
+			EXPECT_EQ(0, cell.getActiveLayer());
+
+			EXPECT_EQ(6, cell.getActiveLayerSize()[0]);
+			EXPECT_EQ(6, cell.getActiveLayerSize()[1]);
+			EXPECT_EQ(6, cell.getActiveLayerSize()[2]);
+
+			cell.setActiveLayer(1);
+
+		});
+
+		aGrid.forEach([](auto& cell) {
+			EXPECT_EQ(1, cell.getActiveLayer());
+
+			EXPECT_EQ(2, cell.getActiveLayerSize()[0]);
+			EXPECT_EQ(2, cell.getActiveLayerSize()[1]);
+			EXPECT_EQ(2, cell.getActiveLayerSize()[2]);
+
+			cell.setActiveLayer(2);
+
+		});
+
+		aGrid.forEach([](auto& cell) {
+			EXPECT_EQ(2, cell.getActiveLayer());
+
+			EXPECT_EQ(1, cell.getActiveLayerSize()[0]);
+			EXPECT_EQ(1, cell.getActiveLayerSize()[1]);
+			EXPECT_EQ(1, cell.getActiveLayerSize()[2]);
+
+		});
+
+	}
+
+	TEST(AdaptiveGrid, AdaptiveGrid4D) {
+
+		AdaptiveGrid<int, CellConfig<4, layers<layer<2,2,2,2>, layer<3,3,3,3>>>> aGrid({ 10, 10, 10, 10 });
+
+		aGrid.forEach([](auto& cell) {
+			EXPECT_EQ(0, cell.getActiveLayer());
+
+			EXPECT_EQ(6, cell.getActiveLayerSize()[0]);
+			EXPECT_EQ(6, cell.getActiveLayerSize()[1]);
+			EXPECT_EQ(6, cell.getActiveLayerSize()[2]);
+			EXPECT_EQ(6, cell.getActiveLayerSize()[3]);
+
+			cell.setActiveLayer(1);
+
+		});
+
+		aGrid.forEach([](auto& cell) {
+			EXPECT_EQ(1, cell.getActiveLayer());
+
+			EXPECT_EQ(2, cell.getActiveLayerSize()[0]);
+			EXPECT_EQ(2, cell.getActiveLayerSize()[1]);
+			EXPECT_EQ(2, cell.getActiveLayerSize()[2]);
+			EXPECT_EQ(2, cell.getActiveLayerSize()[3]);
+
+			cell.setActiveLayer(2);
+
+		});
+
+		aGrid.forEach([](auto& cell) {
+			EXPECT_EQ(2, cell.getActiveLayer());
+
+			EXPECT_EQ(1, cell.getActiveLayerSize()[0]);
+			EXPECT_EQ(1, cell.getActiveLayerSize()[1]);
+			EXPECT_EQ(1, cell.getActiveLayerSize()[2]);
+			EXPECT_EQ(1, cell.getActiveLayerSize()[3]);
+
+		});
 
 	}
 
