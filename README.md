@@ -1,10 +1,12 @@
 # AllScale API
 
-The AllScale API comprising the AllScale Core API and AllScale User API.
+The AllScale API comprises the AllScale Core API and AllScale User API.
 
 The AllScale User API comprises an extendable set of parallel primitives and data constructs to support the effective implementation of efficient HPC applications.
 
-The AllScale Core API defining the interface between the AllScale User API and the underlying implemenations, including the AllScale Compiler and Runtime environment itself.
+The AllScale Core API defines the interface between the AllScale User API and the underlying implemenations, including the AllScale Compiler and Runtime environment itself.
+
+For more detailed information visit our [wiki](https://github.com/allscale/allscale_api/wiki) or [project website](http://www.allscale.eu/home).
 
 ## Quickstart
 
