@@ -138,12 +138,10 @@ namespace data {
 
 
 		// some real import -- this one should work
-		EXPECT_NE(12,dst2.mask().get());
 		insert(dst2,archiveOn);
 		EXPECT_EQ(12,dst2.mask().get());
 
 		// importing the empty data archive should not change anything
-		EXPECT_EQ(12,dst2.mask().get());
 		insert(dst2,archiveOff);
 		EXPECT_EQ(12,dst2.mask().get());
 
