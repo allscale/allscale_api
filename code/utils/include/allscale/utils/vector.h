@@ -6,6 +6,7 @@
 
 #include "allscale/utils/printer/arrays.h"
 #include "allscale/utils/assert.h"
+#include "allscale/utils/unused.h"
 
 namespace allscale {
 namespace utils {
@@ -39,8 +40,8 @@ namespace utils {
 
 		template<typename R>
 		Vector(const std::initializer_list<R>& values) {
-			std::size_t pos = 0;
-			for(const auto& cur : values) { data[pos++] = cur; }
+			assert_eq(Dims,values.size());
+			init(values);
 		}
 
 		Vector& operator=(const Vector& other) = default;
@@ -102,6 +103,19 @@ namespace utils {
 		friend std::ostream& operator<<(std::ostream& out, const Vector& vec) {
 			return out << vec.data;
 		}
+
+	private:
+
+		template<typename R, std::size_t ... Index>
+		void init_internal(const std::initializer_list<R>& list, const std::integer_sequence<std::size_t,Index...>&) {
+			__allscale_unused auto bla = { data[Index] = *(list.begin() + Index) ... };
+		}
+
+		template<typename R>
+		void init(const std::initializer_list<R>& list) {
+			init_internal(list,std::make_index_sequence<Dims>());
+		}
+
 	};
 
 	template<typename T, std::size_t Dims, typename S>
