@@ -33,27 +33,26 @@ preduce(const Iter& a, const Iter& b, const Op& op) {
 			return op(*r.begin(),res_type());
 		},
 		core::pick(
-		[op](const range& r, const auto& nested) {
-			// here we have the binary splitting
-			auto fragments = r.split();
-			auto left = fragments.first;
-			auto right = fragments.second;
+			[op](const range& r, const auto& nested) {
+				// here we have the binary splitting
+				auto fragments = r.split();
+				auto left = fragments.first;
+				auto right = fragments.second;
+				return core::combine(nested(left),nested(right),op);
+			},
+			[op](const range& r, const auto&)->res_type {
+				if (r.size() == 0) return res_type();
 
-			return core::impl::reference::make_split_task(std::move(core::impl::reference::after()),
-					std::move(nested(left)).toTask(), std::move(nested(right)).toTask(), op, true);
-		},
-		[op](const range& r, const auto&)->res_type {
-			if (r.size() == 0) return res_type();
+				auto tmp = res_type();
 
-			auto tmp = res_type();
+				auto opB = [op, &tmp](const auto& cur) {
+					tmp = op(cur, tmp);
+				};
 
-			auto opB = [op, &tmp](const auto& cur) {
-				tmp = op(cur, tmp);
-			};
-
-			r.forEach(opB);
-			return tmp;
-		})
+				r.forEach(opB);
+				return tmp;
+			}
+		)
 	)(range(a,b)).get();
 }
 
@@ -100,10 +99,9 @@ preduce(
 
 	auto handle = [](const InitLocalState& init, const MapOp& map, const ReduceLocalState& exit, const range& r)->res_type {
 		auto res = init();
-		auto mapB = [map,&res](const auto& cur) {
+		r.forEach([map,&res](const auto& cur) {
 			return map(cur,res);
-		};
-		r.forEach(mapB);
+		});
 		return exit(res);
 	};
 
@@ -115,18 +113,17 @@ preduce(
 			return handle(init, map, exit, r);
 		},
 		core::pick(
-		[reduce](const range& r, const auto& nested) {
-			// here we have the binary splitting
-			auto fragments = r.split();
-			auto left = fragments.first;
-			auto right = fragments.second;
-
-			return core::impl::reference::make_split_task(std::move(core::impl::reference::after()),
-					std::move(nested(left)).toTask(), std::move(nested(right)).toTask(), reduce, true);
-		},
-		[init,map,exit,handle](const range& r, const auto&)->res_type {
-			return handle(init, map, exit, r);
-		})
+			[reduce](const range& r, const auto& nested) {
+				// here we have the binary splitting
+				auto fragments = r.split();
+				auto left = fragments.first;
+				auto right = fragments.second;
+				return core::combine(nested(left),nested(right),reduce);
+			},
+			[init,map,exit,handle](const range& r, const auto&)->res_type {
+				return handle(init, map, exit, r);
+			}
+		)
 	)(range(a, b)).get();
 }
 
