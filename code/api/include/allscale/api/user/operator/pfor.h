@@ -683,6 +683,16 @@ namespace user {
 			return res;
 		}
 
+		template<typename Iter>
+		struct fragments {
+			range<Iter> left;
+			range<Iter> right;
+		};
+
+		template<typename Iter>
+		fragments<Iter> make_fragments(const range<Iter>& left, const range<Iter>& right) {
+			return fragments<Iter>{ left, right };
+		}
 
 		template<typename Iter>
 		struct range_spliter;
@@ -748,7 +758,7 @@ namespace user {
 				return grow(*this, -steps);
 			}
 
-			std::pair<range<Iter>,range<Iter>> split() const {
+			fragments<Iter> split() const {
 				return range_spliter<Iter>::split(*this);
 			}
 
@@ -768,18 +778,16 @@ namespace user {
 
 		};
 
-
-
 		template<typename Iter>
 		struct range_spliter {
 
 			using rng = range<Iter>;
 
-			static std::pair<rng,rng> split(const rng& r) {
+			static fragments<Iter> split(const rng& r) {
 				const auto& a = r.begin();
 				const auto& b = r.end();
 				auto m = a + (b - a)/2;
-				return std::make_pair(rng(a,m),rng(m,b));
+				return make_fragments(rng(a,m),rng(m,b));
 			}
 
 		};
@@ -792,7 +800,7 @@ namespace user {
 
 			using rng = range<Container<Iter,dims>>;
 
-			static std::pair<rng,rng> split(const rng& r) {
+			static fragments<Container<Iter,dims>> split(const rng& r) {
 
 				__allscale_unused const auto volume = detail::volume<Container<Iter,dims>>();
 				const auto distance = detail::volume<Iter>();
@@ -814,13 +822,13 @@ namespace user {
 				// split the longest dimension, keep the others as they are
 				auto midA = end;
 				auto midB = begin;
-				midA[maxDim] = midB[maxDim] = range_spliter<Iter>::split(range<Iter>(begin[maxDim],end[maxDim])).first.end();
+				midA[maxDim] = midB[maxDim] = range_spliter<Iter>::split(range<Iter>(begin[maxDim],end[maxDim])).left.end();
 
 				// make sure no points got lost
 				assert_eq(volume(begin,end), volume(begin,midA) + volume(midB,end));
 
 				// create result
-				return std::make_pair(rng(begin,midA),rng(midB,end));
+				return make_fragments(rng(begin,midA),rng(midB,end));
 			}
 
 		};
@@ -869,11 +877,11 @@ namespace user {
 			}
 
 			iteration_reference<Iter> getLeft() const {
-				return { range_spliter<Iter>::split(_range).first, handle.getLeft() };
+				return { range_spliter<Iter>::split(_range).left, handle.getLeft() };
 			}
 
 			iteration_reference<Iter> getRight() const {
-				return { range_spliter<Iter>::split(_range).second, handle.getRight() };
+				return { range_spliter<Iter>::split(_range).right, handle.getRight() };
 			}
 
 			operator core::task_reference() const {
@@ -944,8 +952,8 @@ namespace user {
 				[](const rangeHelper& rg, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
 					auto fragments = rg.range.split();
-					auto& left = fragments.first;
-					auto& right = fragments.second;
+					auto& left = fragments.left;
+					auto& right = fragments.right;
 					auto dep = rg.dependencies.split(left,right);
 					return parallel(
 						nested(dep.left.toCoreDependencies(), rangeHelper{left, dep.left} ),
@@ -978,11 +986,9 @@ namespace user {
 				[](const range& r, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
 					auto fragments = r.split();
-					auto& left = fragments.first;
-					auto& right = fragments.second;
 					return parallel(
-						nested(left),
-						nested(right)
+						nested(fragments.left),
+						nested(fragments.right)
 					);
 				},
 				[body](const range& r, const auto&) {
@@ -1132,8 +1138,8 @@ namespace user {
 				[](const rangeHelper& rg, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
 					auto fragments = rg.range.split();
-					auto& left = fragments.first;
-					auto& right = fragments.second;
+					auto& left = fragments.left;
+					auto& right = fragments.right;
 					auto dep = rg.dependencies.split(left,right);
 					return parallel(
 						nested(dep.left.toCoreDependencies(), rangeHelper{left, dep.left} ),
@@ -1169,8 +1175,8 @@ namespace user {
 				[](const range& r, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
 					auto fragments = r.split();
-					auto& left = fragments.first;
-					auto& right = fragments.second;
+					auto& left = fragments.left;
+					auto& right = fragments.right;
 					return parallel(
 						nested(left),
 						nested(right)
@@ -1216,8 +1222,8 @@ namespace user {
 				[](const rangeHelper& rg, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
 					auto fragments = rg.range.split();
-					auto& left = fragments.first;
-					auto& right = fragments.second;
+					auto& left = fragments.left;
+					auto& right = fragments.right;
 					auto dep = rg.dependencies.split(left,right);
 					return parallel(
 						nested(dep.left.toCoreDependencies(), rangeHelper{left, dep.left} ),

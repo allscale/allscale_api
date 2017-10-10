@@ -36,8 +36,8 @@ preduce(const Iter& a, const Iter& b, const Op& op) {
 		[op](const range& r, const auto& nested) {
 			// here we have the binary splitting
 			auto fragments = r.split();
-			auto left = fragments.first;
-			auto right = fragments.second;
+			auto left = fragments.left;
+			auto right = fragments.right;
 
 			return core::impl::reference::make_split_task(std::move(core::impl::reference::after()),
 					std::move(nested(left)).toTask(), std::move(nested(right)).toTask(), op, true);
@@ -118,8 +118,8 @@ preduce(
 		[reduce](const range& r, const auto& nested) {
 			// here we have the binary splitting
 			auto fragments = r.split();
-			auto left = fragments.first;
-			auto right = fragments.second;
+			auto left = fragments.left;
+			auto right = fragments.right;
 
 			return core::impl::reference::make_split_task(std::move(core::impl::reference::after()),
 					std::move(nested(left)).toTask(), std::move(nested(right)).toTask(), reduce, true);
