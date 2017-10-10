@@ -53,8 +53,8 @@ namespace algorithm {
 				[aggregate](const range& r, const auto& nested) {
 					// here we have the binary splitting
 					auto fragments = r.split();
-					auto left = fragments.first;
-					auto right = fragments.second;
+					auto left = fragments.left;
+					auto right = fragments.right;
 					return core::combine(nested(left),nested(right),aggregate);
 				},
 				[reduce](const range& r, const auto&)->res_type {
