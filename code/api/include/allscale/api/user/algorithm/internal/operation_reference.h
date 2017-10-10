@@ -7,6 +7,7 @@
 namespace allscale {
 namespace api {
 namespace user {
+namespace algorithm {
 namespace internal {
 
 
@@ -107,6 +108,7 @@ namespace internal {
 
 
 } // end namespace internal
+} // end namespace algorithm
 } // end namespace user
 } // end namespace api
 } // end namespace allscale

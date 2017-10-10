@@ -8,9 +8,9 @@
 #include "allscale/api/user/data/grid.h"
 #include "allscale/api/user/data/static_grid.h"
 
-#include "allscale/api/user/operator/pfor.h"
-#include "allscale/api/user/operator/async.h"
-#include "allscale/api/user/operator/internal/operation_reference.h"
+#include "allscale/api/user/algorithm/pfor.h"
+#include "allscale/api/user/algorithm/async.h"
+#include "allscale/api/user/algorithm/internal/operation_reference.h"
 
 #include "allscale/utils/bitmanipulation.h"
 #include "allscale/utils/unused.h"
@@ -19,6 +19,7 @@
 namespace allscale {
 namespace api {
 namespace user {
+namespace algorithm {
 
 
 	// ---------------------------------------------------------------------------------------------
@@ -177,7 +178,7 @@ namespace user {
 					for(std::size_t t=0; t<steps; t++) {
 
 						// loop based sequential implementation
-						user::detail::forEach(iter_type(0),a.size(),
+						user::algorithm::detail::forEach(iter_type(0),a.size(),
 							// inner update operation
 							[x,y,t,innerUpdate](const iter_type& i){
 								(*y)[i] = innerUpdate(t,i,*x);
@@ -194,7 +195,7 @@ namespace user {
 								// check whether this time step is of interest
 								if(!observer.isInterestedInTime(t)) return;
 								// walk through space
-								user::detail::forEach(iter_type(0),a.size(),
+								user::algorithm::detail::forEach(iter_type(0),a.size(),
 									[&](const iter_type& i) {
 										if (observer.isInterestedInLocation(i)) {
 											observer.trigger(t,i,(*y)[i]);
@@ -255,7 +256,7 @@ namespace user {
 								// check whether this time step is of interest
 								if(!observer.isInterestedInTime(t)) return;
 								// walk through space
-								pfor(iter_type(0),a.size(),
+								algorithm::pfor(iter_type(0),a.size(),
 									[&](const iter_type& i) {
 										if (observer.isInterestedInLocation(i)) {
 											observer.trigger(t,i,(*y)[i]);
@@ -298,12 +299,12 @@ namespace user {
 
 					using iter_type = decltype(a.size());
 
-					user::detail::loop_reference<iter_type> ref;
+					user::algorithm::detail::loop_reference<iter_type> ref;
 
 					for(std::size_t t=0; t<steps; t++) {
 
 						// loop based parallel implementation with fine grained dependencies
-						ref = pforWithBoundary(iter_type(0),a.size(),
+						ref = algorithm::pforWithBoundary(iter_type(0),a.size(),
 							[x,y,t,inner](const iter_type& i){
 								(*y)[i] = inner(t,i,*x);
 							},
@@ -319,7 +320,7 @@ namespace user {
 								// check whether this time step is of interest
 								if(!observer.isInterestedInTime(t)) return;
 								// walk through space
-								ref = pfor(iter_type(0),a.size(),
+								ref = algorithm::pfor(iter_type(0),a.size(),
 									[t,y,observer](const iter_type& i) {
 										if (observer.isInterestedInLocation(i)) {
 											observer.trigger(t,i,(*y)[i]);
@@ -1467,6 +1468,7 @@ namespace user {
 	} // end namespace implementation
 
 
+} // end namespace algorithm
 } // end namespace user
 } // end namespace api
 } // end namespace allscale

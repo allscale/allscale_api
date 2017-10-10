@@ -3,14 +3,15 @@
 #include <atomic>
 #include <type_traits>
 
-#include "allscale/api/user/operator/internal/operation_reference.h"
+#include "allscale/api/user/algorithm/internal/operation_reference.h"
 
 #include "allscale/api/core/prec.h"
-#include "allscale/api/user/operator/async.h"
+#include "allscale/api/user/algorithm/async.h"
 
 namespace allscale {
 namespace api {
 namespace user {
+namespace algorithm {
 namespace internal {
 
 	TEST(OperatorReference,TypeTraits) {
@@ -50,7 +51,7 @@ namespace internal {
 
 		std::atomic<int> counter(0);
 
-		operation_reference task = async([&]{
+		operation_reference task = algorithm::async([&]{
 				counter = 1;
 		});
 
@@ -70,7 +71,7 @@ namespace internal {
 
 		std::atomic<int> counter(0);
 
-		operation_reference task = async([&]{
+		operation_reference task = algorithm::async([&]{
 				counter = 1;
 		});
 
@@ -114,7 +115,7 @@ namespace internal {
 
 		std::atomic<int> counter(0);
 
-		operation_reference task = async([&]{
+		operation_reference task = algorithm::async([&]{
 				counter = 1;
 		});
 
@@ -134,7 +135,7 @@ namespace internal {
 
 		std::atomic<int> counter(0);
 
-		operation_reference task = async([&]{
+		operation_reference task = algorithm::async([&]{
 				counter = 1;
 		});
 
@@ -154,6 +155,7 @@ namespace internal {
 
 
 } // end namespace internal
+} // end namespace algorithm
 } // end namespace user
 } // end namespace api
 } // end namespace allscale

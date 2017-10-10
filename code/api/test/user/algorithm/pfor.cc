@@ -5,7 +5,7 @@
 
 #include "allscale/api/core/io.h"
 
-#include "allscale/api/user/operator/pfor.h"
+#include "allscale/api/user/algorithm/pfor.h"
 
 #include "allscale/utils/serializer.h"
 #include "allscale/utils/string_utils.h"
@@ -14,6 +14,7 @@
 namespace allscale {
 namespace api {
 namespace user {
+namespace algorithm {
 
 	// --- basic parallel loop usage ---
 
@@ -775,7 +776,7 @@ namespace user {
 		}
 
 		// write file
-		user::pfor(toBeWritten, [&](auto c) {
+		pfor(toBeWritten, [&](auto c) {
 			EXPECT_TRUE(out.atomic([c](auto& out) {
 				out << c << " ";
 			}));
@@ -1251,6 +1252,7 @@ namespace user {
 		EXPECT_TRUE(overlapDetected.load());
 	}
 
+} // end namespace algorithm
 } // end namespace user
 } // end namespace api
 } // end namespace allscale

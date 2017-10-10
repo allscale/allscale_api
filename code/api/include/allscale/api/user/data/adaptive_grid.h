@@ -6,7 +6,7 @@
 #include "allscale/api/core/data.h"
 
 #include "allscale/api/user/data/grid.h"
-#include "allscale/api/user/operator/pfor.h"
+#include "allscale/api/user/algorithm/pfor.h"
 
 #include "allscale/utils/assert.h"
 #include "allscale/utils/serializer.h"
@@ -229,7 +229,7 @@ namespace data {
 		void refineFromLayer(unsigned layer, const Refiner& refiner) {
 			if(layer == getLayerNumber()) {
 				// iterate over cells on nested layer
-				api::user::detail::forEach({0}, nested.data.size(), [&](const auto& index) {
+				api::user::algorithm::detail::forEach({0}, nested.data.size(), [&](const auto& index) {
 					// using the index of a cell on nested layer, computes index covering cell on this layer
 					auto newIndex = utils::elementwiseDivision(index, utils::elementwiseDivision(nested.data.size(), data.size()));
 					// simply replicate data to cell on nested layer
@@ -247,11 +247,11 @@ namespace data {
 				auto indexer = [&](const auto& index) { return utils::elementwiseProduct(index, utils::elementwiseDivision(nested.data.size(), data.size())); };
 
 				// iterate over cells on this layer
-				api::user::detail::forEach({ 0 }, data.size(), [&](const auto& index) {
+				api::user::algorithm::detail::forEach({ 0 }, data.size(), [&](const auto& index) {
 					const auto& res = refiner(data[index]);
 					auto begin = indexer(index);
 					auto end = indexer(index + decltype(index){1});
-					api::user::detail::forEach(begin, end, [&](const auto& i) {
+					api::user::algorithm::detail::forEach(begin, end, [&](const auto& i) {
 						nested.data[i] = res[i-indexer(index)];
 					});
 				});
@@ -268,12 +268,12 @@ namespace data {
 				auto indexer = [&](const auto& index) { return utils::elementwiseProduct(index, utils::elementwiseDivision(nested.data.size(), data.size())); };
 
 				// iterate over cells on this layer
-				api::user::detail::forEach({ 0 }, data.size(), [&](const auto& index) {
+				api::user::algorithm::detail::forEach({ 0 }, data.size(), [&](const auto& index) {
 					T sum = T();
 					// iterate over subset of cells on nested layer, to be projected to the current cell pointed to by index
 					auto begin = indexer(index);
 					auto end = indexer(index + decltype(index){1});
-					api::user::detail::forEach(begin, end, [&](const auto& i) {
+					api::user::algorithm::detail::forEach(begin, end, [&](const auto& i) {
 						sum += coarsener(nested.data[i]);
 					});
 					// compute divisor for average
@@ -295,11 +295,11 @@ namespace data {
 
 				// iterate over cells on this layer
 				utils::StaticGrid<T, Dims...> param;
-				api::user::detail::forEach({ 0 }, data.size(), [&](const auto& index) {
+				api::user::algorithm::detail::forEach({ 0 }, data.size(), [&](const auto& index) {
 					// iterate over subset of cells on nested layer, to be projected to the current cell pointed to by index
 					auto begin = indexer(index);
 					auto end = indexer(index + decltype(index){1});
-					api::user::detail::forEach(begin, end, [&](const decltype(index)& i) {
+					api::user::algorithm::detail::forEach(begin, end, [&](const decltype(index)& i) {
 						param[i - indexer(index)] = nested.data[i];
 					});
 					data[index] = coarsener(param);

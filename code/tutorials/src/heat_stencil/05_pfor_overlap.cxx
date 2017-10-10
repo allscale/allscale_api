@@ -3,7 +3,7 @@
 #include <utility>
 
 #include "allscale/api/user/data/static_grid.h"
-#include "allscale/api/user/operator/pfor.h"
+#include "allscale/api/user/algorithm/pfor.h"
 
 using namespace allscale::api::user;
 

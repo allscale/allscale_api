@@ -4,7 +4,7 @@
 
 #include "allscale/api/core/prec.h"
 
-#include "allscale/api/user/operator/pfor.h"
+#include "allscale/api/user/algorithm/pfor.h"
 
 #include "allscale/utils/assert.h"
 #include "allscale/utils/vector.h"
@@ -12,6 +12,7 @@
 namespace allscale {
 namespace api {
 namespace user {
+namespace algorithm {
 
 
 	// ----- fold / reduce ------
@@ -38,7 +39,7 @@ namespace user {
 			const AggregationOp& aggregate
 		) {
 
-		using range = detail::range<Iter>;
+		using range = algorithm::detail::range<Iter>;
 		using res_type = typename utils::lambda_traits<AggregationOp>::result_type;
 
 		return core::prec(
@@ -89,7 +90,7 @@ namespace user {
 		return preduce(
 				a, b, [init,fold,finish](const Iter& a, const Iter& b) {
 					auto res = init();
-					detail::range<Iter>(a,b).forEach([&](const auto& cur){
+					algorithm::detail::range<Iter>(a,b).forEach([&](const auto& cur){
 						fold(cur,res);
 					});
 					return finish(res);
@@ -193,6 +194,7 @@ namespace user {
 
 	}
 
+} // end namespace algorithm
 } // end namespace user
 } // end namespace api
 } // end namespace allscale

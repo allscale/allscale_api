@@ -3,11 +3,12 @@
 #include <array>
 #include <vector>
 
-#include "allscale/api/user/operator/preduce.h"
+#include "allscale/api/user/algorithm/preduce.h"
 
 namespace allscale {
 namespace api {
 namespace user {
+namespace algorithm {
 
 	TEST(Ops, Reduce) {
 		auto plus = [](int a, int b) { return a + b; };
@@ -212,6 +213,7 @@ namespace user {
 		EXPECT_EQ(cnt/10, res);
 	}
 
+} // end namespace algorithm
 } // end namespace user
 } // end namespace api
 } // end namespace allscale

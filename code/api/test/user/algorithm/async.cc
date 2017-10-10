@@ -5,12 +5,13 @@
 #include <chrono>
 #include <thread>
 
-#include "allscale/api/user/operator/async.h"
+#include "allscale/api/user/algorithm/async.h"
 #include "allscale/api/core/io.h"
 
 namespace allscale {
 namespace api {
 namespace user {
+namespace algorithm {
 
 	// --- basic async usage ---
 
@@ -115,6 +116,7 @@ namespace user {
 		manager.remove(binary);
 	}
 
+} // end namespace algorithm
 } // end namespace user
 } // end namespace api
 } // end namespace allscale

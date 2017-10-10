@@ -7,11 +7,12 @@
 #include "allscale/utils/string_utils.h"
 
 #include "allscale/api/user/data/mesh.h"
-#include "allscale/api/user/operator/vcycle.h"
+#include "allscale/api/user/algorithm/vcycle.h"
 
 namespace allscale {
 namespace api {
 namespace user {
+namespace algorithm {
 
 	#include "../data/bar_mesh.inl"
 
@@ -314,6 +315,7 @@ namespace user {
 		vcycle.run(T);
 	}
 
+} // end namespace algorithm
 } // end namespace user
 } // end namespace api
 } // end namespace allscale

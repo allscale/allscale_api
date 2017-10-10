@@ -1,7 +1,7 @@
 #pragma once
 
 #include "allscale/api/core/io.h"
-#include "allscale/api/user/operator/pfor.h"
+#include "allscale/api/user/algorithm/pfor.h"
 
 
 namespace allscale {
@@ -24,7 +24,7 @@ void saveVecVecToFile(std::vector<std::vector<T>> vecVec, std::string filename, 
 	for(size_t i = 0; i < innerSize; ++i)
 		idxVec.push_back(i);
 
-	pfor(idxVec, [&](size_t& i) {
+	algorithm::pfor(idxVec, [&](size_t& i) {
 		fout.atomic([&](auto& out) {
 			// write preamble
 			out.write(i);
@@ -53,7 +53,7 @@ void saveVecVecToFileMM(std::vector<std::vector<T>> vecVec, std::string filename
 		idxVec.push_back(i);
 
 	auto dataOut = &fout.access<T>();//std::array<T, OuterSize*InnerSize>>();
-	pfor(idxVec, [&](size_t& i) {
+	algorithm::pfor(idxVec, [&](size_t& i) {
 		// write data
 		for(size_t j = 0; j < outerSize; ++j) {
 			dataOut[i*outerSize + j] = vecVec[j][i];

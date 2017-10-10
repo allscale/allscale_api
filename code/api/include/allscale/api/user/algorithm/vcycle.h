@@ -1,12 +1,13 @@
 #pragma once
 
-#include "allscale/api/user/operator/async.h"
+#include "allscale/api/user/algorithm/async.h"
 #include "allscale/api/core/treeture.h"
-#include "allscale/api/user/operator/internal/operation_reference.h"
+#include "allscale/api/user/algorithm/internal/operation_reference.h"
 
 namespace allscale {
 namespace api {
 namespace user {
+namespace algorithm {
 
 
 	// ---------------------------------------------------------------------------------------------
@@ -232,6 +233,7 @@ namespace user {
 	};
 
 
+} // end namespace algorithm
 } // end namespace user
 } // end namespace api
 } // end namespace allscale

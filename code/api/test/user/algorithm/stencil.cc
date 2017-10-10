@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "allscale/api/user/operator/stencil.h"
+#include "allscale/api/user/algorithm/stencil.h"
 #include "allscale/api/user/data/grid.h"
 
 #include "allscale/utils/string_utils.h"
@@ -11,6 +11,7 @@
 namespace allscale {
 namespace api {
 namespace user {
+namespace algorithm {
 
 	// --- basic parallel stencil usage ---
 
@@ -606,6 +607,7 @@ namespace user {
 
 	}
 
+} // end namespace algorithm
 } // end namespace user
 } // end namespace api
 } // end namespace allscale

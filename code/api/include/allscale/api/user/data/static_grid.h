@@ -290,7 +290,7 @@ namespace data {
 		 */
 		template<typename Op>
 		void forEach(const Op& op) const {
-			allscale::api::user::detail::forEach(
+			allscale::api::user::algorithm::detail::forEach(
 					coordinate_type(0),
 					size(),
 					[&](const auto& pos){
@@ -305,7 +305,7 @@ namespace data {
 		 */
 		template<typename Op>
 		void forEach(const Op& op) {
-			allscale::api::user::detail::forEach(
+			allscale::api::user::algorithm::detail::forEach(
 					coordinate_type(0),
 					size(),
 					[&](const auto& pos){
@@ -320,7 +320,7 @@ namespace data {
 		 */
 		template<typename Op>
 		auto pforEach(const Op& op) const {
-			return pfor(coordinate_type(0), size(), [&](const auto& pos) { op((*this)[pos]); });
+			return algorithm::pfor(coordinate_type(0), size(), [&](const auto& pos) { op((*this)[pos]); });
 		}
 
 		/**
@@ -329,7 +329,7 @@ namespace data {
 		 */
 		template<typename Op>
 		auto pforEach(const Op& op) {
-			return pfor(coordinate_type(0), size(), [&](const auto& pos) { op((*this)[pos]); });
+			return algorithm::pfor(coordinate_type(0), size(), [&](const auto& pos) { op((*this)[pos]); });
 		}
 
 	};

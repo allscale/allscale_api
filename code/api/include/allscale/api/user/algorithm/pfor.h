@@ -11,6 +11,7 @@
 namespace allscale {
 namespace api {
 namespace user {
+namespace algorithm {
 
 	// ----- forward declarations ------
 
@@ -1232,7 +1233,7 @@ namespace user {
 		)(dependency.toCoreDependencies(),rangeHelper{r,dependency}) };
 	}
 
-
+} // end namespace algorithm
 } // end namespace user
 } // end namespace api
 } // end namespace allscale
