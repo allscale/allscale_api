@@ -3,7 +3,7 @@
 #include <array>
 #include <vector>
 
-#include "allscale/api/user/operator/ops.h"
+#include "allscale/api/user/operator/preduce.h"
 
 namespace allscale {
 namespace api {
@@ -13,15 +13,15 @@ namespace user {
 		auto plus = [](int a, int b) { return a + b; };
 
 		std::vector<int> v = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26 };
-		EXPECT_EQ(351, preduce(v, plus));
+		EXPECT_EQ(351, preduce(v, plus).get());
 
 		std::vector<int> e = { };
-		EXPECT_EQ(0, preduce(e, plus));
+		EXPECT_EQ(0, preduce(e, plus).get());
 
 		auto concat = [](std::string a, std::string b) { return a + b; };
 		std::vector<std::string> s = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n",
 				"o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"};
-		std::string res = preduce(s, concat);
+		std::string res = preduce(s, concat).get();
 		EXPECT_EQ(26, res.size());
 		for(std::string cur : s) {
 			EXPECT_NE(std::string::npos, res.find(cur));
@@ -29,7 +29,7 @@ namespace user {
 	}
 
 
-	TEST(Ops, MapReduce) {
+	TEST(Ops, FoldReduce) {
 		const int N = 10;
 
 		std::vector<int> data;
@@ -37,11 +37,11 @@ namespace user {
 			data.push_back(1);
 		}
 
-		auto map = [](int i, int& s) { s += i + 1; };
+		auto fold = [](int i, int& s) { s += i + 1; };
 		auto reduce = [](int a, int b) { return a + b; };
 		auto init = []() { return 0; };
 
-		auto res = preduce(data, map, reduce, init);
+		auto res = preduce(data, fold, reduce, init).get();
 
 		EXPECT_EQ(N*2,res);
 
@@ -61,10 +61,10 @@ namespace user {
 			data.push_back(i);
 		}
 
-		auto map = [](int i, Data& s) {
-			s.max = std::max(s.max, i);
-			s.sum += i;
-			s.num += 1;
+		auto fold = [](int i, Data& s) {
+			s.max = std::max(s.max,i);
+			s.sum += i,
+			s.num++;
 		};
 
 		auto reduce = [](Data a, Data b) {
@@ -77,7 +77,7 @@ namespace user {
 
 		auto init = []() { return Data{0,0,0}; };
 
-		auto res = preduce(data, map, reduce, init);
+		auto res = preduce(data, fold, reduce, init).get();
 
 		int max = res.max;
 		double avg = (double)res.sum / res.num;
@@ -100,7 +100,7 @@ namespace user {
 			std::vector<int> odd;
 		};
 
-		auto map = [](int i, Result& r) {
+		auto fold = [](int i, Result& r) {
 			if (i % 2 == 0) r.even.push_back(i);
 			else            r.odd.push_back(i);
 		};
@@ -120,7 +120,7 @@ namespace user {
 
 		auto init = []() { return Result(); };
 
-		auto res = preduce(data, map, reduce, init);
+		auto res = preduce(data, fold, reduce, init).get();
 
 
 		std::sort(res.even.begin(),res.even.end());
@@ -137,7 +137,7 @@ namespace user {
 		for(int i = 97; i < 123; ++i)
 			characters.push_back(i);
 
-		auto map = [](int i, std::vector<char>& acc) {
+		auto fold = [](int i, std::vector<char>& acc) {
 			acc.push_back((char)i);
 		};
 
@@ -148,7 +148,7 @@ namespace user {
 		auto init = []() { return std::vector<char>(); };
 		auto exit = [](std::vector<char> vec) { return std::string(vec.begin(), vec.end()); };
 
-		auto res = preduce(characters, map, reduce, init, exit);
+		auto res = preduce(characters, fold, reduce, init, exit).get();
 
 		EXPECT_EQ(26, res.size());
 		for(int cur : characters) {
@@ -169,12 +169,12 @@ namespace user {
 			}
 		}
 
-		auto map = [data](std::array<int,2> i, int& s) { s += data[i[0]*10 + i[1]]; };
+		auto fold = [data](std::array<int,2> i, int& s) { s += data[i[0]*10 + i[1]]; };
 		auto reduce = [](int a, int b) { return a + b; };
 		auto init = []() { return 0; };
 		auto exit = [](int i) { return i; };
 
-		auto res = preduce(start, end, map, reduce, init, exit);
+		auto res = preduce(start, end, fold, reduce, init, exit).get();
 
 		EXPECT_EQ(N*N, res);
 	}
@@ -202,12 +202,12 @@ namespace user {
 
 
 
-		auto map = [data,Y,Z](std::array<int,3> i, int& s) { s += data[i[0]*Y*Z + i[1]*Z + i[2]]; };
+		auto fold = [data,Y,Z](std::array<int,3> i, int& s) { s += data[i[0]*Y*Z + i[1]*Z + i[2]]; };
 		auto reduce = [](double a, double b) { return a + b; };
 		auto init = []() { return 0; };
 		auto exit = [](int i) { return 0.1*i; };
 
-		auto res = preduce(start, end, map, reduce, init, exit);
+		auto res = preduce(start, end, fold, reduce, init, exit).get();
 
 		EXPECT_EQ(cnt/10, res);
 	}
