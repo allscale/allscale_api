@@ -239,6 +239,10 @@ namespace core {
 			ostream << value;
 			return *this;
 		}
+		OutputStream& operator<<(const char* value) {
+			ostream << value;
+			return *this;
+		}
 
 		/**
 		 * Allows to test whether this stream is in a valid state. It can, for instance,
