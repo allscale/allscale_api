@@ -311,7 +311,7 @@ namespace algorithm {
 							[x,y,t,boundary](const iter_type& i){
 								(*y)[i] = boundary(t,i,*x);
 							},
-							neighborhood_sync(ref)
+							full_neighborhood_sync(ref)
 						);
 
 						// check observers

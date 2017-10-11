@@ -10,6 +10,7 @@
 #include "allscale/utils/serializer.h"
 #include "allscale/utils/string_utils.h"
 #include "allscale/utils/vector.h"
+#include "allscale/utils/printer/vectors.h"
 
 namespace allscale {
 namespace api {
@@ -19,7 +20,7 @@ namespace algorithm {
 	// --- basic parallel loop usage ---
 
 
-	TEST(PFor,Basic) {
+	TEST(Pfor,Basic) {
 		const int N = 200;
 
 		// -- initialize data --
@@ -84,7 +85,7 @@ namespace algorithm {
 		}
 	}
 
-	TEST(PFor,Integrals) {
+	TEST(Pfor,Integrals) {
 
 		testIntegral<char>();
 		testIntegral<short>();
@@ -115,7 +116,7 @@ namespace algorithm {
 		testIntegral<std::size_t>();
 	}
 
-	TEST(PFor,Container) {
+	TEST(Pfor,Container) {
 		const int N = 200;
 
 		// create data
@@ -143,7 +144,7 @@ namespace algorithm {
 	}
 
 
-	TEST(PFor, Array) {
+	TEST(Pfor, Array) {
 
 		const int N = 100;
 
@@ -185,7 +186,7 @@ namespace algorithm {
 	}
 
 
-	TEST(PFor, Vector) {
+	TEST(Pfor, Vector) {
 
 		const int N = 100;
 
@@ -229,6 +230,108 @@ namespace algorithm {
 
 
 	// --- loop iteration sync ---
+
+	// a utility function to generate arbitrary loop references
+	template<typename T>
+	detail::range<T> make_range(const T& from, const T& to) {
+		return detail::range<T>(from,to);
+	}
+
+	// a utility function to generate arbitrary loop references
+	template<typename T>
+	detail::loop_reference<T> make_loop_ref(const T& from, const T& to) {
+		return detail::loop_reference<T>(make_range(from,to), core::done());
+	}
+
+	TEST(SyncOneOnOne, Explicit_1D) {
+
+		auto full = make_loop_ref(0,100);
+
+		// create an initial dependency
+		auto dep = one_on_one(full);
+		EXPECT_EQ("[0,100)",toString(dep.getRange()));
+
+		// test a clean split
+		auto parts = dep.split(make_range(0,50),make_range(50,100));
+		EXPECT_EQ("[0,50)",  toString(parts.left.getRange()));
+		EXPECT_EQ("[50,100)",toString(parts.right.getRange()));
+
+		// test an split that does not hit the center
+		parts = dep.split(make_range(0,40),make_range(40,100));
+		EXPECT_EQ("[0,50)",  toString(parts.left.getRange()));
+		EXPECT_EQ("[0,100)",toString(parts.right.getRange()));
+
+		// and in the other direction
+		parts = dep.split(make_range(0,80),make_range(80,100));
+		EXPECT_EQ("[0,100)",  toString(parts.left.getRange()));
+		EXPECT_EQ("[50,100)",toString(parts.right.getRange()));
+
+	}
+
+	TEST(SyncOneOnOne, Explicit_2D) {
+
+		using point = utils::Vector<int,2>;
+
+		auto full = make_loop_ref(point{0,0},point{100,100});
+
+		// create an initial dependency
+		auto dep = one_on_one(full);
+		EXPECT_EQ("[[0,0],[100,100])",toString(dep.getRange()));
+
+		// test a clean split
+		auto parts = dep.split(make_range(point{0,0},point{50,100}),make_range(point{50,0},point{100,100}));
+		EXPECT_EQ("[[0,0],[50,100])",  toString(parts.left.getRange()));
+		EXPECT_EQ("[[50,0],[100,100])",toString(parts.right.getRange()));
+
+		// test an split that does not hit the center
+		parts = dep.split(make_range(point{0,0},point{40,100}),make_range(point{40,0},point{100,100}));
+		EXPECT_EQ("[[0,0],[50,100])",  toString(parts.left.getRange()));
+		EXPECT_EQ("[[0,0],[100,100])",toString(parts.right.getRange()));
+
+		// and in the other direction
+		parts = dep.split(make_range(point{0,0},point{80,100}),make_range(point{80,0},point{100,100}));
+		EXPECT_EQ("[[0,0],[100,100])",  toString(parts.left.getRange()));
+		EXPECT_EQ("[[50,0],[100,100])",toString(parts.right.getRange()));
+
+		// test split along the wrong dimension
+		parts = dep.split(make_range(point{0,0},point{100,50}),make_range(point{0,50},point{100,100}));
+		EXPECT_EQ("[[0,0],[100,100])",  toString(parts.left.getRange()));
+		EXPECT_EQ("[[0,0],[100,100])",toString(parts.right.getRange()));
+
+	}
+
+	TEST(SyncOneOnOne, Explicit_3D) {
+
+		using point = utils::Vector<int,3>;
+
+		auto full = make_loop_ref(point{0,0,0},point{100,100,100});
+
+		// create an initial dependency
+		auto dep = one_on_one(full);
+		EXPECT_EQ("[[0,0,0],[100,100,100])",toString(dep.getRange()));
+
+		// test a clean split
+		auto parts = dep.split(make_range(point{0,0,0},point{50,100,100}),make_range(point{50,0,0},point{100,100,100}));
+		EXPECT_EQ("[[0,0,0],[50,100,100])",  toString(parts.left.getRange()));
+		EXPECT_EQ("[[50,0,0],[100,100,100])",toString(parts.right.getRange()));
+
+		// test an split that does not hit the center
+		parts = dep.split(make_range(point{0,0,0},point{40,100,100}),make_range(point{40,0,0},point{100,100,100}));
+		EXPECT_EQ("[[0,0,0],[50,100,100])",  toString(parts.left.getRange()));
+		EXPECT_EQ("[[0,0,0],[100,100,100])",toString(parts.right.getRange()));
+
+		// and in the other direction
+		parts = dep.split(make_range(point{0,0,0},point{80,100,100}),make_range(point{80,0,0},point{100,100,100}));
+		EXPECT_EQ("[[0,0,0],[100,100,100])",  toString(parts.left.getRange()));
+		EXPECT_EQ("[[50,0,0],[100,100,100])",toString(parts.right.getRange()));
+
+		// test split along the wrong dimension
+		parts = dep.split(make_range(point{0,0,0},point{100,50,100}),make_range(point{0,50,0},point{100,100,100}));
+		EXPECT_EQ("[[0,0,0],[100,100,100])",  toString(parts.left.getRange()));
+		EXPECT_EQ("[[0,0,0],[100,100,100])",toString(parts.right.getRange()));
+
+	}
+
 
 	TEST(Pfor, SyncOneOnOne) {
 
@@ -352,7 +455,283 @@ namespace algorithm {
 	}
 
 
-	TEST(Pfor, SyncNeighbor) {
+	TEST(Pfor, SyncOneOnOne_2D_DifferentExtends) {
+
+		const int N = 50;
+		const int T = 10;
+
+		using Point = utils::Vector<int,2>;
+
+		Point size = {N,2*N};
+
+		std::array<std::array<int,2*N>,N> bufferA;
+		std::array<std::array<int,2*N>,N> bufferB;
+
+		auto* A = &bufferA;
+		auto* B = &bufferB;
+
+		// start with an initialization
+		auto ref = pfor(size,[A,B](const Point& p){
+			(*A)[p.x][p.y] = 0;
+			(*B)[p.x][p.y] = -1;
+		});
+
+		// run the time loop
+		for(int t=0; t<T; ++t) {
+			ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,t](const Point& p) {
+
+				EXPECT_EQ(t,(*A)[p.x][p.y]);
+				EXPECT_EQ(t-1,(*B)[p.x][p.y]);
+
+				(*B)[p.x][p.y]=t+1;
+
+			},one_on_one(ref));
+
+			std::swap(A,B);
+		}
+
+		// check the final state
+		pfor(Point{1,1},Point{N-1,N-1},[T,A](const Point& p){
+			EXPECT_EQ(T,(*A)[p.x][p.y]);
+		},one_on_one(ref));
+
+	}
+
+
+	TEST(Pfor, SyncOneOnOne_3D) {
+
+		const int N = 20;
+		const int T = 10;
+
+		using Point = utils::Vector<int,3>;
+
+		Point size = {N,N,N};
+
+		std::array<std::array<std::array<int,N>,N>,N> bufferA;
+		std::array<std::array<std::array<int,N>,N>,N> bufferB;
+
+		auto* A = &bufferA;
+		auto* B = &bufferB;
+
+		// start with an initialization
+		auto ref = pfor(size,[A,B](const Point& p){
+			(*A)[p.x][p.y][p.z] = 0;
+			(*B)[p.x][p.y][p.z] = -1;
+		});
+
+		// run the time loop
+		for(int t=0; t<T; ++t) {
+			ref = pfor(Point{1,1,1},Point{N-1,N-1,N-1},[A,B,t](const Point& p) {
+
+				EXPECT_EQ(t,(*A)[p.x][p.y][p.z]);
+				EXPECT_EQ(t-1,(*B)[p.x][p.y][p.z]);
+
+				(*B)[p.x][p.y][p.z]=t+1;
+
+			},one_on_one(ref));
+
+			std::swap(A,B);
+		}
+
+		// check the final state
+		pfor(Point{1,1,1},Point{N-1,N-1,N-1},[T,A](const Point& p){
+			EXPECT_EQ(T,(*A)[p.x][p.y][p.z]);
+		},one_on_one(ref));
+
+	}
+
+
+	TEST(Pfor, SyncOneOnOne_3D_DifferentExtends) {
+
+		const int N = 10;
+		const int T = 10;
+
+		using Point = utils::Vector<int,3>;
+
+		Point size = {N,2*N,3*N};
+
+		std::array<std::array<std::array<int,3*N>,2*N>,N> bufferA;
+		std::array<std::array<std::array<int,3*N>,2*N>,N> bufferB;
+
+		auto* A = &bufferA;
+		auto* B = &bufferB;
+
+		// start with an initialization
+		auto ref = pfor(size,[A,B](const Point& p){
+			(*A)[p.x][p.y][p.z] = 0;
+			(*B)[p.x][p.y][p.z] = -1;
+		});
+
+		// run the time loop
+		for(int t=0; t<T; ++t) {
+			ref = pfor(Point{1,1,1},Point{N-1,2*N-1,3*N-1},[A,B,t](const Point& p) {
+
+				EXPECT_EQ(t,(*A)[p.x][p.y][p.z]);
+				EXPECT_EQ(t-1,(*B)[p.x][p.y][p.z]);
+
+				(*B)[p.x][p.y][p.z]=t+1;
+
+			},one_on_one(ref));
+
+			std::swap(A,B);
+		}
+
+		// check the final state
+		pfor(Point{1,1,1},Point{N-1,2*N-1,3*N-1},[T,A](const Point& p){
+			EXPECT_EQ(T,(*A)[p.x][p.y][p.z]);
+		},one_on_one(ref));
+
+	}
+
+
+
+	TEST(SyncSmallNeighbor, Explicit_1D) {
+
+		auto full = make_loop_ref(0,100);
+
+		// create an initial dependency
+		auto dep = small_neighborhood_sync(full);
+		EXPECT_EQ("[[0,100)]",toString(dep.getRanges()));
+
+		// test a clean split
+		auto parts = dep.split(make_range(0,50),make_range(50,100));
+		EXPECT_EQ("[[0,50),[50,100)]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[50,100),[0,50)]",toString(parts.right.getRanges()));
+
+		// test an split that does not hit the center
+		parts = dep.split(make_range(0,40),make_range(40,100));
+		EXPECT_EQ("[[0,50),[50,100)]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[0,100)]",toString(parts.right.getRanges()));
+
+		// and in the other direction
+		parts = dep.split(make_range(0,80),make_range(80,100));
+		EXPECT_EQ("[[0,100)]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[50,100),[0,50)]",toString(parts.right.getRanges()));
+
+		// test a split outside the full range
+		parts = dep.split(make_range(0,120),make_range(120,240));
+		EXPECT_EQ("[[0,100)]",toString(parts.left.getRanges()));
+
+		// TODO: this could be empty!
+		EXPECT_EQ("[[0,100)]",toString(parts.right.getRanges()));
+
+		// - split a second level -
+		auto part = dep.split(make_range(0,50),make_range(50,100)).left;
+		EXPECT_EQ("[[0,50),[50,100)]",toString(part.getRanges()));
+
+		// split it even
+		parts = part.split(make_range(0,25),make_range(25,50));
+		EXPECT_EQ("[[0,25),[25,50)]",toString(parts.left.getRanges()));
+		EXPECT_EQ("[[25,50),[0,25),[50,75)]",toString(parts.right.getRanges()));
+
+		// split it odd
+		parts = part.split(make_range(0,20),make_range(20,50));
+		EXPECT_EQ("[[0,25),[25,50)]",toString(parts.left.getRanges()));
+		EXPECT_EQ("[[0,50),[50,100)]",toString(parts.right.getRanges()));
+
+		// split it odd in the other direction
+		parts = part.split(make_range(0,40),make_range(40,50));
+		EXPECT_EQ("[[0,50),[50,100)]",toString(parts.left.getRanges()));
+		EXPECT_EQ("[[25,50),[0,25),[50,75)]",toString(parts.right.getRanges()));
+
+		// - and a third level -
+		part = part.split(make_range(0,25),make_range(25,50)).right;
+		EXPECT_EQ("[[25,50),[0,25),[50,75)]",toString(part.getRanges()));
+
+		// split evenly
+		parts = part.split(make_range(25,37),make_range(37,50));
+		EXPECT_EQ("[[25,37),[12,25),[37,50)]",toString(parts.left.getRanges()));
+		EXPECT_EQ("[[37,50),[25,37),[50,62)]",toString(parts.right.getRanges()));
+
+		// TODO: add tests for minimum left-over
+
+	}
+
+	TEST(SyncSmallNeighbor, Explicit_2D) {
+
+		using point = utils::Vector<int,2>;
+
+		auto full = make_loop_ref(point{0,0},point{100,100});
+
+		// create an initial dependency
+		auto dep = small_neighborhood_sync(full);
+		EXPECT_EQ("[[[0,0],[100,100])]",toString(dep.getRanges()));
+
+		// test a clean split
+		auto parts = dep.split(make_range(point{0,0},point{50,100}),make_range(point{50,0},point{100,100}));
+		EXPECT_EQ("[[[0,0],[50,100]),[[50,0],[100,100])]",toString(parts.left.getRanges()));
+		EXPECT_EQ("[[[50,0],[100,100]),[[0,0],[50,100])]",toString(parts.right.getRanges()));
+
+		// test an split that does not hit the center
+		parts = dep.split(make_range(point{0,0},point{40,100}),make_range(point{40,0},point{100,100}));
+		EXPECT_EQ("[[[0,0],[50,100]),[[50,0],[100,100])]", toString(parts.left.getRanges()));
+		EXPECT_EQ("[[[0,0],[100,100])]",toString(parts.right.getRanges()));
+
+		// and in the other direction
+		parts = dep.split(make_range(point{0,0},point{80,100}),make_range(point{80,0},point{100,100}));
+		EXPECT_EQ("[[[0,0],[100,100])]", toString(parts.left.getRanges()));
+		EXPECT_EQ("[[[50,0],[100,100]),[[0,0],[50,100])]",toString(parts.right.getRanges()));
+
+		// test split along the wrong dimension
+		parts = dep.split(make_range(point{0,0},point{100,50}),make_range(point{0,50},point{100,100}));
+		EXPECT_EQ("[[[0,0],[100,100])]", toString(parts.left.getRanges()));
+		EXPECT_EQ("[[[0,0],[100,100])]",toString(parts.right.getRanges()));
+
+
+		// split another level
+		auto part = dep.split(make_range(point{0,0},point{50,100}),make_range(point{50,0},point{100,100})).left;
+		EXPECT_EQ("[[[0,0],[50,100]),[[50,0],[100,100])]",toString(part.getRanges()));
+
+		// split at the right position
+		parts = part.split(make_range(point{0,0},point{50,50}),make_range(point{0,50},point{50,100}));
+		EXPECT_EQ("[[[0,0],[50,50]),[[50,0],[100,50]),[[0,50],[50,100])]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[[0,50],[50,100]),[[50,50],[100,100]),[[0,0],[50,50])]",toString(parts.right.getRanges()));
+
+		parts = part.split(make_range(point{0,0},point{50,40}),make_range(point{0,40},point{50,100}));
+		EXPECT_EQ("[[[0,0],[50,50]),[[50,0],[100,50]),[[0,50],[50,100])]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[[0,0],[50,100]),[[50,0],[100,100])]",toString(parts.right.getRanges()));
+
+		parts = part.split(make_range(point{0,0},point{50,60}),make_range(point{0,60},point{50,100}));
+		EXPECT_EQ("[[[0,0],[50,100]),[[50,0],[100,100])]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[[0,50],[50,100]),[[50,50],[100,100]),[[0,0],[50,50])]",toString(parts.right.getRanges()));
+
+		// TODO: add tests for minimum left-over
+
+	}
+
+	TEST(SyncSmallNeighbor, Explicit_3D) {
+
+		using point = utils::Vector<int,3>;
+
+		auto full = make_loop_ref(point{0,0,0},point{100,100,100});
+
+		// create an initial dependency
+		auto dep = small_neighborhood_sync(full);
+		EXPECT_EQ("[[[0,0,0],[100,100,100])]",toString(dep.getRanges()));
+
+		// test a clean split
+		auto parts = dep.split(make_range(point{0,0,0},point{50,100,100}),make_range(point{50,0,0},point{100,100,100}));
+		EXPECT_EQ("[[[0,0,0],[50,100,100]),[[50,0,0],[100,100,100])]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[[50,0,0],[100,100,100]),[[0,0,0],[50,100,100])]",toString(parts.right.getRanges()));
+
+		// test an split that does not hit the center
+		parts = dep.split(make_range(point{0,0,0},point{40,100,100}),make_range(point{40,0,0},point{100,100,100}));
+		EXPECT_EQ("[[[0,0,0],[50,100,100]),[[50,0,0],[100,100,100])]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[[0,0,0],[100,100,100])]",toString(parts.right.getRanges()));
+
+		// and in the other direction
+		parts = dep.split(make_range(point{0,0,0},point{80,100,100}),make_range(point{80,0,0},point{100,100,100}));
+		EXPECT_EQ("[[[0,0,0],[100,100,100])]",toString(parts.left.getRanges()));
+		EXPECT_EQ("[[[50,0,0],[100,100,100]),[[0,0,0],[50,100,100])]",toString(parts.right.getRanges()));
+
+		// test split along the wrong dimension
+		parts = dep.split(make_range(point{0,0,0},point{100,50,100}),make_range(point{0,50,0},point{100,100,100}));
+		EXPECT_EQ("[[[0,0,0],[100,100,100])]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[[0,0,0],[100,100,100])]",toString(parts.right.getRanges()));
+
+	}
+
+	TEST(Pfor, SyncSmallNeighbor) {
 		const int N = 10000;
 
 		std::vector<int> dataA(N);
@@ -376,7 +755,7 @@ namespace algorithm {
 			}
 
 			dataB[i] = 2;
-		}, neighborhood_sync(As));
+		}, small_neighborhood_sync(As));
 
 		auto Cs = pfor(0,N,[&](int i) {
 
@@ -392,7 +771,7 @@ namespace algorithm {
 			}
 
 			dataA[i] = 3;
-		}, neighborhood_sync(Bs));
+		}, small_neighborhood_sync(Bs));
 
 		// trigger execution
 		Cs.wait();
@@ -404,8 +783,7 @@ namespace algorithm {
 		}
 	}
 
-
-	TEST(Pfor, SyncNeighbor_DifferentSize) {
+	TEST(Pfor, SyncSmallNeighbor_DifferentSize) {
 		const int N = 10000;
 
 		std::vector<int> dataA(N+20);
@@ -427,7 +805,7 @@ namespace algorithm {
 			EXPECT_EQ(1,dataA[i+1]) << "Index: " << i;
 
 			dataB[i] = 2;
-		}, neighborhood_sync(As));
+		}, small_neighborhood_sync(As));
 
 		auto Cs = pfor(0,N-2,[&](int i) {
 
@@ -441,7 +819,7 @@ namespace algorithm {
 			EXPECT_EQ(2,dataB[i+1]) << "Index: " << i;
 
 			dataA[i] = 3;
-		}, neighborhood_sync(Bs));
+		}, small_neighborhood_sync(Bs));
 
 		// also try a larger range
 		auto Ds = pfor(0,N+20,[&](int i) {
@@ -467,7 +845,7 @@ namespace algorithm {
 
 			dataB[i] = 4;
 
-		}, neighborhood_sync(Cs));
+		}, small_neighborhood_sync(Cs));
 
 		// trigger execution
 		Ds.wait();
@@ -484,8 +862,7 @@ namespace algorithm {
 		}
 	}
 
-
-	TEST(Pfor, SyncNeighbor_2D) {
+	TEST(Pfor, SyncSmallNeighbor_2D) {
 
 		const int N = 50;
 		const int T = 10;
@@ -507,36 +884,597 @@ namespace algorithm {
 		});
 
 		// run the time loop
-	    for(int t=0; t<T; ++t) {
-	        ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,t,N](const Point& p) {
+		Point min {1,1};
+		Point max {N-1,N-1};
 
-	        	if (p.x != 1   && p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x-1][p.y-1]); }
-	        	if (              p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x  ][p.y-1]); }
-	        	if (p.x != N-2 && p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x+1][p.y-1]); }
+		for(int t=0; t<T; ++t) {
+			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
 
-	        	if (p.x != N-2 && p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x+1][p.y-1]); }
-	        	if (p.x != N-2              )  { EXPECT_EQ(t,(*A)[p.x+1][p.y  ]); }
-	        	if (p.x != N-2 && p.y != N-2)  { EXPECT_EQ(t,(*A)[p.x+1][p.y+1]); }
+				// check small neighborhood
+				for(int i : { -1, 0, 1 }) {
+					for (int j : { -1, 0, 1 }) {
+						if (abs(i) + abs(j) <= 1) {
+							Point r = p + Point{i,j};
+							if (min.dominatedBy(r) && r.strictlyDominatedBy(max)) {
+								EXPECT_EQ(t,(*A)[r.x][r.y]) << "Point: " << r;
+							}
+						}
+					}
+				}
 
-	        	if (p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x][p.y-1]); }
-	        	if (p.y != N-2)  { EXPECT_EQ(t,(*A)[p.x][p.y+1]); }
+				(*B)[p.x][p.y]=t+1;
 
-	        	EXPECT_EQ(t,(*A)[p.x][p.y]);
-	        	EXPECT_EQ(t-1,(*B)[p.x][p.y]);
+			},small_neighborhood_sync(ref));
 
-	        	(*B)[p.x][p.y]=t+1;
+			std::swap(A,B);
+		}
 
-	        },neighborhood_sync(ref));
-
-	        std::swap(A,B);
-	    }
-
-	    // check the final state
-	    pfor(Point{1,1},Point{N-1,N-1},[T,A](const Point& p){
-	    	EXPECT_EQ(T,(*A)[p.x][p.y]);
-	    },neighborhood_sync(ref));
+		// check the final state
+		pfor(min,max,[T,A](const Point& p){
+			EXPECT_EQ(T,(*A)[p.x][p.y]);
+		},small_neighborhood_sync(ref));
 
 	}
+
+	TEST(Pfor, SyncSmallNeighbor_2D_DifferentExtends) {
+
+		const int N = 30;
+		const int T = 10;
+
+		using Point = utils::Vector<int,2>;
+
+		Point size = {N,2*N};
+
+		std::array<std::array<int,2*N>,N> bufferA;
+		std::array<std::array<int,2*N>,N> bufferB;
+
+		auto* A = &bufferA;
+		auto* B = &bufferB;
+
+		// start with an initialization
+		auto ref = pfor(size,[A,B](const Point& p){
+			(*A)[p.x][p.y] = 0;
+			(*B)[p.x][p.y] = -1;
+		});
+
+		// run the time loop
+		Point min {1,1};
+		Point max {N-1,2*N-1};
+
+		for(int t=0; t<T; ++t) {
+			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+
+				// check small neighborhood
+				for(int i : { -1, 0, 1 }) {
+					for (int j : { -1, 0, 1 }) {
+						if (abs(i) + abs(j) <= 1) {
+							Point d { i, j };
+							Point r = p + d;
+							if (min.dominatedBy(r) && r.strictlyDominatedBy(max)) {
+								EXPECT_EQ(t,(*A)[r.x][r.y]) << "Point: " << p << " + " << d << " = " << r;
+							}
+						}
+					}
+				}
+
+				(*B)[p.x][p.y]=t+1;
+
+			},small_neighborhood_sync(ref));
+
+			std::swap(A,B);
+		}
+
+		// check the final state
+		pfor(min,max,[T,A](const Point& p){
+			EXPECT_EQ(T,(*A)[p.x][p.y]);
+		},small_neighborhood_sync(ref));
+
+	}
+
+	TEST(Pfor, SyncSmallNeighbor_3D) {
+
+		const int N = 20;
+		const int T = 10;
+
+		using Point = utils::Vector<int,3>;
+
+		Point size = {N,N,N};
+
+		std::array<std::array<std::array<int,N>,N>,N> bufferA;
+		std::array<std::array<std::array<int,N>,N>,N> bufferB;
+
+		auto* A = &bufferA;
+		auto* B = &bufferB;
+
+		// start with an initialization
+		auto ref = pfor(size,[A,B](const Point& p){
+			(*A)[p.x][p.y][p.z] = 0;
+			(*B)[p.x][p.y][p.z] = -1;
+		});
+
+		// run the time loop
+		Point min {1,1,1};
+		Point max {N-1,N-1,N-1};
+
+		for(int t=0; t<T; ++t) {
+			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+
+				// check small neighborhood
+				for(int i : { -1, 0, 1 }) {
+					for (int j : { -1, 0, 1 }) {
+						for (int k : { -1, 0, 1 }) {
+							if (abs(i) + abs(j) + abs(k) <= 1) {
+								Point r = p + Point{i,j,k};
+								if (min.dominatedBy(r) && r.strictlyDominatedBy(max)) {
+									EXPECT_EQ(t,(*A)[r.x][r.y][r.z]) << "Point: " << r;
+								}
+							}
+						}
+					}
+				}
+
+				(*B)[p.x][p.y][p.z]=t+1;
+
+			},small_neighborhood_sync(ref));
+
+			std::swap(A,B);
+		}
+
+		// check the final state
+		pfor(min,max,[T,A](const Point& p){
+			EXPECT_EQ(T,(*A)[p.x][p.y][p.z]);
+		},small_neighborhood_sync(ref));
+
+	}
+
+	TEST(Pfor, SyncSmallNeighbor_3D_DifferentExtends) {
+
+		const int N = 10;
+		const int T = 10;
+
+		using Point = utils::Vector<int,3>;
+
+		Point size = {N,2*N,3*N};
+
+		std::array<std::array<std::array<int,3*N>,2*N>,N> bufferA;
+		std::array<std::array<std::array<int,3*N>,2*N>,N> bufferB;
+
+		auto* A = &bufferA;
+		auto* B = &bufferB;
+
+		// start with an initialization
+		auto ref = pfor(size,[A,B](const Point& p){
+			(*A)[p.x][p.y][p.z] = 0;
+			(*B)[p.x][p.y][p.z] = -1;
+		});
+
+		// run the time loop
+		Point min {1,1,1};
+		Point max {N-1,2*N-1,3*N-1};
+
+		for(int t=0; t<T; ++t) {
+			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+
+				// check small neighborhood
+				for(int i : { -1, 0, 1 }) {
+					for (int j : { -1, 0, 1 }) {
+						for (int k : { -1, 0, 1 }) {
+							if (abs(i) + abs(j) + abs(k) <= 1) {
+								Point r = p + Point{i,j,k};
+								if (min.dominatedBy(r) && r.strictlyDominatedBy(max)) {
+									EXPECT_EQ(t,(*A)[r.x][r.y][r.z]) << "Point: " << r;
+								}
+							}
+						}
+					}
+				}
+
+				(*B)[p.x][p.y][p.z]=t+1;
+
+			},small_neighborhood_sync(ref));
+
+			std::swap(A,B);
+		}
+
+		// check the final state
+		pfor(min,max,[T,A](const Point& p){
+			EXPECT_EQ(T,(*A)[p.x][p.y][p.z]);
+		},small_neighborhood_sync(ref));
+
+	}
+
+
+
+	TEST(SyncFullNeighbor, Explicit_1D) {
+
+		auto full = make_loop_ref(0,100);
+
+		// create an initial dependency
+		auto dep = full_neighborhood_sync(full);
+		EXPECT_EQ("[[0,100)]",toString(dep.getRanges()));
+
+		// test a clean split
+		auto parts = dep.split(make_range(0,50),make_range(50,100));
+		EXPECT_EQ("[[0,0),[0,50),[50,100)]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[0,50),[50,100),[100,100)]",toString(parts.right.getRanges()));
+
+		// test an split that does not hit the center
+		parts = dep.split(make_range(0,40),make_range(40,100));
+		EXPECT_EQ("[[0,0),[0,50),[50,100)]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[0,50),[50,100),[100,100)]",toString(parts.right.getRanges()));
+
+		// and in the other direction
+		parts = dep.split(make_range(0,80),make_range(80,100));
+		EXPECT_EQ("[[0,0),[0,50),[50,100)]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[0,50),[50,100),[100,100)]",toString(parts.right.getRanges()));
+
+		// split another level
+		auto part = dep.split(make_range(0,50),make_range(50,100)).left;
+		EXPECT_EQ("[[0,0),[0,50),[50,100)]",toString(part.getRanges()));
+
+		// split it even
+		parts = part.split(make_range(0,25),make_range(25,50));
+		EXPECT_EQ("[[0,0),[0,25),[25,50)]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[0,25),[25,50),[50,75)]",toString(parts.right.getRanges()));
+
+		// split it odd
+		parts = part.split(make_range(0,20),make_range(20,50));
+		EXPECT_EQ("[[0,0),[0,25),[25,50)]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[0,25),[25,50),[50,75)]",toString(parts.right.getRanges()));
+
+		// split it odd in the other direction
+		parts = part.split(make_range(0,40),make_range(40,50));
+		EXPECT_EQ("[[0,0),[0,25),[25,50)]",  toString(parts.left.getRanges()));
+		EXPECT_EQ("[[0,25),[25,50),[50,75)]",toString(parts.right.getRanges()));
+
+	}
+//
+//	TEST(Pfor, SyncFullNeighbor) {
+//		const int N = 10000;
+//
+//		std::vector<int> dataA(N);
+//		std::vector<int> dataB(N);
+//
+//		auto As = pfor(0,N,[&](int i) {
+//			dataA[i] = 1;
+//		});
+//
+//		auto Bs = pfor(0,N,[&](int i) {
+//
+//			// the neighborhood of i has to be completed in A
+//			if (i != 0) {
+//				EXPECT_EQ(1,dataA[i-1]) << "Index: " << i;
+//			}
+//
+//			EXPECT_EQ(1,dataA[i])   << "Index: " << i;
+//
+//			if (i != N-1) {
+//				EXPECT_EQ(1,dataA[i+1]) << "Index: " << i;
+//			}
+//
+//			dataB[i] = 2;
+//		}, full_neighborhood_sync(As));
+//
+//		auto Cs = pfor(0,N,[&](int i) {
+//
+//			// the neighborhood of i has to be completed in B
+//			if (i != 0) {
+//				EXPECT_EQ(2,dataB[i-1]) << "Index: " << i;
+//			}
+//
+//			EXPECT_EQ(2,dataB[i])   << "Index: " << i;
+//
+//			if (i != N-1) {
+//				EXPECT_EQ(2,dataB[i+1]) << "Index: " << i;
+//			}
+//
+//			dataA[i] = 3;
+//		}, full_neighborhood_sync(Bs));
+//
+//		// trigger execution
+//		Cs.wait();
+//
+//		// check result
+//		for(int i=0; i<N; i++) {
+//			EXPECT_EQ(3, dataA[i]);
+//			EXPECT_EQ(2, dataB[i]);
+//		}
+//	}
+//
+//
+//	TEST(Pfor, SyncFullNeighbor_DifferentSize) {
+//		const int N = 10000;
+//
+//		std::vector<int> dataA(N+20);
+//		std::vector<int> dataB(N+20);
+//
+//		auto As = pfor(0,N,[&](int i) {
+//			dataA[i] = 1;
+//		});
+//
+//		auto Bs = pfor(0,N-1,[&](int i) {
+//
+//			// the neighborhood of i has to be completed in A
+//			if (i != 0) {
+//				EXPECT_EQ(1,dataA[i-1]) << "Index: " << i;
+//			}
+//
+//			EXPECT_EQ(1,dataA[i])   << "Index: " << i;
+//
+//			EXPECT_EQ(1,dataA[i+1]) << "Index: " << i;
+//
+//			dataB[i] = 2;
+//		}, full_neighborhood_sync(As));
+//
+//		auto Cs = pfor(0,N-2,[&](int i) {
+//
+//			// the neighborhood of i has to be completed in B
+//			if (i != 0) {
+//				EXPECT_EQ(2,dataB[i-1]) << "Index: " << i;
+//			}
+//
+//			EXPECT_EQ(2,dataB[i])   << "Index: " << i;
+//
+//			EXPECT_EQ(2,dataB[i+1]) << "Index: " << i;
+//
+//			dataA[i] = 3;
+//		}, full_neighborhood_sync(Bs));
+//
+//		// also try a larger range
+//		auto Ds = pfor(0,N+20,[&](int i) {
+//
+//			// the neighborhood of i has to be completed in A
+//			if (i != 0 && i <= N-2 ) {
+//				EXPECT_EQ(3,dataA[i-1]) << "Index: " << i;
+//			} else if ( i != 0 && i < N ) {
+//				EXPECT_EQ(1,dataA[i-1]) << "Index: " << i;
+//			}
+//
+//			if (i < N-2) {
+//				EXPECT_EQ(3,dataA[i])   << "Index: " << i;
+//			} else if (i < N) {
+//				EXPECT_EQ(1,dataA[i])   << "Index: " << i;
+//			}
+//
+//			if (i != N-1 && i < N-3) {
+//				EXPECT_EQ(3,dataA[i+1]) << "Index: " << i;
+//			} else if (i != N-1 && i < N) {
+//				EXPECT_EQ(1,dataA[i+1]) << "Index: " << i;
+//			}
+//
+//			dataB[i] = 4;
+//
+//		}, full_neighborhood_sync(Cs));
+//
+//		// trigger execution
+//		Ds.wait();
+//
+//		// check result
+//		for(int i=0; i<N-2; i++) {
+//			EXPECT_EQ(3, dataA[i]);
+//		}
+//		for(int i=N-2; i<N-1; i++) {
+//			EXPECT_EQ(1, dataA[i]);
+//		}
+//		for(int i=0; i<N+20; i++) {
+//			EXPECT_EQ(4, dataB[i]);
+//		}
+//	}
+//
+//
+//	TEST(Pfor, SyncFullNeighbor_2D) {
+//
+//		const int N = 50;
+//		const int T = 10;
+//
+//		using Point = utils::Vector<int,2>;
+//
+//		Point size = {N,N};
+//
+//		std::array<std::array<int,N>,N> bufferA;
+//		std::array<std::array<int,N>,N> bufferB;
+//
+//		auto* A = &bufferA;
+//		auto* B = &bufferB;
+//
+//		// start with an initialization
+//		auto ref = pfor(size,[A,B](const Point& p){
+//			(*A)[p.x][p.y] = 0;
+//			(*B)[p.x][p.y] = -1;
+//		});
+//
+//		// run the time loop
+//		Point min {1,1};
+//		Point max {N-1,N-1};
+//
+//		for(int t=0; t<T; ++t) {
+//			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+//
+//				// check full neighborhood
+//				for(int i : { -1, 0, 1 }) {
+//					for (int j : { -1, 0, 1 }) {
+//						Point r = p + Point{i,j};
+//						if (min.dominatedBy(r) && r.strictlyDominatedBy(max)) {
+//							EXPECT_EQ(t,(*A)[r.x][r.y]) << "Point: " << r;
+//						}
+//					}
+//				}
+//
+//				(*B)[p.x][p.y]=t+1;
+//
+//			},full_neighborhood_sync(ref));
+//
+//			std::swap(A,B);
+//		}
+//
+//		// check the final state
+//		pfor(min,max,[T,A](const Point& p){
+//			EXPECT_EQ(T,(*A)[p.x][p.y]);
+//		},full_neighborhood_sync(ref));
+//
+//	}
+//
+//	TEST(Pfor, SyncFullNeighbor_2D_DifferentExtends) {
+//
+//		const int N = 30;
+//		const int T = 10;
+//
+//		using Point = utils::Vector<int,2>;
+//
+//		Point size = {N,2*N};
+//
+//		std::array<std::array<int,2*N>,N> bufferA;
+//		std::array<std::array<int,2*N>,N> bufferB;
+//
+//		auto* A = &bufferA;
+//		auto* B = &bufferB;
+//
+//		// start with an initialization
+//		auto ref = pfor(size,[A,B](const Point& p){
+//			(*A)[p.x][p.y] = 0;
+//			(*B)[p.x][p.y] = -1;
+//		});
+//
+//		// run the time loop
+//		Point min {1,1};
+//		Point max {N-1,2*N-1};
+//
+//		for(int t=0; t<T; ++t) {
+//			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+//
+//				// check full neighborhood
+//				for(int i : { -1, 0, 1 }) {
+//					for (int j : { -1, 0, 1 }) {
+//						Point r = p + Point{i,j};
+//						if (min.dominatedBy(r) && r.strictlyDominatedBy(max)) {
+//							EXPECT_EQ(t,(*A)[r.x][r.y]) << "Point: " << r;
+//						}
+//					}
+//				}
+//
+//				(*B)[p.x][p.y]=t+1;
+//
+//			},full_neighborhood_sync(ref));
+//
+//			std::swap(A,B);
+//		}
+//
+//		// check the final state
+//		pfor(min,max,[T,A](const Point& p){
+//			EXPECT_EQ(T,(*A)[p.x][p.y]);
+//		},full_neighborhood_sync(ref));
+//
+//	}
+//
+//
+//	TEST(Pfor, SyncFullNeighbor_3D) {
+//
+//		const int N = 20;
+//		const int T = 10;
+//
+//		using Point = utils::Vector<int,3>;
+//
+//		Point size = {N,N,N};
+//
+//		std::array<std::array<std::array<int,N>,N>,N> bufferA;
+//		std::array<std::array<std::array<int,N>,N>,N> bufferB;
+//
+//		auto* A = &bufferA;
+//		auto* B = &bufferB;
+//
+//		// start with an initialization
+//		auto ref = pfor(size,[A,B](const Point& p){
+//			(*A)[p.x][p.y][p.z] = 0;
+//			(*B)[p.x][p.y][p.z] = -1;
+//		});
+//
+//		// run the time loop
+//		Point min {1,1,1};
+//		Point max {N-1,N-1,N-1};
+//
+//		for(int t=0; t<T; ++t) {
+//			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+//
+//				// check full neighborhood
+//				for(int i : { -1, 0, 1 }) {
+//					for (int j : { -1, 0, 1 }) {
+//						for (int k : { -1, 0, 1 }) {
+//							Point r = p + Point{i,j,k};
+//							if (min.dominatedBy(r) && r.strictlyDominatedBy(max)) {
+//								EXPECT_EQ(t,(*A)[r.x][r.y][r.z]) << "Point: " << r;
+//							}
+//						}
+//					}
+//				}
+//
+//				(*B)[p.x][p.y][p.z]=t+1;
+//
+//			},full_neighborhood_sync(ref));
+//
+//			std::swap(A,B);
+//		}
+//
+//		// check the final state
+//		pfor(min,max,[T,A](const Point& p){
+//			EXPECT_EQ(T,(*A)[p.x][p.y][p.z]);
+//		},full_neighborhood_sync(ref));
+//
+//	}
+//
+//	TEST(Pfor, SyncFullNeighbor_3D_DifferentExtends) {
+//
+//		const int N = 10;
+//		const int T = 10;
+//
+//		using Point = utils::Vector<int,3>;
+//
+//		Point size = {N,2*N,3*N};
+//
+//		std::array<std::array<std::array<int,3*N>,2*N>,N> bufferA;
+//		std::array<std::array<std::array<int,3*N>,2*N>,N> bufferB;
+//
+//		auto* A = &bufferA;
+//		auto* B = &bufferB;
+//
+//		// start with an initialization
+//		auto ref = pfor(size,[A,B](const Point& p){
+//			(*A)[p.x][p.y][p.z] = 0;
+//			(*B)[p.x][p.y][p.z] = -1;
+//		});
+//
+//		// run the time loop
+//		Point min {1,1,1};
+//		Point max {N-1,2*N-1,3*N-1};
+//
+//		for(int t=0; t<T; ++t) {
+//			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+//
+//				// check full neighborhood
+//				for(int i : { -1, 0, 1 }) {
+//					for (int j : { -1, 0, 1 }) {
+//						for (int k : { -1, 0, 1 }) {
+//							Point r = p + Point{i,j,k};
+//							if (min.dominatedBy(r) && r.strictlyDominatedBy(max)) {
+//								EXPECT_EQ(t,(*A)[r.x][r.y][r.z]) << "Point: " << r;
+//							}
+//						}
+//					}
+//				}
+//
+//				(*B)[p.x][p.y][p.z]=t+1;
+//
+//			},full_neighborhood_sync(ref));
+//
+//			std::swap(A,B);
+//		}
+//
+//		// check the final state
+//		pfor(min,max,[T,A](const Point& p){
+//			EXPECT_EQ(T,(*A)[p.x][p.y][p.z]);
+//		},full_neighborhood_sync(ref));
+//
+//	}
+
 
 
 	// --- stencil variants --.
@@ -556,27 +1494,27 @@ namespace algorithm {
 		});
 
 		// run the time loop
-	    for(int t=0; t<T; ++t) {
+		for(int t=0; t<T; ++t) {
 			pfor(1, N - 1, [A, B, t](int i) {
 
 				if(i != 1) { EXPECT_EQ(t, A[i - 1]); }
 				EXPECT_EQ(t, A[i]);
 				if(i != N - 2) { EXPECT_EQ(t, A[i + 1]); }
 
-	        	EXPECT_EQ(t-1,B[i]);
+				EXPECT_EQ(t-1,B[i]);
 
-	        	B[i]=t+1;
+				B[i]=t+1;
 
-	        });
-	        std::swap(A,B);
-	    }
+			});
+			std::swap(A,B);
+		}
 
-	    // check the final state
-	    pfor(1,N-1,[A](int i){
-	    	EXPECT_EQ(T,A[i]);
-	    });
+		// check the final state
+		pfor(1,N-1,[A](int i){
+			EXPECT_EQ(T,A[i]);
+		});
 
-	    delete [] A;
+		delete [] A;
 		delete [] B;
 	}
 
@@ -592,28 +1530,28 @@ namespace algorithm {
 		});
 
 		// run the time loop
-	    for(int t=0; t<T; ++t) {
-	        ref = pfor(1,N-1,[A,B,t](int i) {
+		for(int t=0; t<T; ++t) {
+			ref = pfor(1,N-1,[A,B,t](int i) {
 
 				if(i != 1) { EXPECT_EQ(t, A[i - 1]); }
-	        	EXPECT_EQ(t,A[i]);
+				EXPECT_EQ(t,A[i]);
 				if(i != N - 2) { EXPECT_EQ(t, A[i + 1]); }
 
-	        	EXPECT_EQ(t-1,B[i]);
+				EXPECT_EQ(t-1,B[i]);
 
-	        	B[i]=t+1;
+				B[i]=t+1;
 
-	        },neighborhood_sync(ref));
-	        std::swap(A,B);
-	    }
+			},small_neighborhood_sync(ref));
+			std::swap(A,B);
+		}
 
-	    // check the final state
-	    pfor(1,N-1,[A](int i){
-	    	EXPECT_EQ(T,A[i]);
-	    },neighborhood_sync(ref));
+		// check the final state
+		pfor(1,N-1,[A](int i){
+			EXPECT_EQ(T,A[i]);
+		},small_neighborhood_sync(ref));
 
-	    delete [] A;
-	    delete [] B;
+		delete [] A;
+		delete [] B;
 	}
 
 
@@ -817,7 +1755,7 @@ namespace algorithm {
 	}
 
 
-	TEST(PForWithBoundary, Basic1D) {
+	TEST(PforWithBoundary, Basic1D) {
 
 		const int N = 100;
 
@@ -843,7 +1781,7 @@ namespace algorithm {
 
 	}
 
-	TEST(PForWithBoundary, Basic2D) {
+	TEST(PforWithBoundary, Basic2D) {
 
 		const int N = 100;
 
@@ -876,7 +1814,7 @@ namespace algorithm {
 	}
 
 
-	TEST(PForWithBoundary, Basic3D) {
+	TEST(PforWithBoundary, Basic3D) {
 
 		const int N = 100;
 
@@ -909,7 +1847,7 @@ namespace algorithm {
 	}
 
 
-	TEST(PForWithBoundary, SyncNeighbor) {
+	TEST(PforWithBoundary, SyncFullNeighbor) {
 		const int N = 10000;
 
 		std::vector<int> dataA(N);
@@ -949,7 +1887,7 @@ namespace algorithm {
 
 				dataB[i] = 2;
 			},
-			neighborhood_sync(As)
+			small_neighborhood_sync(As)
 		);
 
 		auto Cs = pforWithBoundary(0,N,
@@ -982,7 +1920,7 @@ namespace algorithm {
 
 				dataA[i] = 3;
 			},
-			neighborhood_sync(Bs)
+			small_neighborhood_sync(Bs)
 		);
 
 		// trigger execution
@@ -1012,39 +1950,39 @@ namespace algorithm {
 		int counter = 0;
 
 		// run the time loop
-	    for(int t=0; t<T; ++t) {
-	        ref = pfor(1,N-1,[A,B,t,N](int i) {
+		for(int t=0; t<T; ++t) {
+			ref = pfor(1,N-1,[A,B,t,N](int i) {
 
 				if(i != 1) { EXPECT_EQ(t, A[i - 1]); }
-	        	EXPECT_EQ(t,A[i]);
+				EXPECT_EQ(t,A[i]);
 				if(i != N - 2) { EXPECT_EQ(t, A[i + 1]); }
 
-	        	EXPECT_EQ(t-1,B[i]);
+				EXPECT_EQ(t-1,B[i]);
 
-	        	B[i]=t+1;
+				B[i]=t+1;
 
-	        },neighborhood_sync(ref));
+			},small_neighborhood_sync(ref));
 
-	        // plug in after
-	        if (t % 2 == 0) {
-	        	ref = after(ref,N/2,[B,t,&counter,N]{
-	        		EXPECT_EQ(t+1,B[N/2]);
-	        		counter++;
-	        	});
-	        }
+			// plug in after
+			if (t % 2 == 0) {
+				ref = after(ref,N/2,[B,t,&counter,N]{
+					EXPECT_EQ(t+1,B[N/2]);
+					counter++;
+				});
+			}
 
-	        std::swap(A,B);
-	    }
+			std::swap(A,B);
+		}
 
-	    // check the final state
-	    pfor(1,N-1,[A](int i){
-	    	EXPECT_EQ(T,A[i]);
-	    },neighborhood_sync(ref));
+		// check the final state
+		pfor(1,N-1,[A](int i){
+			EXPECT_EQ(T,A[i]);
+		},small_neighborhood_sync(ref));
 
-	    EXPECT_EQ(counter,T/2);
+		EXPECT_EQ(counter,T/2);
 
-	    delete [] A;
-	    delete [] B;
+		delete [] A;
+		delete [] B;
 
 	}
 
@@ -1073,44 +2011,38 @@ namespace algorithm {
 		int counter = 0;
 
 		// run the time loop
-	    for(int t=0; t<T; ++t) {
-	        ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,t,N](const Point& p) {
+		for(int t=0; t<T; ++t) {
+			ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,t,N](const Point& p) {
 
-	        	if (p.x != 1   && p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x-1][p.y-1]); }
-	        	if (              p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x  ][p.y-1]); }
-	        	if (p.x != N-2 && p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x+1][p.y-1]); }
+				if (			  p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x  ][p.y-1]); }
+				if (p.x != N-2			  )  { EXPECT_EQ(t,(*A)[p.x+1][p.y  ]); }
+				if (p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x][p.y-1]); }
+				if (p.y != N-2)  { EXPECT_EQ(t,(*A)[p.x][p.y+1]); }
 
-	        	if (p.x != N-2 && p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x+1][p.y-1]); }
-	        	if (p.x != N-2              )  { EXPECT_EQ(t,(*A)[p.x+1][p.y  ]); }
-	        	if (p.x != N-2 && p.y != N-2)  { EXPECT_EQ(t,(*A)[p.x+1][p.y+1]); }
+				EXPECT_EQ(t,(*A)[p.x][p.y]);
+				EXPECT_EQ(t-1,(*B)[p.x][p.y]);
 
-	        	if (p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x][p.y-1]); }
-	        	if (p.y != N-2)  { EXPECT_EQ(t,(*A)[p.x][p.y+1]); }
+				(*B)[p.x][p.y]=t+1;
 
-	        	EXPECT_EQ(t,(*A)[p.x][p.y]);
-	        	EXPECT_EQ(t-1,(*B)[p.x][p.y]);
+			},small_neighborhood_sync(ref));
 
-	        	(*B)[p.x][p.y]=t+1;
+			// plug in after
+			if (t % 2 == 0) {
+				ref = after(ref,center,[&,B,t]{
+					EXPECT_EQ(t+1,(*B)[center.x][center.y]);
+					counter++;
+				});
+			}
 
-	        },neighborhood_sync(ref));
+			std::swap(A,B);
+		}
 
-	        // plug in after
-	        if (t % 2 == 0) {
-	        	ref = after(ref,center,[&,B,t]{
-	        		EXPECT_EQ(t+1,(*B)[center.x][center.y]);
-	        		counter++;
-	        	});
-	        }
+		// check the final state
+		pfor(Point{1,1},Point{N-1,N-1},[A](const Point& p){
+			EXPECT_EQ(T,(*A)[p.x][p.y]);
+		},small_neighborhood_sync(ref));
 
-	        std::swap(A,B);
-	    }
-
-	    // check the final state
-	    pfor(Point{1,1},Point{N-1,N-1},[A](const Point& p){
-	    	EXPECT_EQ(T,(*A)[p.x][p.y]);
-	    },neighborhood_sync(ref));
-
-	    EXPECT_EQ(counter,T/2);
+		EXPECT_EQ(counter,T/2);
 
 	}
 
@@ -1132,25 +2064,25 @@ namespace algorithm {
 		});
 
 		// run the time loop
-	    for(int t=0; t<T; ++t) {
-	        ref = pfor(1,N-1,[&](int i) {
-	        	if (i==X) counter++;
-	        },neighborhood_sync(ref));
-	    }
+		for(int t=0; t<T; ++t) {
+			ref = pfor(1,N-1,[&](int i) {
+				if (i==X) counter++;
+			},small_neighborhood_sync(ref));
+		}
 
-	    // check the final state
-	    ref = pfor(1,N-1,[&](int i){
-	    	if (i==X) counter++;
-	    },neighborhood_sync(ref));
+		// check the final state
+		ref = pfor(1,N-1,[&](int i){
+			if (i==X) counter++;
+		},small_neighborhood_sync(ref));
 
-	    // should not be done by now
-	    EXPECT_EQ(0,counter);
+		// should not be done by now
+		EXPECT_EQ(0,counter);
 
-	    // now wait for ref
-	    ref.wait();
+		// now wait for ref
+		ref.wait();
 
-	    // now all the steps should be done
-	    EXPECT_EQ(T+2,counter);
+		// now all the steps should be done
+		EXPECT_EQ(T+2,counter);
 
 	}
 
@@ -1243,7 +2175,7 @@ namespace algorithm {
 
 				// introduce some unbalanced delay
 				std::this_thread::sleep_for(std::chrono::microseconds(i));
-			},neighborhood_sync(ref));
+			},small_neighborhood_sync(ref));
 		}
 
 		ref.wait();

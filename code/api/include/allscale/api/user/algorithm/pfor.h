@@ -292,6 +292,16 @@ namespace algorithm {
 	// -------------------------------------------------------------------------------------------
 
 	/**
+	 * A dependency actually representing no dependency. Could be used as a place-holder.
+	 */
+	class no_dependency;
+
+	/**
+	 * A factory for no synchronization dependencies. Could be used as a place-holder.
+	 */
+	no_dependency no_sync();
+
+	/**
 	 * A dependency between loop iterations where iteration i of a new parallel loop may be executed
 	 * as soon as iteration i of a given parallel loop has been completed.
 	 *
@@ -299,7 +309,6 @@ namespace algorithm {
 	 */
 	template<typename Iter>
 	class one_on_one_dependency;
-
 
 	/**
 	 * A factory for one_on_one dependencies.
@@ -311,30 +320,79 @@ namespace algorithm {
 
 	/**
 	 * A dependency between loop iterations where iteration i of a new parallel loop may be executed
-	 * as soon as iteration (i-1), (i), and (i+1) of a given parallel loop has been completed.
+	 * as soon as iterations { i + c | c \in {-1,0,1}^n && |c| <= 1 } of a given parallel loop has been completed.
 	 *
 	 * @param Iter the iterator type utilized to address iterations
 	 */
 	template<typename Iter>
-	class neighborhood_sync_dependency;
+	class small_neighborhood_sync_dependency;
 
 	/**
-	 * A factory for one_on_one dependencies.
+	 * A factory for small neighborhood sync dependencies.
 	 */
 	template<typename Iter>
-	neighborhood_sync_dependency<Iter> neighborhood_sync(const detail::loop_reference<Iter>& dep) {
-		return neighborhood_sync_dependency<Iter>(dep);
+	small_neighborhood_sync_dependency<Iter> small_neighborhood_sync(const detail::loop_reference<Iter>& dep) {
+		return small_neighborhood_sync_dependency<Iter>(dep);
+	}
+
+	/**
+	 * A dependency between loop iterations where iteration i of a new parallel loop may be executed
+	 * as soon as iterations { i + c | c \in {-1,0,1}^n } of a given parallel loop has been completed.
+	 *
+	 * @param Iter the iterator type utilized to address iterations
+	 */
+	template<typename Iter>
+	class full_neighborhood_sync_dependency;
+
+	/**
+	 * A factory for full neighborhood sync dependencies.
+	 */
+	template<typename Iter>
+	full_neighborhood_sync_dependency<Iter> full_neighborhood_sync(const detail::loop_reference<Iter>& dep) {
+		return full_neighborhood_sync_dependency<Iter>(dep);
+	}
+
+	/**
+	 * A dependency between loop iterations where iteration i of a new parallel loop may be executed
+	 * as soon the entire range of a given loop has been executed.
+	 *
+	 * @param Iter the iterator type utilized to address iterations
+	 */
+	template<typename Iter>
+	class after_all_sync_dependency;
+
+	/**
+	 * A factory for after-all sync dependencies.
+	 */
+	template<typename Iter>
+	after_all_sync_dependency<Iter> after_all_sync(const detail::loop_reference<Iter>& dep) {
+		return after_all_sync_dependency<Iter>(dep);
 	}
 
 
-
 	// -------------------------------------------------------------------------------------------
-	//								     Range Utils
+	//									Range Utils
 	// -------------------------------------------------------------------------------------------
 
 
 	namespace detail {
 
+		// -- obtain number of dimensions of an iterator --
+
+		template<typename Iter>
+		struct dimensions {
+			enum { value = 1 };
+		};
+
+		template<typename Iter, std::size_t D>
+		struct dimensions<std::array<Iter,D>> {
+			enum { value = D };
+		};
+
+		template<typename Iter, std::size_t D>
+		struct dimensions<utils::Vector<Iter,D>> {
+			enum { value = D };
+		};
 
 		// -- distances between begin and end of iterators --
 
@@ -759,8 +817,8 @@ namespace algorithm {
 				return grow(*this, -steps);
 			}
 
-			fragments<Iter> split() const {
-				return range_spliter<Iter>::split(*this);
+			fragments<Iter> split(std::size_t depth) const {
+				return range_spliter<Iter>::split(depth,*this);
 			}
 
 			template<typename Op>
@@ -784,13 +842,16 @@ namespace algorithm {
 
 			using rng = range<Iter>;
 
-			static fragments<Iter> split(const rng& r) {
+			static fragments<Iter> split(std::size_t, const rng& r) {
 				const auto& a = r.begin();
 				const auto& b = r.end();
 				auto m = a + (b - a)/2;
 				return make_fragments(rng(a,m),rng(m,b));
 			}
 
+			static std::size_t getSplitDimension(std::size_t) {
+				return 0;
+			}
 		};
 
 		template<
@@ -801,35 +862,31 @@ namespace algorithm {
 
 			using rng = range<Container<Iter,dims>>;
 
-			static fragments<Container<Iter,dims>> split(const rng& r) {
+			static fragments<Container<Iter,dims>> split(std::size_t depth, const rng& r) {
 
 				__allscale_unused const auto volume = detail::volume<Container<Iter,dims>>();
-				const auto distance = detail::volume<Iter>();
 
+				// get split dimension
+				auto splitDim = getSplitDimension(depth);
+
+				// compute range fragments
 				const auto& begin = r.begin();
 				const auto& end = r.end();
-
-				// get the longest dimension
-				size_t maxDim = 0;
-				size_t maxDist = distance(begin[0],end[0]);
-				for(size_t i = 1; i<dims;++i) {
-					size_t curDist = distance(begin[i],end[i]);
-					if (curDist > maxDist) {
-						maxDim = i;
-						maxDist = curDist;
-					}
-				}
 
 				// split the longest dimension, keep the others as they are
 				auto midA = end;
 				auto midB = begin;
-				midA[maxDim] = midB[maxDim] = range_spliter<Iter>::split(range<Iter>(begin[maxDim],end[maxDim])).left.end();
+				midA[splitDim] = midB[splitDim] = range_spliter<Iter>::split(depth,range<Iter>(begin[splitDim],end[splitDim])).left.end();
 
 				// make sure no points got lost
 				assert_eq(volume(begin,end), volume(begin,midA) + volume(midB,end));
 
 				// create result
 				return make_fragments(rng(begin,midA),rng(midB,end));
+			}
+
+			static std::size_t getSplitDimension(std::size_t depth) {
+				return depth % dims;
 			}
 
 		};
@@ -860,12 +917,17 @@ namespace algorithm {
 			 */
 			core::task_reference handle;
 
+			/**
+			 * The recursive depth of the referenced iteration range.
+			 */
+			std::size_t depth;
+
 		public:
 
-			iteration_reference(const range<Iter>& _range = range<Iter>()) : _range(_range) {}
+			iteration_reference(const range<Iter>& range, const core::task_reference& handle, std::size_t depth)
+				: _range(range), handle(handle), depth(depth) {}
 
-			iteration_reference(const range<Iter>& range, const core::task_reference& handle)
-				: _range(range), handle(handle) {}
+			iteration_reference(const range<Iter>& _range = range<Iter>()) : _range(_range), depth(0) {}
 
 			iteration_reference(const iteration_reference&) = default;
 			iteration_reference(iteration_reference&&) = default;
@@ -878,11 +940,11 @@ namespace algorithm {
 			}
 
 			iteration_reference<Iter> getLeft() const {
-				return { range_spliter<Iter>::split(_range).left, handle.getLeft() };
+				return { range_spliter<Iter>::split(depth,_range).left, handle.getLeft(), depth+1 };
 			}
 
 			iteration_reference<Iter> getRight() const {
-				return { range_spliter<Iter>::split(_range).right, handle.getRight() };
+				return { range_spliter<Iter>::split(depth,_range).right, handle.getRight(), depth+1 };
 			}
 
 			operator core::task_reference() const {
@@ -895,6 +957,10 @@ namespace algorithm {
 
 			const core::task_reference& getHandle() const {
 				return handle;
+			}
+
+			std::size_t getDepth() const {
+				return depth;
 			}
 		};
 
@@ -909,7 +975,7 @@ namespace algorithm {
 		public:
 
 			loop_reference(const range<Iter>& range, core::treeture<void>&& handle)
-				: iteration_reference<Iter>(range, std::move(handle)) {}
+				: iteration_reference<Iter>(range, std::move(handle), 0) {}
 
 			loop_reference() {};
 			loop_reference(const loop_reference&) = delete;
@@ -934,72 +1000,102 @@ namespace algorithm {
 	template<typename Iter, typename Body, typename Dependency>
 	detail::loop_reference<Iter> pfor(const detail::range<Iter>& r, const Body& body, const Dependency& dependency) {
 
-		struct rangeHelper {
+		struct RecArgs {
+			std::size_t depth;
 			detail::range<Iter> range;
 			Dependency dependencies;
 		};
 
 		// trigger parallel processing
 		return { r, core::prec(
-			[](const rangeHelper& rg) {
+			[](const RecArgs& rg) {
 				// if there is only one element left, we reached the base case
 				return rg.range.size() <= 1;
 			},
-			[body](const rangeHelper& rg) {
+			[body](const RecArgs& rg) {
 				// apply the body operation to every element in the remaining range
 				rg.range.forEach(body);
 			},
 			core::pick(
-				[](const rangeHelper& rg, const auto& nested) {
+				[](const RecArgs& rg, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
-					auto fragments = rg.range.split();
+					auto fragments = rg.range.split(rg.depth);
 					auto& left = fragments.left;
 					auto& right = fragments.right;
 					auto dep = rg.dependencies.split(left,right);
 					return parallel(
-						nested(dep.left.toCoreDependencies(), rangeHelper{left, dep.left} ),
-						nested(dep.right.toCoreDependencies(), rangeHelper{right,dep.right})
+						nested(dep.left.toCoreDependencies(), RecArgs{rg.depth+1, left, dep.left} ),
+						nested(dep.right.toCoreDependencies(), RecArgs{rg.depth+1, right,dep.right})
 					);
 				},
-				[body](const rangeHelper& rg, const auto&) {
+				[body](const RecArgs& rg, const auto&) {
 					// the alternative is processing the step sequentially
 					rg.range.forEach(body);
 				}
 			)
-		)(dependency.toCoreDependencies(),rangeHelper{r,dependency}) };
+		)(dependency.toCoreDependencies(),RecArgs{0,r,dependency}) };
 	}
 
 	template<typename Iter, typename Body>
 	detail::loop_reference<Iter> pfor(const detail::range<Iter>& r, const Body& body, const no_dependencies&) {
-		using range = detail::range<Iter>;
+
+		struct RecArgs {
+			std::size_t depth;
+			detail::range<Iter> range;
+		};
 
 		// trigger parallel processing
 		return { r, core::prec(
-			[](const range& r) {
+			[](const RecArgs& r) {
 				// if there is only one element left, we reached the base case
-				return r.size() <= 1;
+				return r.range.size() <= 1;
 			},
-			[body](const range& r) {
+			[body](const RecArgs& r) {
 				// apply the body operation to every element in the remaining range
-				r.forEach(body);
+				r.range.forEach(body);
 			},
 			core::pick(
-				[](const range& r, const auto& nested) {
+				[](const RecArgs& r, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
-					auto fragments = r.split();
+					auto fragments = r.range.split(r.depth);
 					return parallel(
-						nested(fragments.left),
-						nested(fragments.right)
+						nested(RecArgs{r.depth+1,fragments.left}),
+						nested(RecArgs{r.depth+1,fragments.right})
 					);
 				},
-				[body](const range& r, const auto&) {
+				[body](const RecArgs& r, const auto&) {
 					// the alternative is processing the step sequentially
-					r.forEach(body);
+					r.range.forEach(body);
 				}
 			)
-		)(r) };
+		)(RecArgs{0,r}) };
 	}
 
+
+	class no_dependency : public detail::loop_dependency {
+
+	public:
+
+		auto toCoreDependencies() const {
+			return core::after();
+		}
+
+		template<typename Range>
+		detail::SubDependencies<no_dependency> split(const Range&, const Range&) const {
+			// split dependencies, which is actually nothing to do ...
+			return { no_dependency(), no_dependency() };
+
+		}
+
+		friend std::ostream& operator<< (std::ostream& out, const no_dependency&) {
+			return out << "none";
+		}
+
+	};
+
+	inline no_dependency no_sync() {
+		return no_dependency();
+	}
 
 
 	template<typename Iter>
@@ -1011,6 +1107,10 @@ namespace algorithm {
 
 		one_on_one_dependency(const detail::iteration_reference<Iter>& loop)
 			: loop(loop) {}
+
+		auto getRange() const {
+			return loop.getRange();
+		}
 
 		core::impl::reference::dependencies<core::impl::reference::fixed_sized<1>> toCoreDependencies() const {
 			return core::after(loop.getHandle());
@@ -1037,8 +1137,129 @@ namespace algorithm {
 
 	};
 
+
 	template<typename Iter>
-	class neighborhood_sync_dependency : public detail::loop_dependency {
+	class small_neighborhood_sync_dependency : public detail::loop_dependency {
+
+		// determine the number of dimensions
+		enum { num_dimensions = detail::dimensions<Iter>::value };
+
+		// the type of iteration dependency
+		using iteration_reference = detail::iteration_reference<Iter>;
+
+		// on each dimension, two dependencies are stored in each direction
+		struct deps_pair {
+			iteration_reference left;
+			iteration_reference right;
+		};
+
+		// save two dependencies for each dimension
+		using deps_list = std::array<deps_pair,num_dimensions>;
+
+		// on dependency covering the central area
+		iteration_reference center;
+
+		// the neighboring dependencies
+		deps_list neighborhood;
+
+		// and internal constructor required by the split operation
+		small_neighborhood_sync_dependency() {}
+
+	public:
+
+		small_neighborhood_sync_dependency(const iteration_reference& loop)
+			: center(loop), neighborhood() {}
+
+		std::vector<detail::range<Iter>> getRanges() const {
+			std::vector<detail::range<Iter>> res;
+			res.push_back(center.getRange());
+			for(std::size_t i=0; i<num_dimensions; i++) {
+				if (!neighborhood[i].left.getRange().empty())  res.push_back(neighborhood[i].left.getRange());
+				if (!neighborhood[i].right.getRange().empty()) res.push_back(neighborhood[i].right.getRange());
+			}
+			return res;
+		}
+
+	private:
+
+		template<std::size_t ... Dims>
+		core::impl::reference::dependencies<core::impl::reference::fixed_sized<2*num_dimensions+1>> toCoreDependencies(const std::index_sequence<Dims...>&) const {
+			return core::after(
+					center,
+					neighborhood[Dims].left ...,
+					neighborhood[Dims].right ...
+			);
+		}
+
+	public:
+
+		core::impl::reference::dependencies<core::impl::reference::fixed_sized<2*num_dimensions+1>> toCoreDependencies() const {
+			return toCoreDependencies(std::make_index_sequence<num_dimensions>());
+		}
+
+		detail::SubDependencies<small_neighborhood_sync_dependency<Iter>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
+
+			using splitter = detail::range_spliter<Iter>;
+
+			// split the root dependency
+			iteration_reference ref_left = center.getLeft();
+			iteration_reference ref_right = center.getRight();
+
+			// create new left and right dependencies
+			small_neighborhood_sync_dependency res_left;
+			small_neighborhood_sync_dependency res_right;
+
+			// update center
+			res_left.center = center.getLeft();
+			res_right.center = center.getRight();
+
+			// update neighbors except split dimension
+			bool save_left = true;
+			bool save_right = true;
+			auto splitDim = splitter::getSplitDimension(center.getDepth());
+			for(std::size_t i =0; i<num_dimensions; i++) {
+				if (i != splitDim) {
+					// narrow down dependencies in each dimension
+					res_left.neighborhood[i].left  = neighborhood[i].left.getLeft();
+					res_left.neighborhood[i].right = neighborhood[i].right.getLeft();
+					res_right.neighborhood[i].left  = neighborhood[i].left.getRight();
+					res_right.neighborhood[i].right = neighborhood[i].right.getRight();
+				} else {
+					// for the split dimension, apply special treatment
+					res_left.neighborhood[i].left = neighborhood[i].left.getRight();
+					res_left.neighborhood[i].right = center.getRight();
+					res_right.neighborhood[i].left = center.getLeft();
+					res_right.neighborhood[i].right = neighborhood[i].right.getLeft();
+
+					// check that there is still something remaining in left and right
+					// TODO: replace by a configurable minimum width
+					if (neighborhood[i].left.getRange().empty() && !res_left.neighborhood[i].left.getRange().empty()) save_left = false;
+					if (neighborhood[i].right.getRange().empty() && !res_right.neighborhood[i].right.getRange().empty()) save_right = false;
+				}
+			}
+
+			// check coverage and build up result
+			return {
+				save_left && res_left.center.getRange().covers(left) ? res_left : *this,
+				save_right && res_right.center.getRange().covers(right) ? res_right : *this
+			};
+		}
+
+		friend std::ostream& operator<< (std::ostream& out, const small_neighborhood_sync_dependency& dep) {
+			out << "[";
+			out << dep.center;
+			out << ",";
+			for(const auto& cur : dep.neighborhood) {
+				out << cur.left << "," << cur.right;
+			}
+			return out << "]";
+		}
+
+	};
+
+
+	template<typename Iter>
+	class full_neighborhood_sync_dependency : public detail::loop_dependency {
 
 		using deps_list = std::array<detail::iteration_reference<Iter>,3>;
 
@@ -1046,19 +1267,27 @@ namespace algorithm {
 
 		std::size_t size;
 
-		neighborhood_sync_dependency(std::array<detail::iteration_reference<Iter>,3>&& deps)
+		full_neighborhood_sync_dependency(std::array<detail::iteration_reference<Iter>,3>&& deps)
 			: deps(std::move(deps)), size(3) {}
 
 	public:
 
-		neighborhood_sync_dependency(const detail::iteration_reference<Iter>& loop)
+		full_neighborhood_sync_dependency(const detail::iteration_reference<Iter>& loop)
 			: deps({{ loop }}), size(1) {}
+
+		std::vector<detail::range<Iter>> getRanges() const {
+			std::vector<detail::range<Iter>> res;
+			for(std::size_t i=0; i<size; i++) {
+				res.push_back(deps[i].getRange());
+			}
+			return res;
+		}
 
 		core::impl::reference::dependencies<core::impl::reference::fixed_sized<3>> toCoreDependencies() const {
 			return core::after(deps[0],deps[1],deps[2]);
 		}
 
-		detail::SubDependencies<neighborhood_sync_dependency<Iter>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
+		detail::SubDependencies<full_neighborhood_sync_dependency<Iter>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
 			using iter_dependency = detail::iteration_reference<Iter>;
 
 			// check for the root case
@@ -1074,8 +1303,8 @@ namespace algorithm {
 				iter_dependency finish({{right.getRange().end(), right.getRange().end() }});
 
 				return {
-					neighborhood_sync_dependency(deps_list{{ start, left,  right  }}),
-					neighborhood_sync_dependency(deps_list{{ left,  right, finish }})
+					full_neighborhood_sync_dependency(deps_list{{ start, left,  right  }}),
+					full_neighborhood_sync_dependency(deps_list{{ left,  right, finish }})
 				};
 			}
 
@@ -1101,13 +1330,13 @@ namespace algorithm {
 
 			// and pack accordingly
 			return {
-				leftPart.covers(left.grow(full))   ? neighborhood_sync_dependency(deps_list{{ a,b,c }}) : *this,
-				rightPart.covers(right.grow(full)) ? neighborhood_sync_dependency(deps_list{{ b,c,d }}) : *this
+				leftPart.covers(left.grow(full))   ? full_neighborhood_sync_dependency(deps_list{{ a,b,c }}) : *this,
+				rightPart.covers(right.grow(full)) ? full_neighborhood_sync_dependency(deps_list{{ b,c,d }}) : *this
 			};
 
 		}
 
-		friend std::ostream& operator<< (std::ostream& out, const neighborhood_sync_dependency& dep) {
+		friend std::ostream& operator<< (std::ostream& out, const full_neighborhood_sync_dependency& dep) {
 			return out << "[" << utils::join(",",dep.deps,[](std::ostream& out, const detail::iteration_reference<Iter>& cur) { out << cur.getRange(); }) << "]";
 		}
 
@@ -1117,7 +1346,8 @@ namespace algorithm {
 	template<typename Iter, typename InnerBody, typename BoundaryBody, typename Dependency>
 	detail::loop_reference<Iter> pforWithBoundary(const detail::range<Iter>& r, const InnerBody& innerBody, const BoundaryBody& boundaryBody, const Dependency& dependency) {
 
-		struct rangeHelper {
+		struct RecArgs {
+			std::size_t depth;
 			detail::range<Iter> range;
 			Dependency dependencies;
 		};
@@ -1127,68 +1357,72 @@ namespace algorithm {
 
 		// trigger parallel processing
 		return { r, core::prec(
-			[](const rangeHelper& rg) {
+			[](const RecArgs& rg) {
 				// if there is only one element left, we reached the base case
 				return rg.range.size() <= 1;
 			},
-			[innerBody,boundaryBody,full](const rangeHelper& rg) {
+			[innerBody,boundaryBody,full](const RecArgs& rg) {
 				// apply the body operation to every element in the remaining range
 				rg.range.forEachWithBoundary(full,innerBody,boundaryBody);
 			},
 			core::pick(
-				[](const rangeHelper& rg, const auto& nested) {
+				[](const RecArgs& rg, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
-					auto fragments = rg.range.split();
+					auto fragments = rg.range.split(rg.depth);
 					auto& left = fragments.left;
 					auto& right = fragments.right;
 					auto dep = rg.dependencies.split(left,right);
 					return parallel(
-						nested(dep.left.toCoreDependencies(), rangeHelper{left, dep.left} ),
-						nested(dep.right.toCoreDependencies(), rangeHelper{right,dep.right})
+						nested(dep.left.toCoreDependencies(), RecArgs{rg.depth+1,left, dep.left} ),
+						nested(dep.right.toCoreDependencies(), RecArgs{rg.depth+1,right,dep.right})
 					);
 				},
-				[innerBody,boundaryBody,full](const rangeHelper& rg, const auto&) {
+				[innerBody,boundaryBody,full](const RecArgs& rg, const auto&) {
 					// the alternative is processing the step sequentially
 					rg.range.forEachWithBoundary(full,innerBody,boundaryBody);
 				}
 			)
-		)(dependency.toCoreDependencies(),rangeHelper{r,dependency}) };
+		)(dependency.toCoreDependencies(),RecArgs{0,r,dependency}) };
 	}
 
 	template<typename Iter, typename InnerBody, typename BoundaryBody>
 	detail::loop_reference<Iter> pforWithBoundary(const detail::range<Iter>& r, const InnerBody& innerBody, const BoundaryBody& boundaryBody, const no_dependencies&) {
-		using range = detail::range<Iter>;
+
+		struct RecArgs {
+			std::size_t depth;
+			detail::range<Iter> range;
+		};
 
 		// keep a copy of the full range
 		auto full = r;
 
 		// trigger parallel processing
 		return { r, core::prec(
-			[](const range& r) {
+			[](const RecArgs& r) {
 				// if there is only one element left, we reached the base case
-				return r.size() <= 1;
+				return r.range.size() <= 1;
 			},
-			[innerBody,boundaryBody,full](const range& r) {
+			[innerBody,boundaryBody,full](const RecArgs& r) {
 				// apply the body operation to every element in the remaining range
-				r.forEachWithBoundary(full,innerBody,boundaryBody);
+				r.range.forEachWithBoundary(full,innerBody,boundaryBody);
 			},
 			core::pick(
-				[](const range& r, const auto& nested) {
+				[](const RecArgs& r, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
-					auto fragments = r.split();
+					auto fragments = r.range.split(r.depth);
 					auto& left = fragments.left;
 					auto& right = fragments.right;
 					return parallel(
-						nested(left),
-						nested(right)
+						nested(RecArgs{ r.depth+1, left }),
+						nested(RecArgs{ r.depth+1, right })
 					);
 				},
-				[innerBody,boundaryBody,full](const range& r, const auto&) {
+				[innerBody,boundaryBody,full](const RecArgs& r, const auto&) {
 					// the alternative is processing the step sequentially
-					r.forEachWithBoundary(full,innerBody,boundaryBody);
+					r.range.forEachWithBoundary(full,innerBody,boundaryBody);
 				}
 			)
-		)(r) };
+		)(RecArgs{ 0 , r }) };
 	}
 
 
@@ -1200,7 +1434,8 @@ namespace algorithm {
 		// get the full range
 		auto r = loop.getRange();
 
-		struct rangeHelper {
+		struct RecArgs {
+			std::size_t depth;
 			detail::range<Iter> range;
 			one_on_one_dependency<Iter> dependencies;
 		};
@@ -1210,33 +1445,33 @@ namespace algorithm {
 
 		// trigger parallel processing
 		return { r, core::prec(
-			[point](const rangeHelper& rg) {
+			[point](const RecArgs& rg) {
 				// check whether the point of action is covered by the current range
 				return !rg.range.covers(point);
 			},
-			[action,point](const rangeHelper& rg) {
+			[action,point](const RecArgs& rg) {
 				// trigger the action if the current range covers the point
 				if (rg.range.covers(point)) action();
 
 			},
 			core::pick(
-				[](const rangeHelper& rg, const auto& nested) {
+				[](const RecArgs& rg, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
-					auto fragments = rg.range.split();
+					auto fragments = rg.range.split(rg.depth);
 					auto& left = fragments.left;
 					auto& right = fragments.right;
 					auto dep = rg.dependencies.split(left,right);
 					return parallel(
-						nested(dep.left.toCoreDependencies(), rangeHelper{left, dep.left} ),
-						nested(dep.right.toCoreDependencies(), rangeHelper{right,dep.right})
+						nested(dep.left.toCoreDependencies(), RecArgs{rg.depth+1, left, dep.left} ),
+						nested(dep.right.toCoreDependencies(), RecArgs{rg.depth+1, right,dep.right})
 					);
 				},
-				[action,point](const rangeHelper& rg, const auto&) {
+				[action,point](const RecArgs& rg, const auto&) {
 					// trigger the action if the current range covers the point
 					if (rg.range.covers(point)) action();
 				}
 			)
-		)(dependency.toCoreDependencies(),rangeHelper{r,dependency}) };
+		)(dependency.toCoreDependencies(),RecArgs{0,r,dependency}) };
 	}
 
 } // end namespace algorithm
