@@ -6,6 +6,7 @@
 #include "allscale/api/user/algorithm/pfor.h"
 
 using namespace allscale::api::user;
+using namespace allscale::api::user::algorithm;
 
 
 int main() {
