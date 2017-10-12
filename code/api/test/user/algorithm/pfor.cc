@@ -257,6 +257,8 @@ namespace algorithm {
 		Point min {0,0};
 		Point max {N,N};
 
+		std::vector<detail::iteration_reference<Point>> refs;
+
 		for(int t=0; t<T; ++t) {
 			ref = pfor(min,max,[t,&updated](const Point& p) {
 
@@ -268,10 +270,14 @@ namespace algorithm {
 				updated[t][p.x][p.y] = true;
 
 			},no_sync());
+
+			refs.push_back(ref);
 		}
 
 		// wait for completion
-		ref.wait();
+		for(auto& ref : refs) {
+			ref.wait();
+		}
 
 		// at this point everything should be done
 		for(int t=0; t<T; t++) {
