@@ -231,6 +231,60 @@ namespace algorithm {
 
 	// --- loop iteration sync ---
 
+
+	TEST(Pfor, SyncNoDependency_2D) {
+
+		const int N = 50;
+		const int T = 10;
+
+		using Point = utils::Vector<int,2>;
+
+		std::array<std::array<std::array<bool,N>,N>,T> updated;
+
+		// start with an initialization
+		for(int t=0; t<T; t++) {
+			for(int i=0; i<N; i++) {
+				for(int j=0; j<N; j++) {
+					updated[t][i][j] = false;
+				}
+			}
+		}
+
+		// start with a completed loop
+		auto ref = detail::loop_reference<Point>();
+
+		// run the time loop
+		Point min {0,0};
+		Point max {N,N};
+
+		for(int t=0; t<T; ++t) {
+			ref = pfor(min,max,[t,&updated](const Point& p) {
+
+				// we can only check that we have not been here before
+				EXPECT_FALSE(updated[t][p.x][p.y])
+					<< "t=" << t << ", i=" << p.x << ", j=" << p.y;
+
+				// but we record that we have been here
+				updated[t][p.x][p.y] = true;
+
+			},no_sync());
+		}
+
+		// wait for completion
+		ref.wait();
+
+		// at this point everything should be done
+		for(int t=0; t<T; t++) {
+			for(int i=0; i<N; i++) {
+				for(int j=0; j<N; j++) {
+					EXPECT_TRUE(updated[t][i][j])
+							<< "t=" << t << ", i=" << i << ", j=" << j;
+				}
+			}
+		}
+	}
+
+
 	// a utility function to generate arbitrary loop references
 	template<typename T>
 	detail::range<T> make_range(const T& from, const T& to) {
@@ -1990,6 +2044,55 @@ namespace algorithm {
 
 	}
 
+
+	TEST(Pfor, SyncAfterAll_2D) {
+
+		const int N = 50;
+		const int T = 10;
+
+		using Point = utils::Vector<int,2>;
+
+		Point size = {N,N};
+
+		std::array<std::array<int,N>,N> bufferA;
+		std::array<std::array<int,N>,N> bufferB;
+
+		auto* A = &bufferA;
+		auto* B = &bufferB;
+
+		// start with an initialization
+		auto ref = pfor(size,[A,B](const Point& p){
+			(*A)[p.x][p.y] = 0;
+			(*B)[p.x][p.y] = -1;
+		});
+
+		// run the time loop
+		Point min {0,0};
+		Point max {N,N};
+
+		detail::range<Point> r(min,max);
+
+		for(int t=0; t<T; ++t) {
+			ref = pfor(min,max,[A,B,t,N,&r](const Point& p) {
+
+				// check full neighborhood
+				r.forEach([&](const Point& s) {
+					EXPECT_EQ(t,(*A)[s.x][s.y]) << "Point: " << r << " - error for " << s;
+				});
+
+				(*B)[p.x][p.y]=t+1;
+
+			},after_all_sync(ref));
+
+			std::swap(A,B);
+		}
+
+		// check the final state
+		pfor(min,max,[T,A](const Point& p){
+			EXPECT_EQ(T,(*A)[p.x][p.y]);
+		},after_all_sync(ref));
+
+	}
 
 
 	// --- stencil variants --.

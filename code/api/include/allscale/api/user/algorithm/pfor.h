@@ -1437,6 +1437,45 @@ namespace algorithm {
 	};
 
 
+	template<typename Iter>
+	class after_all_sync_dependency : public detail::loop_dependency {
+
+		// the type of iteration dependency
+		using iteration_reference = detail::iteration_reference<Iter>;
+
+		iteration_reference dependency;
+
+	public:
+
+		after_all_sync_dependency(const detail::iteration_reference<Iter>& loop)
+			: dependency(loop) {}
+
+		const detail::range<Iter>& getCenterRange() const {
+			return dependency.getRange();
+		}
+
+		std::vector<detail::range<Iter>> getRanges() const {
+			std::vector<detail::range<Iter>> res;
+			res.push_back(dependency.getRange());
+			return res;
+		}
+
+		auto toCoreDependencies() const {
+			return core::after(dependency);
+		}
+
+		detail::SubDependencies<after_all_sync_dependency<Iter>> split(const detail::range<Iter>&, const detail::range<Iter>&) const {
+			// this dependency never changes
+			return { *this, *this };
+		}
+
+		friend std::ostream& operator<< (std::ostream& out, const after_all_sync_dependency& dep) {
+			return out << "[" << getCenterRange() << "]";
+		}
+
+	};
+
+
 	template<typename Iter, typename InnerBody, typename BoundaryBody, typename Dependency>
 	detail::loop_reference<Iter> pforWithBoundary(const detail::range<Iter>& r, const InnerBody& innerBody, const BoundaryBody& boundaryBody, const Dependency& dependency) {
 
