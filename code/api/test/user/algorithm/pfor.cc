@@ -585,7 +585,7 @@ namespace algorithm {
 
 
 
-	TEST(SyncSmallNeighbor, Explicit_1D) {
+	TEST(SyncSmallNeighborhood, Explicit_1D) {
 
 		auto full = make_loop_ref(0,100);
 
@@ -643,11 +643,9 @@ namespace algorithm {
 		EXPECT_EQ("[[25,37),[12,25),[37,50)]",toString(parts.left.getRanges()));
 		EXPECT_EQ("[[37,50),[25,37),[50,62)]",toString(parts.right.getRanges()));
 
-		// TODO: add tests for minimum left-over
-
 	}
 
-	TEST(SyncSmallNeighbor, Explicit_2D) {
+	TEST(SyncSmallNeighborhood, Explicit_2D) {
 
 		using point = utils::Vector<int,2>;
 
@@ -695,11 +693,9 @@ namespace algorithm {
 		EXPECT_EQ("[[[0,0],[50,100]),[[50,0],[100,100])]",  toString(parts.left.getRanges()));
 		EXPECT_EQ("[[[0,50],[50,100]),[[50,50],[100,100]),[[0,0],[50,50])]",toString(parts.right.getRanges()));
 
-		// TODO: add tests for minimum left-over
-
 	}
 
-	TEST(SyncSmallNeighbor, Explicit_3D) {
+	TEST(SyncSmallNeighborhood, Explicit_3D) {
 
 		using point = utils::Vector<int,3>;
 
@@ -731,7 +727,197 @@ namespace algorithm {
 
 	}
 
-	TEST(Pfor, SyncSmallNeighbor) {
+	template<typename I, std::size_t Dims>
+	void testExhaustive(const small_neighborhood_sync_dependency<utils::Vector<I,Dims>>& dependency, const detail::range<utils::Vector<I,Dims>>& full, const detail::range<utils::Vector<I,Dims>>& range, std::size_t depth) {
+
+		// check that the current range is covered by the given dependency
+		auto coverage = dependency.getRanges();
+
+		// a utility to test coverage
+		auto isCovered = [&](const auto& p) {
+			// what is not in the full range is always covered
+			if (!full.covers(p)) return true;
+			// if it is covered by full, it must be covered by some dependency
+			for(const auto& cur : coverage) {
+				if (cur.covers(p)) return true;
+			}
+			// not covered, we are done
+			return false;
+		};
+
+		// check the currently covered range
+		range.forEach([&](const auto& p){
+
+			EXPECT_PRED1(isCovered,p) << "Point " << p << " in range " << range << " at depth " << depth << " not covered by " << coverage << "\n";
+
+			// check left and right neighbor in each dimension
+			for(std::size_t i=0; i<Dims; ++i) {
+				auto s = p;
+				s[i] = p[i] - 1;
+				EXPECT_PRED1(isCovered,s) << "Point " << s << " in hull of range " << range << " at depth " << depth << " not covered by " << coverage << "\n";
+				s[i] = p[i] + 1;
+				EXPECT_PRED1(isCovered,s) << "Point " << s << " in hull of range " << range << " at depth " << depth << " not covered by " << coverage << "\n";
+			}
+		});
+
+
+		// TODO: narrow down dependency size
+//		// also check that the coverage is not too large
+//		std::size_t center_size = range.size();
+//		std::size_t sum = 0;
+//		for(const auto& cur : coverage) {
+//			sum += cur.size();
+//		}
+//		EXPECT_LE(sum, 5 * center_size)
+//			<< "Large dependency for range " << range << ": " << coverage << "\n";
+
+
+		// simulate loop descent
+		if (range.size() <= 1) return;
+
+		// process fragments
+		auto parts = detail::range_spliter<utils::Vector<I,Dims>>::split(depth,range);
+		auto deps = dependency.split(parts.left,parts.right);
+		testExhaustive(deps.left,full,parts.left,depth+1);
+		testExhaustive(deps.right,full,parts.right,depth+1);
+
+	}
+
+	template<typename I, template<typename T> class Dependency>
+	void testExhaustive(const Dependency<I>& dependency, const detail::range<I>& range) {
+		testExhaustive(dependency,dependency.getRanges().front(),range,0);
+	}
+
+
+	TEST(SyncSmallNeighborhood, Exhaustive_1D) {
+
+		using point = utils::Vector<int,1>;
+
+		// check a dependency / loop combination exhaustive
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0},point{100})),	// < the loop range depending on
+				detail::range<point>(point{0},point{100})						// < the simulated loop
+		);
+
+		// check a loop of different size
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0},point{100})),	// < the loop range depending on
+				detail::range<point>(point{0},point{101})						// < the simulated loop
+		);
+
+		// check an offsetted loop
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0},point{100})),	// < the loop range depending on
+				detail::range<point>(point{10},point{110})						// < the simulated loop
+		);
+
+		// check a completely independent range
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0},point{100})),	// < the loop range depending on
+				detail::range<point>(point{200},point{400})						// < the simulated loop
+		);
+
+	}
+
+
+	TEST(SyncSmallNeighborhood, Exhaustive_2D) {
+
+		using point = utils::Vector<int,2>;
+
+		// check a dependency / loop combination exhaustive
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0,0},point{50,50})),	// < the loop range depending on
+				detail::range<point>(point{0,0},point{50,50})						// < the simulated loop
+		);
+
+		// check a loop of different size
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0,0},point{50,50})),	// < the loop range depending on
+				detail::range<point>(point{0,0},point{51,51})						// < the simulated loop
+		);
+
+		// check an offsetted loop
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0,0},point{50,50})),	// < the loop range depending on
+				detail::range<point>(point{10,10},point{60,60})					// < the simulated loop
+		);
+
+		// check a completely independent range
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0,0},point{50,50})),	// < the loop range depending on
+				detail::range<point>(point{100,100},point{200,200})					// < the simulated loop
+		);
+
+		// check non-quadratic range
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0,0},point{20,80})),	// < the loop range depending on
+				detail::range<point>(point{0,0},point{20,80})						// < the simulated loop
+		);
+
+		// check non-quadratic range
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0,0},point{20,80})),	// < the loop range depending on
+				detail::range<point>(point{0,0},point{21,81})						// < the simulated loop
+		);
+
+		// check non-quadratic range
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0,0},point{20,80})),	// < the loop range depending on
+				detail::range<point>(point{0,0},point{80,20})						// < the simulated loop
+		);
+	}
+
+
+	TEST(SyncSmallNeighborhood, Exhaustive_3D) {
+
+		using point = utils::Vector<int,3>;
+
+		// check a dependency / loop combination exhaustive
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0,0,0},point{30,30,30})),	// < the loop range depending on
+				detail::range<point>(point{0,0,0},point{30,30,30})						// < the simulated loop
+		);
+
+		// check a slightly larger loop than dependency
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0,0,0},point{30,30,30})),	// < the loop range depending on
+				detail::range<point>(point{0,0,0},point{31,31,31})						// < the simulated loop
+		);
+
+		// check a slightly smaller loop than dependency
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0,0,0},point{30,30,30})),	// < the loop range depending on
+				detail::range<point>(point{0,0,0},point{29,29,29})						// < the simulated loop
+		);
+
+		// check an offseted loop
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0,0,0},point{30,30,30})),	// < the loop range depending on
+				detail::range<point>(point{10,10,10},point{40,40,40})					// < the simulated loop
+		);
+
+		// test a completely different range
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0,0,0},point{30,30,30})),	// < the loop range depending on
+				detail::range<point>(point{50,50,50},point{60,60,60})					// < the simulated loop
+		);
+
+		// test a non-cube shape
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0,0,0},point{20,30,40})),	// < the loop range depending on
+				detail::range<point>(point{0,0,0},point{20,30,40})						// < the simulated loop
+		);
+
+		// and a non-cube shape with small differences
+		testExhaustive(
+				small_neighborhood_sync(make_loop_ref(point{0,0,0},point{20,30,40})),	// < the loop range depending on
+				detail::range<point>(point{1,2,3},point{21,32,43})						// < the simulated loop
+		);
+	}
+
+
+
+	TEST(Pfor, SyncSmallNeighborhood) {
 		const int N = 10000;
 
 		std::vector<int> dataA(N);
@@ -783,7 +969,7 @@ namespace algorithm {
 		}
 	}
 
-	TEST(Pfor, SyncSmallNeighbor_DifferentSize) {
+	TEST(Pfor, SyncSmallNeighborhood_DifferentSize) {
 		const int N = 10000;
 
 		std::vector<int> dataA(N+20);
@@ -862,7 +1048,7 @@ namespace algorithm {
 		}
 	}
 
-	TEST(Pfor, SyncSmallNeighbor_2D) {
+	TEST(Pfor, SyncSmallNeighborhood_2D) {
 
 		const int N = 50;
 		const int T = 10;
@@ -916,7 +1102,7 @@ namespace algorithm {
 
 	}
 
-	TEST(Pfor, SyncSmallNeighbor_2D_DifferentExtends) {
+	TEST(Pfor, SyncSmallNeighborhood_2D_DifferentExtends) {
 
 		const int N = 30;
 		const int T = 10;
@@ -971,7 +1157,7 @@ namespace algorithm {
 
 	}
 
-	TEST(Pfor, SyncSmallNeighbor_3D) {
+	TEST(Pfor, SyncSmallNeighborhood_3D) {
 
 		const int N = 20;
 		const int T = 10;
@@ -1027,7 +1213,7 @@ namespace algorithm {
 
 	}
 
-	TEST(Pfor, SyncSmallNeighbor_3D_DifferentExtends) {
+	TEST(Pfor, SyncSmallNeighborhood_3D_DifferentExtends) {
 
 		const int N = 10;
 		const int T = 10;
@@ -1126,6 +1312,31 @@ namespace algorithm {
 		parts = part.split(make_range(0,40),make_range(40,50));
 		EXPECT_EQ("[[0,0),[0,25),[25,50)]",  toString(parts.left.getRanges()));
 		EXPECT_EQ("[[0,25),[25,50),[50,75)]",toString(parts.right.getRanges()));
+
+	}
+	template<typename I>
+	void testExhaustive(const full_neighborhood_sync_dependency<I>& dependency, const detail::range<I>& full, const detail::range<I>& range, std::size_t depth) {
+
+		// check that the current range is covered by the given dependency
+		auto coverage = dependency.getRanges();
+
+		// check the currently covered range
+		range.grow(full,1).forEach([&](const auto& p){
+			bool covered = false;
+			for(const auto& cur : coverage) {
+				covered = covered || cur.covers(p);
+			}
+			EXPECT_TRUE(covered) << "Point " << p << " in range " << range << " at depth " << depth << " not covered by " << coverage << "\n";
+		});
+
+		// simulate loop descent
+		if (range.size() <= 1) return;
+
+		// process fragments
+		auto parts = detail::range_spliter<I>::split(depth,range);
+		auto deps = dependency.split(parts.left,parts.right);
+		testExhaustive(deps.left,full,parts.left,depth+1);
+		testExhaustive(deps.right,full,parts.right,depth+1);
 
 	}
 //

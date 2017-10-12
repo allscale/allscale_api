@@ -1231,11 +1231,16 @@ namespace algorithm {
 					res_right.neighborhood[i].left = center.getLeft();
 					res_right.neighborhood[i].right = neighborhood[i].right.getLeft();
 
-					// check that there is still something remaining in left and right
-					// TODO: replace by a configurable minimum width
-					if (neighborhood[i].left.getRange().empty() && !res_left.neighborhood[i].left.getRange().empty()) save_left = false;
-					if (neighborhood[i].right.getRange().empty() && !res_right.neighborhood[i].right.getRange().empty()) save_right = false;
 				}
+
+				// check that there is still something remaining in left and right
+				// TODO: replace by a configurable minimum width
+				if (save_left && !neighborhood[i].left.getRange().empty() && res_left.neighborhood[i].left.getRange().empty()) save_left = false;
+				if (save_left && !neighborhood[i].right.getRange().empty() && res_left.neighborhood[i].right.getRange().empty()) save_left = false;
+
+				if (save_right && !neighborhood[i].left.getRange().empty() && res_right.neighborhood[i].left.getRange().empty()) save_right = false;
+				if (save_right && !neighborhood[i].right.getRange().empty() && res_right.neighborhood[i].right.getRange().empty()) save_right = false;
+
 			}
 
 			// check coverage and build up result

@@ -39,29 +39,34 @@ namespace algorithm {
 			const AggregationOp& aggregate
 		) {
 
-		using range = algorithm::detail::range<Iter>;
 		using res_type = typename utils::lambda_traits<AggregationOp>::result_type;
 
+		// define the argument struct
+		struct RecArgs {
+			std::size_t depth;
+			algorithm::detail::range<Iter> range;
+		};
+
 		return core::prec(
-			[](const range& r) {
-				return r.size() <= 1;
+			[](const RecArgs& r) {
+				return r.range.size() <= 1;
 			},
-			[reduce](const range& r)->res_type {
-				return reduce(r.begin(),r.end());
+			[reduce](const RecArgs& r)->res_type {
+				return reduce(r.range.begin(),r.range.end());
 			},
 			core::pick(
-				[aggregate](const range& r, const auto& nested) {
+				[aggregate](const RecArgs& r, const auto& nested) {
 					// here we have the binary splitting
-					auto fragments = r.split();
+					auto fragments = r.range.split(r.depth);
 					auto left = fragments.left;
 					auto right = fragments.right;
-					return core::combine(nested(left),nested(right),aggregate);
+					return core::combine(nested(RecArgs{ r.depth+1, left }),nested(RecArgs{ r.depth+1, right }),aggregate);
 				},
-				[reduce](const range& r, const auto&)->res_type {
-					return reduce(r.begin(),r.end());
+				[reduce](const RecArgs& r, const auto&)->res_type {
+					return reduce(r.range.begin(),r.range.end());
 				}
 			)
-		)(range(a, b));
+		)(RecArgs{ 0, algorithm::detail::range<Iter>(a, b) });
 	}
 
 
