@@ -80,22 +80,22 @@ namespace utils {
 		};
 
 		template<typename Lambda>
-		std::enable_if_t<true,decltype(&Lambda::operator())> getCallOperator() {
+		decltype(&Lambda::operator()) getCallOperator() {
 			return &Lambda::operator();
 		}
 
 		template<typename Lambda>
-		std::enable_if_t<true,decltype(&Lambda::template operator()<int>)> getCallOperator() {
+		decltype(&Lambda::template operator()<int>) getCallOperator() {
 			return &Lambda::template operator()<int>;
 		}
 
 		template<typename Lambda>
-		std::enable_if_t<true,decltype(&Lambda::template operator()<int,int>)> getCallOperator() {
+		decltype(&Lambda::template operator()<int,int>) getCallOperator() {
 			return &Lambda::template operator()<int,int>;
 		}
 
 		template<typename Lambda>
-		std::enable_if_t<true,decltype(&Lambda::template operator()<int,int,int>)> getCallOperator() {
+		decltype(&Lambda::template operator()<int,int,int>) getCallOperator() {
 			return &Lambda::template operator()<int,int,int>;
 		}
 

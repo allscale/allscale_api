@@ -6,6 +6,7 @@
 #include "allscale/api/user/algorithm/stencil.h"
 
 using namespace allscale::api::user;
+using namespace allscale::api::user::algorithm;
 
 
 int main() {

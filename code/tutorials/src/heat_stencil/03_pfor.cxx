@@ -5,6 +5,7 @@
 #include "allscale/api/user/data/static_grid.h"
 
 using namespace allscale::api::user;
+using namespace allscale::api::user::algorithm;
 
 
 int main() {

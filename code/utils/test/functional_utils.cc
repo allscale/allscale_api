@@ -99,8 +99,6 @@ namespace utils {
 		EXPECT_TRUE(lambda_traits<decltype(lambda)>::arity == 1);
 	}
 
-#ifndef _MSC_VER
-
 	TEST(LambdaTrait, GenericLambda) {
 
 		auto fun1 = [](auto x){ return x; };
@@ -122,8 +120,6 @@ namespace utils {
 		EXPECT_EQ(3,lambda_traits<decltype(funC)>::arity);
 
 	}
-
-#endif
 
 } // end namespace utils
 } // end namespace allscale

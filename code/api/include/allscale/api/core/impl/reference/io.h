@@ -93,6 +93,7 @@ namespace reference {
 		template<typename Factory>
 		friend class IOManager;
 
+	public:
 		struct IStreamWrapper {
 			std::istream& in;
 			IStreamWrapper(std::istream& in) : in(in) {}
@@ -114,6 +115,7 @@ namespace reference {
 			}
 		};
 
+	private:
 		IStreamWrapper in;
 
 		InputStream(const Entry& entry, std::istream& in)
@@ -171,11 +173,16 @@ namespace reference {
 		template<typename Factory>
 		friend class IOManager;
 
+	public:
 		struct OStreamWrapper {
 			std::ostream& out;
 			OStreamWrapper(std::ostream& out) : out(out) {}
 			template<typename T>
 			OStreamWrapper& operator<<(const T& value) {
+				out << value;
+				return *this;
+			}
+			OStreamWrapper& operator<<(const char* value) {
 				out << value;
 				return *this;
 			}
@@ -186,6 +193,7 @@ namespace reference {
 			}
 		};
 
+	private:
 		OStreamWrapper out;
 
 		OutputStream(const Entry& entry, std::ostream& out)
@@ -209,6 +217,11 @@ namespace reference {
 
 		template<typename T>
 		void operator<<(const T& value) {
+			atomic([&](OStreamWrapper& out) {
+				out << value;
+			});
+		}
+		void operator<<(const char* value) {
 			atomic([&](OStreamWrapper& out) {
 				out << value;
 			});
