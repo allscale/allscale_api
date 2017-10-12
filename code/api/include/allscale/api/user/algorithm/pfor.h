@@ -1170,6 +1170,10 @@ namespace algorithm {
 		small_neighborhood_sync_dependency(const iteration_reference& loop)
 			: center(loop), neighborhood() {}
 
+		const detail::range<Iter>& getCenterRange() const {
+			return center.getRange();
+		}
+
 		std::vector<detail::range<Iter>> getRanges() const {
 			std::vector<detail::range<Iter>> res;
 			res.push_back(center.getRange());
@@ -1200,10 +1204,6 @@ namespace algorithm {
 		detail::SubDependencies<small_neighborhood_sync_dependency<Iter>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
 
 			using splitter = detail::range_spliter<Iter>;
-
-			// split the root dependency
-			iteration_reference ref_left = center.getLeft();
-			iteration_reference ref_right = center.getRight();
 
 			// create new left and right dependencies
 			small_neighborhood_sync_dependency res_left;
@@ -1262,87 +1262,176 @@ namespace algorithm {
 
 	};
 
+	namespace detail {
+
+		template<typename Iter, std::size_t Dims>
+		struct full_dependency_block {
+
+			using iteration_reference = detail::iteration_reference<Iter>;
+
+			using nested = full_dependency_block<Iter,Dims-1>;
+
+			enum { num_dependencies = nested::num_dependencies * 3 };
+
+			std::array<nested,3> dependencies;
+
+			void setCenter(const iteration_reference& ref) {
+				dependencies[1].setCenter(ref);
+			}
+
+			const iteration_reference& getCenter() const {
+				return dependencies[1].getCenter();
+			}
+
+			template<typename Op>
+			void forEach(const Op& op) const {
+				dependencies[0].forEach(op);
+				dependencies[1].forEach(op);
+				dependencies[2].forEach(op);
+			}
+
+			core::impl::reference::dependencies<core::impl::reference::fixed_sized<num_dependencies>> toCoreDependencies() const {
+				return produceCoreDependencies(*this);
+			}
+
+			template<typename ... Blocks>
+			static auto produceCoreDependencies(const Blocks& ... blocks) {
+				return nested::template produceCoreDependencies(blocks.dependencies[0]...,blocks.dependencies[1]...,blocks.dependencies[2]...);
+			}
+
+			full_dependency_block narrowLeft(bool& save, std::size_t splitDimension) const {
+				full_dependency_block res;
+				// TODO: special case if this is the split dimension
+				if (Dims - 1 == splitDimension) {
+					res.dependencies[0] = dependencies[0].narrowRight(save,splitDimension);
+					res.dependencies[1] = dependencies[1].narrowLeft(save,splitDimension);
+					res.dependencies[2] = dependencies[1].narrowRight(save,splitDimension);
+				} else {
+					res.dependencies[0] = dependencies[0].narrowLeft(save,splitDimension);
+					res.dependencies[1] = dependencies[1].narrowLeft(save,splitDimension);
+					res.dependencies[2] = dependencies[2].narrowLeft(save,splitDimension);
+				}
+				return res;
+			}
+
+			full_dependency_block narrowRight(bool& save, std::size_t splitDimension) const {
+				full_dependency_block res;
+				if (Dims - 1 == splitDimension) {
+					res.dependencies[0] = dependencies[1].narrowLeft(save,splitDimension);
+					res.dependencies[1] = dependencies[1].narrowRight(save,splitDimension);
+					res.dependencies[2] = dependencies[2].narrowLeft(save,splitDimension);
+				} else {
+					res.dependencies[0] = dependencies[0].narrowRight(save,splitDimension);
+					res.dependencies[1] = dependencies[1].narrowRight(save,splitDimension);
+					res.dependencies[2] = dependencies[2].narrowRight(save,splitDimension);
+				}
+				return res;
+			}
+		};
+
+		template<typename Iter>
+		struct full_dependency_block<Iter,0> {
+
+			using iteration_reference = detail::iteration_reference<Iter>;
+
+			enum { num_dependencies = 1 };
+
+			iteration_reference dependency;
+
+			void setCenter(const iteration_reference& ref) {
+				dependency = ref;
+			}
+
+			const iteration_reference& getCenter() const {
+				return dependency;
+			}
+
+			template<typename Op>
+			void forEach(const Op& op) const {
+				op(dependency);
+			}
+
+			core::impl::reference::dependencies<core::impl::reference::fixed_sized<num_dependencies>> toCoreDependencies() const {
+				return core::after(dependency);
+			}
+
+			template<typename ... Blocks>
+			static auto produceCoreDependencies(const Blocks& ... blocks) {
+				return core::after(blocks.dependency...);
+			}
+
+			full_dependency_block narrowLeft(bool& save, std::size_t) const {
+				full_dependency_block res;
+				res.dependency = dependency.getLeft();
+				if (!dependency.getRange().empty() && res.dependency.getRange().empty()) save = false;
+				return res;
+			}
+
+			full_dependency_block narrowRight(bool& save, std::size_t) const {
+				full_dependency_block res;
+				res.dependency = dependency.getRight();
+				if (!dependency.getRange().empty() && res.dependency.getRange().empty()) save = false;
+				return res;
+			}
+		};
+
+	}
 
 	template<typename Iter>
 	class full_neighborhood_sync_dependency : public detail::loop_dependency {
 
-		using deps_list = std::array<detail::iteration_reference<Iter>,3>;
+		enum { num_dimensions = detail::dimensions<Iter>::value };
 
-		deps_list deps;
+		using deps_block = detail::full_dependency_block<Iter,num_dimensions>;
 
-		std::size_t size;
+		deps_block deps;
 
-		full_neighborhood_sync_dependency(std::array<detail::iteration_reference<Iter>,3>&& deps)
-			: deps(std::move(deps)), size(3) {}
+		full_neighborhood_sync_dependency(const deps_block& deps) : deps(deps) {}
 
 	public:
 
-		full_neighborhood_sync_dependency(const detail::iteration_reference<Iter>& loop)
-			: deps({{ loop }}), size(1) {}
+		full_neighborhood_sync_dependency(const detail::iteration_reference<Iter>& loop) : deps() {
+			deps.setCenter(loop);
+		}
+
+		const detail::range<Iter>& getCenterRange() const {
+			return deps.getCenter().getRange();
+		}
 
 		std::vector<detail::range<Iter>> getRanges() const {
 			std::vector<detail::range<Iter>> res;
-			for(std::size_t i=0; i<size; i++) {
-				res.push_back(deps[i].getRange());
-			}
+			deps.forEach([&](const auto& dep) {
+				if (!dep.getRange().empty()) res.push_back(dep.getRange());
+			});
 			return res;
 		}
 
-		core::impl::reference::dependencies<core::impl::reference::fixed_sized<3>> toCoreDependencies() const {
-			return core::after(deps[0],deps[1],deps[2]);
+		auto toCoreDependencies() const {
+			return deps.toCoreDependencies();
 		}
 
 		detail::SubDependencies<full_neighborhood_sync_dependency<Iter>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
-			using iter_dependency = detail::iteration_reference<Iter>;
+			using splitter = detail::range_spliter<Iter>;
 
-			// check for the root case
-			if (size == 1) {
-				const auto& dependency = deps.front();
+			auto splitDim = splitter::getSplitDimension(deps.getCenter().getDepth());
 
-				// split the dependency
-				const iter_dependency& left = dependency.getLeft();
-				const iter_dependency& right = dependency.getRight();
+			// prepare safety flag
+			bool save_left = true;
+			bool save_right = true;
 
-				// combine sub-dependencies
-				iter_dependency start ({{left.getRange().begin(),left.getRange().begin()}});
-				iter_dependency finish({{right.getRange().end(), right.getRange().end() }});
+			// compute left and right sub-dependencies
+			full_neighborhood_sync_dependency res_left(deps.narrowLeft(save_left,splitDim));
+			full_neighborhood_sync_dependency res_right(deps.narrowRight(save_right,splitDim));
 
-				return {
-					full_neighborhood_sync_dependency(deps_list{{ start, left,  right  }}),
-					full_neighborhood_sync_dependency(deps_list{{ left,  right, finish }})
-				};
-			}
-
-			// split up input dependencies
-			assert(size == 3);
-
-			// split each of those
-			auto a = deps[0].getRight();
-			auto b = deps[1].getLeft();
-			auto c = deps[1].getRight();
-			auto d = deps[2].getLeft();
-
-
-			// get covered by left and right
-			detail::range<Iter> full(deps[0].getRange().begin(),deps[2].getRange().end());
-			detail::range<Iter> leftPart(a.getRange().begin(),c.getRange().end());
-			detail::range<Iter> rightPart(b.getRange().begin(),d.getRange().end());
-
-
-			// check some range consistencies
-			assert_true(full.covers(left.grow(full)));
-			assert_true(full.covers(right.grow(full)));
-
-			// and pack accordingly
+			// check coverage and build up result
 			return {
-				leftPart.covers(left.grow(full))   ? full_neighborhood_sync_dependency(deps_list{{ a,b,c }}) : *this,
-				rightPart.covers(right.grow(full)) ? full_neighborhood_sync_dependency(deps_list{{ b,c,d }}) : *this
+				save_left && res_left.getCenterRange().covers(left) ? res_left : *this,
+				save_right && res_right.getCenterRange().covers(right) ? res_right : *this
 			};
-
 		}
 
 		friend std::ostream& operator<< (std::ostream& out, const full_neighborhood_sync_dependency& dep) {
-			return out << "[" << utils::join(",",dep.deps,[](std::ostream& out, const detail::iteration_reference<Iter>& cur) { out << cur.getRange(); }) << "]";
+			return out << "[" << utils::join(",", dep.getRanges()) << "]";
 		}
 
 	};
