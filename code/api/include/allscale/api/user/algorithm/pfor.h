@@ -1470,7 +1470,7 @@ namespace algorithm {
 		}
 
 		friend std::ostream& operator<< (std::ostream& out, const after_all_sync_dependency& dep) {
-			return out << "[" << getCenterRange() << "]";
+			return out << "[" << dep.getCenterRange() << "]";
 		}
 
 	};
