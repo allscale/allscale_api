@@ -262,5 +262,35 @@ namespace utils {
 
 	}
 
+	template<typename T>
+	void testStoreLoad(const T& val) {
+		auto archive = serialize(val);
+		EXPECT_EQ(val,deserialize<T>(archive));
+	}
+
+	TEST(Vector, Serializable) {
+
+		EXPECT_TRUE((is_serializable<Vector<int,0>>::value));
+		EXPECT_TRUE((is_serializable<Vector<int,1>>::value));
+		EXPECT_TRUE((is_serializable<Vector<int,2>>::value));
+		EXPECT_TRUE((is_serializable<Vector<int,3>>::value));
+		EXPECT_TRUE((is_serializable<Vector<int,4>>::value));
+
+		testStoreLoad(Vector<int,0>());
+		testStoreLoad(Vector<int,1>(10));
+		testStoreLoad(Vector<int,2>(10,20));
+		testStoreLoad(Vector<int,2>(20,10));
+		testStoreLoad(Vector<int,3>(10,20,30));
+		testStoreLoad(Vector<int,4>{10,20,30,40});
+
+		testStoreLoad(Vector<short,0>());
+		testStoreLoad(Vector<short,1>(10));
+		testStoreLoad(Vector<short,2>(10,20));
+		testStoreLoad(Vector<short,2>(20,10));
+		testStoreLoad(Vector<short,3>(10,20,30));
+		testStoreLoad(Vector<short,4>{10,20,30,40});
+	}
+
+
 } // end namespace utils
 } // end namespace allscale

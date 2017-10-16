@@ -7,10 +7,8 @@
 #include "allscale/utils/printer/arrays.h"
 #include "allscale/utils/assert.h"
 #include "allscale/utils/unused.h"
-
-#if defined(ALLSCALE_WITH_HPX)
-#include <hpx/runtime/serialization/array.hpp>
-#endif
+#include "allscale/utils/serializer.h"
+#include "allscale/utils/serializer/arrays.h"
 
 namespace allscale {
 namespace utils {
@@ -108,13 +106,15 @@ namespace utils {
 			return out << vec.data;
 		}
 
-#if defined(ALLSCALE_WITH_HPX)
-        template <typename Archive>
-        void serialize(Archive& ar, unsigned)
-        {
-            ar & data;
-        }
-#endif
+		static Vector load(ArchiveReader& in) {
+			Vector res;
+			res.data = in.read<std::array<T,Dims>>();
+			return res;
+		}
+
+		void store(ArchiveWriter& out) const {
+			out.write(data);
+		}
 
 	private:
 
@@ -320,6 +320,19 @@ namespace utils {
 			return out << "[" << vec.x << "," << vec.y << "," << vec.z << "]";
 		}
 
+		static Vector load(ArchiveReader& in) {
+			auto x = in.read<T>();
+			auto y = in.read<T>();
+			auto z = in.read<T>();
+			return { x, y, z };
+		}
+
+		void store(ArchiveWriter& out) const {
+			out.write(x);
+			out.write(y);
+			out.write(z);
+		}
+
 	};
 
 	template<typename T>
@@ -408,6 +421,17 @@ namespace utils {
 		// Adds printer support to this vector.
 		friend std::ostream& operator<<(std::ostream& out, const Vector& vec) {
 			return out << "[" << vec.x << "," << vec.y << "]";
+		}
+
+		static Vector load(ArchiveReader& in) {
+			auto x = in.read<T>();
+			auto y = in.read<T>();
+			return { x, y };
+		}
+
+		void store(ArchiveWriter& out) const {
+			out.write(x);
+			out.write(y);
 		}
 
 	};
