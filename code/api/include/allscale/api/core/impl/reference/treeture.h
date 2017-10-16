@@ -616,6 +616,9 @@ namespace reference {
 	template<std::size_t Size>
 	class dependencies<fixed_sized<Size>> {
 
+		template<std::size_t A, std::size_t B>
+		friend dependencies<fixed_sized<A+B>> concat(const dependencies<fixed_sized<A>>&, const dependencies<fixed_sized<B>>&);
+
 		std::array<task_reference,Size> list;
 
 	public:
@@ -646,6 +649,21 @@ namespace reference {
 		}
 
 	};
+
+	/**
+	 * Enables the concatentation of two fixed-sized dependencies lists.
+	 */
+	template<std::size_t A, std::size_t B>
+	dependencies<fixed_sized<A+B>> concat(const dependencies<fixed_sized<A>>& a, const dependencies<fixed_sized<B>>& b) {
+		dependencies<fixed_sized<A+B>> res;
+		for(std::size_t i=0; i<A; i++) {
+			res.list[i] = a.list[i];
+		}
+		for(std::size_t i=0; i<B; i++) {
+			res.list[A+i] = b.list[i];
+		}
+		return res;
+	}
 
 	/**
 	 * A specialization for dynamically sized task dependencies.

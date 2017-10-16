@@ -291,6 +291,21 @@ namespace algorithm {
 	//								Adaptive Synchronization
 	// -------------------------------------------------------------------------------------------
 
+
+	/**
+	 * A dependency forming the conjunction of a list of given dependencies.
+	 */
+	template<typename ... Dependencies>
+	class conjunction_sync_dependency;
+
+	/**
+	 * A factory for a conjunction of dependencies.
+	 */
+	template<typename ... Dependencies>
+	conjunction_sync_dependency<Dependencies...> sync_all(const Dependencies& ... dependencies) {
+		return conjunction_sync_dependency<Dependencies...>(dependencies...);
+	}
+
 	/**
 	 * A dependency actually representing no dependency. Could be used as a place-holder.
 	 */
@@ -1110,7 +1125,6 @@ namespace algorithm {
 		)(RecArgs{0,r}) };
 	}
 
-
 	class no_dependency : public detail::loop_dependency {
 
 	public:
@@ -1136,6 +1150,66 @@ namespace algorithm {
 		return no_dependency();
 	}
 
+	// --------------------------------------------------------------------------------------------------------
+
+	template<typename First, typename ... Rest>
+	class conjunction_sync_dependency<First,Rest...> : public detail::loop_dependency {
+
+		using nested_type = conjunction_sync_dependency<Rest...>;
+
+		First first;
+
+		nested_type nested;
+
+		conjunction_sync_dependency(const First& first, const nested_type& nested)
+			: first(first), nested(nested) {}
+
+	public:
+
+		conjunction_sync_dependency(const First& first, const Rest& ... rest)
+			: first(first), nested(rest...) {}
+
+		auto toCoreDependencies() const {
+			return concat(first.toCoreDependencies(),nested.toCoreDependencies());
+		}
+
+		template<typename Iter>
+		detail::SubDependencies<conjunction_sync_dependency> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
+
+			// get fragments
+			auto firstFragments = first.split(left,right);
+			auto nestedFragments = nested.split(left,right);
+
+			// create resulting dependencies
+			return {
+				{ firstFragments.left, nestedFragments.left },
+				{ firstFragments.right, nestedFragments.right }
+			};
+
+		}
+
+		friend std::ostream& operator<< (std::ostream& out, const conjunction_sync_dependency& dep) {
+			return out << dep.first << " && " << dep.nested;
+		}
+
+	};
+
+	// special case for a conjunction of a single dependency - this is just that dependency
+	template<typename Dependency>
+	class conjunction_sync_dependency<Dependency> : public Dependency {
+	public:
+		conjunction_sync_dependency(const Dependency& dep) : Dependency(dep) {}
+	};
+
+	// special case for an empty conjunction - this is no dependency
+	template<>
+	class conjunction_sync_dependency<> : public no_dependency {
+	public:
+		conjunction_sync_dependency() : no_dependency() {}
+		conjunction_sync_dependency(const no_dependency& dep) : no_dependency(dep) {}
+	};
+
+	// --------------------------------------------------------------------------------------------------------
 
 	template<typename Iter>
 	class one_on_one_dependency : public detail::loop_dependency {

@@ -291,6 +291,84 @@ namespace algorithm {
 	}
 
 
+	TEST(Pfor, SyncConjunction) {
+		const int N = 10000;
+
+		std::vector<int> dataA(N);
+		std::vector<int> dataB(N);
+		std::vector<int> dataC(N);
+
+		// check 0-init
+		for(int i=0; i<N; i++) {
+			EXPECT_EQ(0,dataA[i]);
+			EXPECT_EQ(0,dataB[i]);
+			EXPECT_EQ(0,dataC[i]);
+		}
+
+		// start 3 parallel loops updating the vectors
+
+		auto As = pfor(0,N,[&](int i) {
+			dataA[i] = 1;
+		});
+
+		auto Bs = pfor(0,N,[&](int i) {
+			dataB[i] = 1;
+		});
+
+		auto Cs = pfor(0,N,[&](int i) {
+			dataC[i] = 1;
+		});
+
+		// start a third loop updating depending on all three previous loops
+		auto Xs = pfor(0,N,[&](int i) {
+				EXPECT_EQ(1,dataA[i]);
+				EXPECT_EQ(1,dataB[i]);
+				EXPECT_EQ(1,dataC[i]);
+			}, sync_all(
+				one_on_one(As),
+				one_on_one(Bs),
+				one_on_one(Cs)
+			)
+		);
+
+		// also just on two of those
+		auto Ys = pfor(0,N,[&](int i) {
+				EXPECT_EQ(1,dataA[i]);
+				EXPECT_EQ(1,dataC[i]);
+			}, sync_all(
+				one_on_one(As),
+				one_on_one(Cs)
+			)
+		);
+
+		// or just a single
+		auto Zs = pfor(0,N,[&](int i) {
+				EXPECT_EQ(1,dataC[i]);
+			}, sync_all(
+				one_on_one(Cs)
+			)
+		);
+
+		// or even none
+		auto Ws = pfor(0,N,[&](int) {
+			}, sync_all(
+			)
+		);
+
+		// also for mixed dependencies
+		auto Vs = pfor(0,N,[&](int i) {
+				EXPECT_EQ(1,dataA[i]);
+				EXPECT_EQ(1,dataB[i]);
+				if (i > 0)   EXPECT_EQ(1,dataB[i-1]);
+				if (i < N-1) EXPECT_EQ(1,dataB[i+1]);
+			}, sync_all(
+				one_on_one(As),
+				full_neighborhood_sync(Bs)
+			)
+		);
+
+	}
+
 	// a utility function to generate arbitrary loop references
 	template<typename T>
 	detail::range<T> make_range(const T& from, const T& to) {
@@ -2855,6 +2933,7 @@ namespace algorithm {
 		// there should have been some overlap
 		EXPECT_TRUE(overlapDetected.load());
 	}
+
 
 } // end namespace algorithm
 } // end namespace user
