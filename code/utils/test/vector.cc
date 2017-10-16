@@ -3,6 +3,8 @@
 #include "allscale/utils/string_utils.h"
 #include "allscale/utils/vector.h"
 
+#include "allscale/utils/serializer/strings.h"
+
 namespace allscale {
 namespace utils {
 
@@ -291,6 +293,94 @@ namespace utils {
 		testStoreLoad(Vector<short,4>{10,20,30,40});
 	}
 
+	// -- more complex serialization cases --
+
+	struct NotSerializable {};
+
+	class SerializableButNotDefaultConstructable {
+
+		int x;
+
+		SerializableButNotDefaultConstructable(int x) : x(x) {}
+
+	public:
+
+		static SerializableButNotDefaultConstructable get(int x) {
+			return SerializableButNotDefaultConstructable(x);
+		}
+
+		static SerializableButNotDefaultConstructable load(ArchiveReader& reader) {
+			return SerializableButNotDefaultConstructable(reader.read<int>());
+		}
+
+		void store(ArchiveWriter& writer) const {
+			writer.write<int>(x);
+		}
+
+		bool operator==(const SerializableButNotDefaultConstructable& other) const {
+			return x == other.x;
+		}
+
+
+		friend std::ostream& operator<<(std::ostream& out, const SerializableButNotDefaultConstructable& obj) {
+			return out << obj.x;
+		}
+
+	};
+
+
+	TEST(Serializer, Vectors) {
+
+		// check that strings are recognized as serializable
+		EXPECT_TRUE((is_serializable<Vector<int,1>>::value));
+		EXPECT_TRUE((is_serializable<Vector<float,2>>::value));
+		EXPECT_TRUE((is_serializable<Vector<bool,3>>::value));
+		EXPECT_TRUE((is_serializable<Vector<double,4>>::value));
+
+		// this should work also for a nested vectors
+		EXPECT_TRUE((is_serializable<Vector<Vector<int,3>,4>>::value));
+
+		// and with other types
+		EXPECT_TRUE((is_serializable<Vector<std::string,2>>::value));
+
+		// but not with non-serializable typse
+		EXPECT_FALSE((is_serializable<NotSerializable>::value));
+		EXPECT_FALSE((is_serializable<Vector<NotSerializable,4>>::value));
+
+	}
+
+	TEST(Serializer,VectorInt) {
+		// serialize and de-serialize a vector
+		Vector<int,4> in { 1, 2, 3, 4 };
+		auto archive = serialize(in);
+		auto out = deserialize<Vector<int,4>>(archive);
+
+		EXPECT_EQ(in,out);
+	}
+
+	TEST(Serializer,VectorNoDefaultConstructor) {
+
+		// make sure the test type is realy not default-constructable
+		EXPECT_FALSE(std::is_default_constructible<SerializableButNotDefaultConstructable>::value);
+
+		// but it is serializable
+		EXPECT_TRUE(is_serializable<SerializableButNotDefaultConstructable>::value);
+
+		// and so is the enclosing vector
+		EXPECT_TRUE((is_serializable<Vector<SerializableButNotDefaultConstructable,2>>::value));
+
+		// serialize and de-serialize a string
+		Vector<SerializableButNotDefaultConstructable,3> in {
+			SerializableButNotDefaultConstructable::get(1),
+			SerializableButNotDefaultConstructable::get(2),
+			SerializableButNotDefaultConstructable::get(3)
+		};
+
+		auto archive = serialize(in);
+		auto out = deserialize<Vector<SerializableButNotDefaultConstructable,3>>(archive);
+
+		EXPECT_EQ(in,out);
+	}
 
 } // end namespace utils
 } // end namespace allscale

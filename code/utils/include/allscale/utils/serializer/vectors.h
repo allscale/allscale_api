@@ -5,7 +5,6 @@
 
 #include <vector>
 
-#include "allscale/utils/vector.h"
 #include "allscale/utils/serializer/arrays.h"
 
 namespace allscale {
