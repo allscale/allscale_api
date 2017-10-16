@@ -324,6 +324,7 @@ namespace utils {
         template <typename Archive>
         void serialize(Archive& ar, unsigned)
         {
+            std::array<T, 3> data{x, y, z};
             ar & data;
         }
 #endif
@@ -422,6 +423,7 @@ namespace utils {
         template <typename Archive>
         void serialize(Archive& ar, unsigned)
         {
+            std::array<T, 3> data{x, y};
             ar & data;
         }
 #endif
