@@ -324,15 +324,15 @@ namespace algorithm {
 	 *
 	 * @param Iter the iterator type utilized to address iterations
 	 */
-	template<typename Iter>
+	template<typename Iter,std::size_t radius>
 	class small_neighborhood_sync_dependency;
 
 	/**
 	 * A factory for small neighborhood sync dependencies.
 	 */
-	template<typename Iter>
-	small_neighborhood_sync_dependency<Iter> small_neighborhood_sync(const detail::loop_reference<Iter>& dep) {
-		return small_neighborhood_sync_dependency<Iter>(dep);
+	template<std::size_t radius = 1, typename Iter>
+	small_neighborhood_sync_dependency<Iter, radius> small_neighborhood_sync(const detail::loop_reference<Iter>& dep) {
+		return small_neighborhood_sync_dependency<Iter, radius>(dep);
 	}
 
 	/**
@@ -341,15 +341,15 @@ namespace algorithm {
 	 *
 	 * @param Iter the iterator type utilized to address iterations
 	 */
-	template<typename Iter>
+	template<typename Iter,std::size_t radius>
 	class full_neighborhood_sync_dependency;
 
 	/**
 	 * A factory for full neighborhood sync dependencies.
 	 */
-	template<typename Iter>
-	full_neighborhood_sync_dependency<Iter> full_neighborhood_sync(const detail::loop_reference<Iter>& dep) {
-		return full_neighborhood_sync_dependency<Iter>(dep);
+	template<std::size_t radius = 1, typename Iter>
+	full_neighborhood_sync_dependency<Iter,radius> full_neighborhood_sync(const detail::loop_reference<Iter>& dep) {
+		return full_neighborhood_sync_dependency<Iter,radius>(dep);
 	}
 
 	/**
@@ -429,6 +429,45 @@ namespace algorithm {
 			}
 		};
 
+		// -- minimum distance between elements along individual dimensions --
+
+		template<typename Iter,typename filter = bool>
+		struct min_dimension_length {
+			size_t operator()(const Iter& a, const Iter& b) const {
+				return std::distance(a,b);
+			}
+		};
+
+		template<typename Int>
+		struct min_dimension_length<Int,std::enable_if_t<std::template is_integral<Int>::value,bool>> {
+			size_t operator()(Int a, Int b) const {
+				return (a < b) ? b-a : 0;
+			}
+		};
+
+		template<typename Iter,size_t dims>
+		struct min_dimension_length<std::array<Iter,dims>> {
+			size_t operator()(const std::array<Iter,dims>& a, const std::array<Iter,dims>& b) const {
+				min_dimension_length<Iter> inner;
+				size_t res = std::numeric_limits<size_t>::max();
+				for(size_t i = 0; i<dims; i++) {
+					res = std::min(res,inner(a[i],b[i]));
+				}
+				return res;
+			}
+		};
+
+		template<typename Iter,size_t dims>
+		struct min_dimension_length<utils::Vector<Iter,dims>> {
+			size_t operator()(const utils::Vector<Iter,dims>& a, const utils::Vector<Iter,dims>& b) const {
+				return min_dimension_length<std::array<Iter,dims>>()(a,b);
+			}
+		};
+
+		template<typename Iter>
+		size_t getMinimumDimensionLength(const range<Iter>& r) {
+			return min_dimension_length<Iter>()(r.begin(),r.end());
+		}
 
 		// -- coverage --
 
@@ -1108,7 +1147,7 @@ namespace algorithm {
 		one_on_one_dependency(const detail::iteration_reference<Iter>& loop)
 			: loop(loop) {}
 
-		auto getRange() const {
+		auto getCenterRange() const {
 			return loop.getRange();
 		}
 
@@ -1138,7 +1177,7 @@ namespace algorithm {
 	};
 
 
-	template<typename Iter>
+	template<typename Iter, std::size_t radius>
 	class small_neighborhood_sync_dependency : public detail::loop_dependency {
 
 		// determine the number of dimensions
@@ -1201,7 +1240,7 @@ namespace algorithm {
 			return toCoreDependencies(std::make_index_sequence<num_dimensions>());
 		}
 
-		detail::SubDependencies<small_neighborhood_sync_dependency<Iter>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
+		detail::SubDependencies<small_neighborhood_sync_dependency<Iter,radius>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
 
 			using splitter = detail::range_spliter<Iter>;
 
@@ -1234,12 +1273,11 @@ namespace algorithm {
 				}
 
 				// check that there is still something remaining in left and right
-				// TODO: replace by a configurable minimum width
-				if (save_left && !neighborhood[i].left.getRange().empty() && res_left.neighborhood[i].left.getRange().empty()) save_left = false;
-				if (save_left && !neighborhood[i].right.getRange().empty() && res_left.neighborhood[i].right.getRange().empty()) save_left = false;
+				if (save_left && !neighborhood[i].left.getRange().empty() && getMinimumDimensionLength(res_left.neighborhood[i].left.getRange()) < radius) save_left = false;
+				if (save_left && !neighborhood[i].right.getRange().empty() && getMinimumDimensionLength(res_left.neighborhood[i].right.getRange()) < radius) save_left = false;
 
-				if (save_right && !neighborhood[i].left.getRange().empty() && res_right.neighborhood[i].left.getRange().empty()) save_right = false;
-				if (save_right && !neighborhood[i].right.getRange().empty() && res_right.neighborhood[i].right.getRange().empty()) save_right = false;
+				if (save_right && !neighborhood[i].left.getRange().empty() && getMinimumDimensionLength(res_right.neighborhood[i].left.getRange()) < radius) save_right = false;
+				if (save_right && !neighborhood[i].right.getRange().empty() && getMinimumDimensionLength(res_right.neighborhood[i].right.getRange()) < radius) save_right = false;
 
 			}
 
@@ -1299,31 +1337,30 @@ namespace algorithm {
 				return nested::template produceCoreDependencies(blocks.dependencies[0]...,blocks.dependencies[1]...,blocks.dependencies[2]...);
 			}
 
-			full_dependency_block narrowLeft(bool& save, std::size_t splitDimension) const {
+			full_dependency_block narrowLeft(bool& save, std::size_t splitDimension, std::size_t radius) const {
 				full_dependency_block res;
-				// TODO: special case if this is the split dimension
 				if (Dims - 1 == splitDimension) {
-					res.dependencies[0] = dependencies[0].narrowRight(save,splitDimension);
-					res.dependencies[1] = dependencies[1].narrowLeft(save,splitDimension);
-					res.dependencies[2] = dependencies[1].narrowRight(save,splitDimension);
+					res.dependencies[0] = dependencies[0].narrowRight(save,splitDimension, radius);
+					res.dependencies[1] = dependencies[1].narrowLeft(save,splitDimension, radius);
+					res.dependencies[2] = dependencies[1].narrowRight(save,splitDimension, radius);
 				} else {
-					res.dependencies[0] = dependencies[0].narrowLeft(save,splitDimension);
-					res.dependencies[1] = dependencies[1].narrowLeft(save,splitDimension);
-					res.dependencies[2] = dependencies[2].narrowLeft(save,splitDimension);
+					res.dependencies[0] = dependencies[0].narrowLeft(save,splitDimension, radius);
+					res.dependencies[1] = dependencies[1].narrowLeft(save,splitDimension, radius);
+					res.dependencies[2] = dependencies[2].narrowLeft(save,splitDimension, radius);
 				}
 				return res;
 			}
 
-			full_dependency_block narrowRight(bool& save, std::size_t splitDimension) const {
+			full_dependency_block narrowRight(bool& save, std::size_t splitDimension, std::size_t radius) const {
 				full_dependency_block res;
 				if (Dims - 1 == splitDimension) {
-					res.dependencies[0] = dependencies[1].narrowLeft(save,splitDimension);
-					res.dependencies[1] = dependencies[1].narrowRight(save,splitDimension);
-					res.dependencies[2] = dependencies[2].narrowLeft(save,splitDimension);
+					res.dependencies[0] = dependencies[1].narrowLeft(save,splitDimension, radius);
+					res.dependencies[1] = dependencies[1].narrowRight(save,splitDimension, radius);
+					res.dependencies[2] = dependencies[2].narrowLeft(save,splitDimension, radius);
 				} else {
-					res.dependencies[0] = dependencies[0].narrowRight(save,splitDimension);
-					res.dependencies[1] = dependencies[1].narrowRight(save,splitDimension);
-					res.dependencies[2] = dependencies[2].narrowRight(save,splitDimension);
+					res.dependencies[0] = dependencies[0].narrowRight(save,splitDimension, radius);
+					res.dependencies[1] = dependencies[1].narrowRight(save,splitDimension, radius);
+					res.dependencies[2] = dependencies[2].narrowRight(save,splitDimension, radius);
 				}
 				return res;
 			}
@@ -1360,24 +1397,24 @@ namespace algorithm {
 				return core::after(blocks.dependency...);
 			}
 
-			full_dependency_block narrowLeft(bool& save, std::size_t) const {
+			full_dependency_block narrowLeft(bool& save, std::size_t, std::size_t radius) const {
 				full_dependency_block res;
 				res.dependency = dependency.getLeft();
-				if (!dependency.getRange().empty() && res.dependency.getRange().empty()) save = false;
+				if (!dependency.getRange().empty() && getMinimumDimensionLength(res.dependency.getRange()) < radius) save = false;
 				return res;
 			}
 
-			full_dependency_block narrowRight(bool& save, std::size_t) const {
+			full_dependency_block narrowRight(bool& save, std::size_t, std::size_t radius) const {
 				full_dependency_block res;
 				res.dependency = dependency.getRight();
-				if (!dependency.getRange().empty() && res.dependency.getRange().empty()) save = false;
+				if (!dependency.getRange().empty() && getMinimumDimensionLength(res.dependency.getRange()) < radius) save = false;
 				return res;
 			}
 		};
 
 	}
 
-	template<typename Iter>
+	template<typename Iter, std::size_t radius>
 	class full_neighborhood_sync_dependency : public detail::loop_dependency {
 
 		enum { num_dimensions = detail::dimensions<Iter>::value };
@@ -1410,7 +1447,7 @@ namespace algorithm {
 			return deps.toCoreDependencies();
 		}
 
-		detail::SubDependencies<full_neighborhood_sync_dependency<Iter>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
+		detail::SubDependencies<full_neighborhood_sync_dependency<Iter,radius>> split(const detail::range<Iter>& left, const detail::range<Iter>& right) const {
 			using splitter = detail::range_spliter<Iter>;
 
 			auto splitDim = splitter::getSplitDimension(deps.getCenter().getDepth());
@@ -1420,8 +1457,8 @@ namespace algorithm {
 			bool save_right = true;
 
 			// compute left and right sub-dependencies
-			full_neighborhood_sync_dependency res_left(deps.narrowLeft(save_left,splitDim));
-			full_neighborhood_sync_dependency res_right(deps.narrowRight(save_right,splitDim));
+			full_neighborhood_sync_dependency res_left(deps.narrowLeft(save_left,splitDim,radius));
+			full_neighborhood_sync_dependency res_right(deps.narrowRight(save_right,splitDim,radius));
 
 			// check coverage and build up result
 			return {
