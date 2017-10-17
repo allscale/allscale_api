@@ -359,8 +359,8 @@ namespace algorithm {
 		auto Vs = pfor(0,N,[&](int i) {
 				EXPECT_EQ(1,dataA[i]);
 				EXPECT_EQ(1,dataB[i]);
-				if (i > 0)   EXPECT_EQ(1,dataB[i-1]);
-				if (i < N-1) EXPECT_EQ(1,dataB[i+1]);
+				if (i > 0)   { EXPECT_EQ(1,dataB[i-1]); }
+				if (i < N-1) { EXPECT_EQ(1,dataB[i+1]); }
 			}, sync_all(
 				one_on_one(As),
 				full_neighborhood_sync(Bs)
