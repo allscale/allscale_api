@@ -1,11 +1,11 @@
 #pragma once
 
-#if !defined(ALLSCALE_WITH_HPX)
-#include "allscale/utils/serializer.h"
+#ifdef ALLSCALE_WITH_HPX
+	#include "allscale/utils/serializer.h"
+#endif
 
 #include <vector>
 
-#include "allscale/utils/vector.h"
 #include "allscale/utils/serializer/arrays.h"
 
 namespace allscale {
@@ -48,19 +48,5 @@ namespace utils {
 		}
 	};
 
-
-	/**
-	 * Add support for serializing / de-serializing Vector instances.
-	 * The implementation is simply re-using the serializing capabilities of arrays.
-	 */
-	template<typename T, std::size_t Dims>
-	struct serializer<Vector<T,Dims>,typename std::enable_if<is_serializable<T>::value,void>::type> : public serializer<std::array<T,Dims>> {};
-
 } // end namespace utils
 } // end namespace allscale
-
-#else
-
-#include <hpx/runtime/serialization/vector.hpp>
-
-#endif
