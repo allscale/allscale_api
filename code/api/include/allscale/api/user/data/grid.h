@@ -203,9 +203,8 @@ namespace data {
 		point_type min;
 		point_type max;
 
-		GridBox() {}
-
 	public:
+		GridBox() {}
 
 		GridBox(coordinate_type N)
 			: min(0), max(N) {}
