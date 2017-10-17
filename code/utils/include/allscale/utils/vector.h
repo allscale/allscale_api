@@ -9,6 +9,10 @@
 #include "allscale/utils/unused.h"
 #include "allscale/utils/serializer/arrays.h"
 
+#if defined(ALLSCALE_WITH_HPX)
+#include <hpx/runtime/serialization/array.hpp>
+#endif
+
 namespace allscale {
 namespace utils {
 
@@ -104,6 +108,14 @@ namespace utils {
 		friend std::ostream& operator<<(std::ostream& out, const Vector& vec) {
 			return out << vec.data;
 		}
+
+#if defined(ALLSCALE_WITH_HPX)
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            ar & data;
+        }
+#endif
 
 	private:
 
@@ -309,6 +321,15 @@ namespace utils {
 			return out << "[" << vec.x << "," << vec.y << "," << vec.z << "]";
 		}
 
+#if defined(ALLSCALE_WITH_HPX)
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            std::array<T, 3> data{x, y, z};
+            ar & data;
+        }
+#endif
+
 	};
 
 	template<typename T>
@@ -398,6 +419,15 @@ namespace utils {
 		friend std::ostream& operator<<(std::ostream& out, const Vector& vec) {
 			return out << "[" << vec.x << "," << vec.y << "]";
 		}
+
+#if defined(ALLSCALE_WITH_HPX)
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            std::array<T, 3> data{x, y};
+            ar & data;
+        }
+#endif
 
 	};
 
