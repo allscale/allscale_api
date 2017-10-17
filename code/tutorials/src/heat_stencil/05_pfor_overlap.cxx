@@ -49,7 +49,7 @@ int main() {
 					 (*A)[{i,j+1}] +
 					 (-4)*(*A)[{i,j}]
 			);
-		}, neighborhood_sync(ref));
+		}, small_neighborhood_sync(ref));
 
 		// output gradual reduction of central temperature
 		if ((t % (T/10)) == 0) {
