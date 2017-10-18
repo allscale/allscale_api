@@ -17,13 +17,13 @@ matrix:
         apt:
           sources: ubuntu-toolchain-r-test
           packages: g++-5
-    - os: linux
-      compiler: gcc
-      env: BUILD_TYPE=Debug CXX_EVAL="g++-6" CC_EVAL="gcc-6"
-      addons:
-        apt:
-          sources: ubuntu-toolchain-r-test
-          packages: g++-6
+#    - os: linux
+#      compiler: gcc
+#      env: BUILD_TYPE=Debug CXX_EVAL="g++-6" CC_EVAL="gcc-6"
+#      addons:
+#        apt:
+#          sources: ubuntu-toolchain-r-test
+#          packages: g++-6
     - os: linux
       compiler: gcc
       env: BUILD_TYPE=Debug CXX_EVAL="g++-7" CC_EVAL="gcc-7"
