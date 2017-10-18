@@ -25,7 +25,7 @@ namespace utils {
 		Vector() = default;
 
 		Vector(const T& e) {
-			for(std::size_t i = 0; i < Dims; i++) { data[i] = e; }
+			data.fill(e);
 		}
 
 		Vector(const Vector&) = default;
