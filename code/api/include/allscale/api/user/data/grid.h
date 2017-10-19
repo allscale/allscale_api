@@ -313,8 +313,8 @@ namespace data {
 
 		static GridBox span(const GridBox& a, const GridBox& b) {
 			return GridBox(
-				allscale::utils::elementwiseMin(a.min,b.min),
-				allscale::utils::elementwiseMax(a.max,b.max)
+				allscale::utils::elementwiseMin(a.min,b.min-point_type(1)),
+				allscale::utils::elementwiseMax(a.max,b.max-point_type(1))
 			);
 		}
 
@@ -411,6 +411,10 @@ namespace data {
 
 		GridRegion& operator=(const GridRegion&) = default;
 		GridRegion& operator=(GridRegion&&) = default;
+
+		static GridRegion single(const point_type& p) {
+			return GridRegion(p,p+point_type(1));
+		}
 
 		box_type boundingBox() const {
 			// handle empty region
@@ -836,14 +840,14 @@ namespace data {
 		 * Provides read/write access to one of the values stored within this grid.
 		 */
 		T& operator[](const coordinate_type& index) {
-			return data_item_element_access(*this, region_type(index), (*base)[index]);
+			return data_item_element_access(*this, region_type::single(index), (*base)[index]);
 		}
 
 		/**
 		 * Provides read access to one of the values stored within this grid.
 		 */
 		const T& operator[](const coordinate_type& index) const {
-			return data_item_element_access(*this, region_type(index), (*base)[index]);
+			return data_item_element_access(*this, region_type::single(index), (*base)[index]);
 		}
 
 		/**
