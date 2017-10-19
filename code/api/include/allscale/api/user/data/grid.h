@@ -390,11 +390,6 @@ namespace data {
 			if (0 >= N) regions.clear();
 		}
 
-		GridRegion(coordinate_type A, coordinate_type B)
-			: regions({box_type(A,B)}) {
-			if (A >= B) regions.clear();
-		}
-
 		GridRegion(const point_type& size)
 			: regions({box_type(0,size)}) {
 			if (regions[0].empty()) regions.clear();
@@ -403,6 +398,7 @@ namespace data {
 		GridRegion(const point_type& min, const point_type& max)
 			: regions({box_type(min,max)}) {
 			assert_true(min.dominatedBy(max));
+			if (regions[0].empty()) regions.clear();
 		}
 
 		GridRegion(const box_type& box)

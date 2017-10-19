@@ -686,7 +686,6 @@ namespace data {
 
 	}
 
-
 	TEST(GridFragment,Basic) {
 
 		EXPECT_TRUE((core::is_fragment<GridFragment<double,2>>::value));
