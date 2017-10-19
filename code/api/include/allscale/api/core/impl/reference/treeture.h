@@ -1954,6 +1954,8 @@ namespace reference {
 
 	public:
 
+		using treeture_type = treeture<T>;
+
 		treeture() {}
 
 		treeture(const T& value)
@@ -2068,6 +2070,8 @@ namespace reference {
 	public:
 
 		using value_type = T;
+
+		using treeture_type = treeture<T>;
 
 		unreleased_treeture(Task<T>* task)
 			: task(task) {}

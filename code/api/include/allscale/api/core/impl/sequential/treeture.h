@@ -116,6 +116,10 @@ namespace sequential {
 
 		using value_type = T;
 
+		using treeture_type = treeture<T>;
+
+		treeture() {}
+
 		treeture(const T& value)
 			: value(value) {}
 
@@ -148,6 +152,8 @@ namespace sequential {
 	public:
 
 		using value_type = T;
+
+		using treeture_type = treeture<T>;
 
 		unreleased_treeture() {}
 
@@ -188,6 +194,8 @@ namespace sequential {
 	public:
 
 		using value_type = T;
+
+		using treeture_type = treeture<T>;
 
 		explicit lazy_unreleased_treeture(Gen&& gen)
 			: gen(std::move(gen)) {}
