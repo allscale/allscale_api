@@ -744,6 +744,26 @@ namespace data {
 			});
 		}
 
+		/**
+		 * An operator to load an instance of this shared data from the given archive.
+		 */
+		static GridFragment load(utils::ArchiveReader& reader) {
+            GridFragment res(reader.read<size_type>());
+            region_type covered(reader.read<region_type>());
+            res.resize(covered);
+            res.insert(reader);
+			return res;
+		}
+
+		/**
+		 * An operator to store an instance of this shared data into the given archive.
+		 */
+		void store(utils::ArchiveWriter& writer) const {
+			writer.write(getTotalSize());
+            writer.write(getCoveredRegion());
+            extract(writer, coveredRegion());
+		}
+
 	private:
 
 		static std::size_t area(const GridPoint<Dims>& pos) {
