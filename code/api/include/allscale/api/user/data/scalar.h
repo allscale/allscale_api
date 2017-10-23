@@ -122,6 +122,10 @@ namespace data {
 			using shared_data_type = core::no_shared_data;
 			using facade_type = Scalar<T>;
 
+            ScalarFragment()
+                : covered(false)
+            {}
+
 			ScalarFragment(const core::no_shared_data&, const ScalarRegion& region = ScalarRegion())
 				: covered(region) {}
 
@@ -170,6 +174,30 @@ namespace data {
 				value = reader.read<T>();
 			}
 
+			/**
+			 * An operator to load an instance of this range from the given archive.
+			 */
+			static ScalarFragment load(utils::ArchiveReader& reader) {
+                ScalarFragment res;
+                res.insert(reader);
+
+                return res;
+			}
+
+			/**
+			 * An operator to store an instance of this range into the given archive.
+			 */
+			void store(utils::ArchiveWriter& writer) const {
+				// start by adding the extracted region
+				writer.write(covered);
+
+				// if the requested region is empty, we are done
+				if (covered.empty()) return;
+
+				// otherwise we extract the data stored in this fragment
+				writer.write(value);
+			}
+
 			Scalar<T> mask() {
 				return Scalar<T>(*this);
 			}
@@ -192,7 +220,7 @@ namespace data {
 			: base(&fragment) {}
 
 	public:
-			
+
 		Scalar()
 			: owned(std::make_unique<detail::ScalarFragment<T>>(core::no_shared_data())), base(owned.get()) {}
 
