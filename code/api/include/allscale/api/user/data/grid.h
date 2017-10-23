@@ -313,8 +313,8 @@ namespace data {
 
 		static GridBox span(const GridBox& a, const GridBox& b) {
 			return GridBox(
-				allscale::utils::elementwiseMin(a.min,b.min-point_type(1)),
-				allscale::utils::elementwiseMax(a.max,b.max-point_type(1))
+				allscale::utils::elementwiseMin(a.min,b.min),
+				allscale::utils::elementwiseMax(a.max,b.max)
 			);
 		}
 
