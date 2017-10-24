@@ -1195,7 +1195,7 @@ namespace reference {
 		virtual void aggregate() =0;
 
 		void setSplitable(bool value = true) {
-			splitable = value;
+			splitable = value && getDepth() < 60;
 		}
 
 		void setSubstitute(TaskBase* newSub) {
