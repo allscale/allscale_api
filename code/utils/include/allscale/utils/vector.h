@@ -250,7 +250,7 @@ namespace utils {
 		Vector(const T& e) : x(e), y(e), z(e) { }
 
 		template<typename R>
-		Vector(const R& x, const R& y, const R& z) : x(x), y(y), z(z) { }
+		Vector(R x, R y, R z) : x(x), y(y), z(z) { }
 
 		Vector(const Vector&) = default;
 		Vector(Vector&&) = default;
@@ -340,7 +340,7 @@ namespace utils {
 		Vector(const T& e) : x(e), y(e) { }
 
 		template<typename R>
-		Vector(const R& x, const R& y) : x(x), y(y) { }
+		Vector(R x, R y) : x(x), y(y) { }
 
 		Vector(const Vector&) = default;
 		Vector(Vector&&) = default;
