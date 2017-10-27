@@ -45,6 +45,12 @@ namespace utils {
 			init(values);
 		}
 
+		template<typename ... Rest>
+		Vector(T a, T b, Rest ... rest) : data{a,b,rest...} {
+			static_assert(Dims == sizeof...(rest)+2, "Invalid number of components!");
+		}
+
+
 		Vector& operator=(const Vector& other) = default;
 		Vector& operator=(Vector&& other) = default;
 
