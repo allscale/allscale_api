@@ -617,7 +617,9 @@ namespace algorithm {
 			scanner<idx-1> nested;
 			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Op, typename ... Coordinates>
 			void operator()(const Compound<Iter,dims>& begin, const Compound<Iter,dims>& end, const Op& op, Coordinates ... coordinates) {
-				for(Iter i = begin[dims-idx]; i != end[dims-idx]; ++i) {
+				auto a = begin[dims-idx];
+				auto b = end[dims-idx];
+				for(Iter i = a; i != b ; ++i) {
 					nested(begin,end,op,coordinates...,i);
 				}
 			}
