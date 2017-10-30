@@ -262,11 +262,11 @@ namespace utils {
 		Vector(const std::array<R,3>& other) : x(other[0]), y(other[1]), z(other[2]) {}
 
 		T& operator[](std::size_t i) {
-			return reinterpret_cast<std::array<T,3>&>(*this)[i];
+			return (i==0) ? x : (i==1) ? y : z;
 		}
 
 		const T& operator[](std::size_t i) const {
-			return reinterpret_cast<const std::array<T,3>&>(*this)[i];
+			return (i==0) ? x : (i==1) ? y : z;
 		}
 
 		Vector& operator=(const Vector& other) = default;
@@ -352,11 +352,11 @@ namespace utils {
 		Vector(const std::array<R,2>& other) : x(other[0]), y(other[1]) {}
 
 		T& operator[](std::size_t i) {
-			return reinterpret_cast<std::array<T,2>&>(*this)[i];
+			return (i == 0) ? x : y;
 		}
 
 		const T& operator[](std::size_t i) const {
-			return reinterpret_cast<const std::array<T,2>&>(*this)[i];
+			return (i == 0) ? x : y;
 		}
 
 		Vector& operator=(const Vector& other) = default;
