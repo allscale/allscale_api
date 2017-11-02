@@ -605,6 +605,9 @@ namespace data {
 
 		size_type size;
 
+        GridSharedData()
+        {}
+
 		GridSharedData(const size_type& size)
 			: size(size) {}
 
