@@ -34,14 +34,14 @@ int main() {
     allscale::utils::Vector<double, 3> influence(0.5, 0., 0.5);
 
     const double amp = 1;
-    const double x0 = 50;
-    const double y0 = 50;
-    const double sx = 4;
-    const double sy = 4;
+    const double x0 = 100;
+    const double y0 = 100;
+    const double sx = 20;
+    const double sy = 20;
 
 
-    const int rows = 100;
-    const int columns = 100;
+    const int rows = 200;
+    const int columns = 200;
 
     
     Grid<double, 2> up({rows, columns});
