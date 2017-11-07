@@ -17,6 +17,66 @@ namespace api {
 namespace user {
 namespace algorithm {
 
+	// --- scanner tests ---
+
+	TEST(Scanner,ScanOrder1D) {
+
+		auto range = detail::range<int>(0,100);
+
+		int last = -1;
+		range.forEach([&](int x){
+			EXPECT_EQ(last+1,x);
+			last = x;
+		});
+
+		EXPECT_EQ(99,last);
+	}
+
+	namespace {
+
+		template<typename T, std::size_t D>
+		utils::Vector<T,D> inc(const utils::Vector<T,D>& in, const T& limit) {
+			auto res = in;
+			for(int i = D-1; i>=0; --i) {
+				res[i]++;
+				if (res[i] < limit) return res;
+				res[i] = 0;
+			}
+			return res;
+		}
+
+	}
+
+
+	TEST(Scanner,ScanOrder2D) {
+
+		using Point = utils::Vector<int,2>;
+		auto range = detail::range<Point>(Point(0,0),Point(100,100));
+
+		Point last(0,-1);
+		range.forEach([&](Point x){
+			EXPECT_EQ(inc(last,100),x);
+			last = x;
+		});
+
+		EXPECT_EQ(Point(99,99),last);
+	}
+
+	TEST(Scanner,ScanOrder3D) {
+
+		using Point = utils::Vector<int,3>;
+		auto range = detail::range<Point>(Point(0,0,0),Point(100,100,100));
+
+		Point last(0,0,-1);
+		range.forEach([&](Point x){
+			EXPECT_EQ(inc(last,100),x);
+			last = x;
+		});
+
+		EXPECT_EQ(Point(99,99,99),last);
+	}
+
+
 	// --- basic parallel loop usage ---
 
 
@@ -359,8 +419,8 @@ namespace algorithm {
 		auto Vs = pfor(0,N,[&](int i) {
 				EXPECT_EQ(1,dataA[i]);
 				EXPECT_EQ(1,dataB[i]);
-				if (i > 0)   EXPECT_EQ(1,dataB[i-1]);
-				if (i < N-1) EXPECT_EQ(1,dataB[i+1]);
+				if (i > 0)   { EXPECT_EQ(1,dataB[i-1]); }
+				if (i < N-1) { EXPECT_EQ(1,dataB[i+1]); }
 			}, sync_all(
 				one_on_one(As),
 				full_neighborhood_sync(Bs)

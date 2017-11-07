@@ -274,14 +274,14 @@ namespace data {
 		 * Provides read/write access to one of the values stored within this grid.
 		 */
 		T& operator[](const coordinate_type& index) {
-			return data_item_element_access(*this, region_type(index), (*base)[index]);
+			return data_item_element_access(*this, region_type::single(index), (*base)[index]);
 		}
 
 		/**
 		 * Provides read access to one of the values stored within this grid.
 		 */
 		const T& operator[](const coordinate_type& index) const {
-			return data_item_element_access(*this, region_type(index), (*base)[index]);
+			return data_item_element_access(*this, region_type::single(index), (*base)[index]);
 		}
 
 		/**

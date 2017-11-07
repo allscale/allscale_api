@@ -1,6 +1,9 @@
 #pragma once
 
-#if !defined(ALLSCALE_WITH_HPX)
+#ifdef ALLSCALE_WITH_HPX
+	#include <hpx/runtime/serialization/array.hpp>
+#endif
+
 #include "allscale/utils/serializer.h"
 
 #include <array>
@@ -55,8 +58,3 @@ namespace utils {
 } // end namespace utils
 } // end namespace allscale
 
-#else
-
-#include <hpx/runtime/serialization/array.hpp>
-
-#endif

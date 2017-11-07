@@ -25,7 +25,7 @@ namespace utils {
 		Vector() = default;
 
 		Vector(const T& e) {
-			for(std::size_t i = 0; i < Dims; i++) { data[i] = e; }
+			data.fill(e);
 		}
 
 		Vector(const Vector&) = default;
@@ -44,6 +44,12 @@ namespace utils {
 			assert_eq(Dims,values.size());
 			init(values);
 		}
+
+		template<typename ... Rest>
+		Vector(T a, T b, Rest ... rest) : data{a,b,rest...} {
+			static_assert(Dims == sizeof...(rest)+2, "Invalid number of components!");
+		}
+
 
 		Vector& operator=(const Vector& other) = default;
 		Vector& operator=(Vector&& other) = default;
@@ -244,7 +250,7 @@ namespace utils {
 		Vector(const T& e) : x(e), y(e), z(e) { }
 
 		template<typename R>
-		Vector(const R& x, const R& y, const R& z) : x(x), y(y), z(z) { }
+		Vector(R x, R y, R z) : x(x), y(y), z(z) { }
 
 		Vector(const Vector&) = default;
 		Vector(Vector&&) = default;
@@ -256,11 +262,11 @@ namespace utils {
 		Vector(const std::array<R,3>& other) : x(other[0]), y(other[1]), z(other[2]) {}
 
 		T& operator[](std::size_t i) {
-			return reinterpret_cast<std::array<T,3>&>(*this)[i];
+			return (i==0) ? x : (i==1) ? y : z;
 		}
 
 		const T& operator[](std::size_t i) const {
-			return reinterpret_cast<const std::array<T,3>&>(*this)[i];
+			return (i==0) ? x : (i==1) ? y : z;
 		}
 
 		Vector& operator=(const Vector& other) = default;
@@ -334,7 +340,7 @@ namespace utils {
 		Vector(const T& e) : x(e), y(e) { }
 
 		template<typename R>
-		Vector(const R& x, const R& y) : x(x), y(y) { }
+		Vector(R x, R y) : x(x), y(y) { }
 
 		Vector(const Vector&) = default;
 		Vector(Vector&&) = default;
@@ -346,11 +352,11 @@ namespace utils {
 		Vector(const std::array<R,2>& other) : x(other[0]), y(other[1]) {}
 
 		T& operator[](std::size_t i) {
-			return reinterpret_cast<std::array<T,2>&>(*this)[i];
+			return (i == 0) ? x : y;
 		}
 
 		const T& operator[](std::size_t i) const {
-			return reinterpret_cast<const std::array<T,2>&>(*this)[i];
+			return (i == 0) ? x : y;
 		}
 
 		Vector& operator=(const Vector& other) = default;

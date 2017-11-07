@@ -1,6 +1,8 @@
 #pragma once
 
-#if !defined(ALLSCALE_WITH_HPX)
+#ifdef ALLSCALE_WITH_HPX
+#include <hpx/runtime/serialization/string.hpp>
+#endif
 
 #include "allscale/utils/serializer.h"
 
@@ -30,9 +32,3 @@ namespace utils {
 
 } // end namespace utils
 } // end namespace allscale
-
-#else
-
-#include <hpx/runtime/serialization/string.hpp>
-
-#endif

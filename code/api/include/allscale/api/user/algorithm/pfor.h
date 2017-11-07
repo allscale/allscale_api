@@ -592,9 +592,51 @@ namespace algorithm {
 			}
 		}
 
+		template<typename Point>
+		struct point_factory;
+
+		template<typename Iter, size_t dims>
+		struct point_factory<std::array<Iter,dims>> {
+			template<typename ... Coordinates>
+			std::array<Iter,dims> operator()(Coordinates ... coordinates) {
+				return { coordinates ... };
+			}
+		};
+
+		template<typename Iter, size_t dims>
+		struct point_factory<utils::Vector<Iter,dims>> {
+			template<typename ... Coordinates>
+			utils::Vector<Iter,dims> operator()(Coordinates ... coordinates) {
+				return utils::Vector<Iter,dims>(coordinates...);
+			}
+		};
+
+
 		template<size_t idx>
 		struct scanner {
 			scanner<idx-1> nested;
+			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Op, typename ... Coordinates>
+			void operator()(const Compound<Iter,dims>& begin, const Compound<Iter,dims>& end, const Op& op, Coordinates ... coordinates) {
+				auto a = begin[dims-idx];
+				auto b = end[dims-idx];
+				for(Iter i = a; i != b ; ++i) {
+					nested(begin,end,op,coordinates...,i);
+				}
+			}
+		};
+
+		template<>
+		struct scanner<0> {
+			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Op, typename ... Coordinates>
+			void operator()(const Compound<Iter,dims>&, const Compound<Iter,dims>&, const Op& op, Coordinates ... coordinates) {
+				point_factory<Compound<Iter,dims>> factory;
+				op(factory(coordinates...));
+			}
+		};
+
+		template<size_t idx>
+		struct scanner_with_boundary {
+			scanner_with_boundary<idx-1> nested;
 			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Op>
 			void operator()(const Compound<Iter,dims>& begin, const Compound<Iter,dims>& end, Compound<Iter,dims>& cur, const Op& op) {
 				auto& i = cur[dims-idx];
@@ -672,7 +714,7 @@ namespace algorithm {
 		};
 
 		template<>
-		struct scanner<0> {
+		struct scanner_with_boundary<0> {
 			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Op>
 			void operator()(const Compound<Iter,dims>&, const Compound<Iter,dims>&, Compound<Iter,dims>& cur, const Op& op) {
 				op(cur);
@@ -694,7 +736,7 @@ namespace algorithm {
 			std::array<Iter,dims> cur;
 
 			// scan range
-			detail::scanner<dims>()(fullBegin, fullEnd, begin, end, cur, inner, boundary);
+			detail::scanner_with_boundary<dims>()(fullBegin, fullEnd, begin, end, cur, inner, boundary);
 		}
 
 		template<typename Iter, size_t dims, typename InnerOp, typename BoundaryOp>
@@ -704,17 +746,13 @@ namespace algorithm {
 			std::array<Iter,dims> cur;
 
 			// scan range
-			detail::scanner<dims>()(begin, end, cur, inner, boundary);
+			detail::scanner_with_boundary<dims>()(begin, end, cur, inner, boundary);
 		}
 
 		template<typename Iter, size_t dims, typename Op>
 		void forEach(const std::array<Iter,dims>& begin, const std::array<Iter,dims>& end, const Op& op) {
-
-			// the current position
-			std::array<Iter,dims> cur;
-
 			// scan range
-			detail::scanner<dims>()(begin, end, cur, op);
+			detail::scanner<dims>()(begin, end, op);
 		}
 
 		template<typename Elem, size_t dims, typename InnerOp, typename BoundaryOp>
@@ -724,7 +762,7 @@ namespace algorithm {
 			utils::Vector<Elem,dims> cur;
 
 			// scan range
-			detail::scanner<dims>()(fullBegin, fullEnd, begin, end, cur, inner, boundary);
+			detail::scanner_with_boundary<dims>()(fullBegin, fullEnd, begin, end, cur, inner, boundary);
 		}
 
 		template<typename Elem, size_t dims, typename InnerOp, typename BoundaryOp>
@@ -734,18 +772,14 @@ namespace algorithm {
 			utils::Vector<Elem,dims> cur;
 
 			// scan range
-			detail::scanner<dims>()(begin, end, cur, inner, boundary);
+			detail::scanner_with_boundary<dims>()(begin, end, cur, inner, boundary);
 		}
 
 
 		template<typename Elem, size_t dims, typename Op>
 		void forEach(const utils::Vector<Elem,dims>& begin, const utils::Vector<Elem,dims>& end, const Op& op) {
-
-			// the current position
-			utils::Vector<Elem,dims> cur;
-
 			// scan range
-			detail::scanner<dims>()(begin, end, cur, op);
+			detail::scanner<dims>()(begin, end, op);
 		}
 
 

@@ -13,3 +13,5 @@ cd "$BUILD_DIR"
 ulimit -t 14400
 
 make test ARGS="-j $NPROC"
+
+make test_tutorials ARGS="-j $NPROC"

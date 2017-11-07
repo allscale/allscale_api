@@ -685,6 +685,118 @@ namespace core {
 
 	}
 
+
+	template<typename Iter, typename Filter, typename Map, typename Reduce>
+	auto reduceIf(const Iter& a, const Iter& b, const Filter& filter, const Map& map, const Reduce& reduce) {
+		using treeture_type = typename utils::lambda_traits<Map>::result_type::treeture_type;
+		using result_type = typename utils::lambda_traits<Reduce>::result_type;
+
+		// check that the interval is not empty
+		if (a>b) return result_type(0);
+
+		// spawn tasks and collect without heap allocation
+		assert_lt(b-a,32);
+		std::bitset<32> mask;
+		std::array<treeture_type,32> tasks;
+		std::size_t j = 0;
+		for(Iter i = a; i<b; ++i,++j) {
+			if (!filter(i)) continue;
+			mask.set(j);
+			tasks[j] = map(i);
+		}
+
+		// collect results
+		result_type res = 0;
+		for(std::size_t j = 0; j < std::size_t(b-a); ++j) {
+			if (!mask.test(j)) continue;
+			res = reduce(res,std::move(tasks[j]).get());
+		}
+		return res;
+	}
+
+	template<typename Iter, typename Filter, typename Map>
+	auto sumIf(const Iter& a, const Iter& b, const Filter& filter, const Map& map) {
+		return reduceIf(a,b,filter,map,std::plus<int>());
+	}
+
+	int nqueens(int size) {
+
+		struct Assignment {
+
+			int column;				// < the number of columns assigned so far
+			int row;				// < the row this queen is placed
+			const Assignment* rest;	// < the rest of this assignment
+
+			Assignment()
+				: column(-1), row(0), rest(nullptr) {}
+
+			Assignment(int row, const Assignment& rest)
+				: column(rest.column+1), row(row), rest(&rest) {}
+
+			int size() const {
+				return column + 1;
+			}
+
+			bool valid(int r) const {
+				return valid(r,column+1);
+			}
+
+			bool valid(int r, int c) const {
+				assert_lt(column,c);
+				// check end of assignment
+				if (column<0) return true;
+				// if in same row => fail
+				if (row == r) return false;
+				// if on same diagonal => fail
+				auto diff = c - column;
+				if (row + diff == r || row - diff == r) return false;
+				// check nested
+				return rest->valid(r,c);
+			}
+		};
+
+		// create the recursive version
+		auto compute = prec(
+			[size](const Assignment& args) {
+				// check whether the assignment is complete
+				return args.size() >= size;
+			},
+			[](const Assignment&) {
+				// if a complete assignment is reached, we have a solution
+				return 1;
+			},
+			[size](const Assignment& a, const auto& rec) {
+				return sumIf(0,size,
+					[&](int i){ return a.valid(i); },
+					[&](int i){ return rec(Assignment(i,a)); }
+				);
+			}
+		);
+
+		// compute the result
+		return compute(Assignment()).get();
+	}
+
+
+	TEST(RecOps,NQueens) {
+
+		EXPECT_EQ(     1,nqueens( 1));
+		EXPECT_EQ(     0,nqueens( 2));
+		EXPECT_EQ(     0,nqueens( 3));
+		EXPECT_EQ(     2,nqueens( 4));
+		EXPECT_EQ(    10,nqueens( 5));
+		EXPECT_EQ(     4,nqueens( 6));
+		EXPECT_EQ(    40,nqueens( 7));
+		EXPECT_EQ(    92,nqueens( 8));
+		EXPECT_EQ(   352,nqueens( 9));
+		EXPECT_EQ(   724,nqueens(10));
+		EXPECT_EQ(  2680,nqueens(11));
+		EXPECT_EQ( 14200,nqueens(12));
+		EXPECT_EQ( 73712,nqueens(13));
+		EXPECT_EQ(365596,nqueens(14));
+
+	}
+
 } // end namespace core
 } // end namespace api
 } // end namespace allscale
