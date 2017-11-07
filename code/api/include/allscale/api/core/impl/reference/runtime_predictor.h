@@ -7,10 +7,17 @@
 #include <chrono>
 #include <ostream>
 
-#ifdef _MSC_VER
-	#include <intrin.h>
+#if defined _MSC_VER
+#include <intrin.h>
+#elif defined (__ppc64__) || defined (_ARCH_PPC64) || defined(__powerpc__) || defined(__ppc__)
+static __inline__ unsigned long long __rdtsc(void)
+{
+  int64_t tb;
+  asm("mfspr %0, 268" : "=r"(tb));
+  return tb;
+}
 #else
-	#include <x86intrin.h>
+#include <x86intrin.h>
 #endif
 
 namespace allscale {
