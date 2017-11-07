@@ -46,7 +46,7 @@ namespace utils {
 		}
 
 		template<typename ... Rest>
-		Vector(T a, T b, Rest ... rest) : data{a,b,rest...} {
+		Vector(T a, T b, Rest ... rest) : data{ {a,b,rest...} } {
 			static_assert(Dims == sizeof...(rest)+2, "Invalid number of components!");
 		}
 

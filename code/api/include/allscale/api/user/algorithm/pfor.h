@@ -599,7 +599,7 @@ namespace algorithm {
 		struct point_factory<std::array<Iter,dims>> {
 			template<typename ... Coordinates>
 			std::array<Iter,dims> operator()(Coordinates ... coordinates) {
-				return { coordinates ... };
+				return { { coordinates ... } };
 			}
 		};
 

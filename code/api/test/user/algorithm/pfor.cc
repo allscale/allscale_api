@@ -952,9 +952,9 @@ namespace algorithm {
 			for(std::size_t i=0; i<Dims; ++i) {
 				auto s = p;
 				for(std::size_t j = 1; j<=width; j++) {
-					s[i] = p[i] - j;
+					s[i] = p[i] - (int)j;
 					EXPECT_PRED1(isCovered,s) << "Point " << s << " in hull of range " << range << " at depth " << depth << " not covered by " << coverage << "\n";
-					s[i] = p[i] + j;
+					s[i] = p[i] + (int)j;
 					EXPECT_PRED1(isCovered,s) << "Point " << s << " in hull of range " << range << " at depth " << depth << " not covered by " << coverage << "\n";
 				}
 			}
