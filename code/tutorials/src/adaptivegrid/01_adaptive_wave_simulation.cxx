@@ -37,86 +37,118 @@ double average(const Cell& cell) {
     return avg / (double)count;
 }
 
-/*
-* Access a given index
-*/
-double access_index(const Grid& grid, int i, int j) {
-    auto& cell = grid[{i / 2, j / 2}];
-    if(cell.getActiveLayer() == 1) {
-        return cell[{0, 0}];
+// TODO: improve this by re-introducing the hierarchical cell address
+
+double getValue(const Cell& cell) {
+    if (cell.getActiveLayer() == 1) {
+        return cell[{0,0}];
     }
-    return cell[{i % 2, j % 2}];
+    return average(cell);
+}
+
+double getValue(const Cell& cell, const Point& pos) {
+    if (cell.getActiveLayer() == 1) {
+        return getValue(cell);
+    }
+    return cell[pos];
 }
 
 // -- a generic update function for the init and update step --
 
 struct init_config {
-	static constexpr double a = .5;
-	static constexpr double b =  0;
-	static constexpr double c = .5;
+    static constexpr double a = .5;
+    static constexpr double b =  0;
+    static constexpr double c = .5;
 };
 
 struct update_config {
-	static constexpr double a = 1;
-	static constexpr double b = 1;
-	static constexpr double c = 1;
+    static constexpr double a = 1;
+    static constexpr double b = 1;
+    static constexpr double c = 1;
 };
 
 template<typename config>
 void step(Grid& up, const Grid& u, const Grid& um, double dt, const Delta delta) {
     //inner points
     pfor({0, 0}, up.size(), [&](const auto& pos) {
-        up[pos].forAllActiveNodes([&](const allscale::utils::Vector<int64_t,2>& cell_pos, auto& element){
-            double prev, prevm, lap;
-            double ij, ip, im, jp, jm;
 
-            int ip1, im1, jp1, jm1;
+        // TODO: this is ugly and needs improvement
 
-            int i = pos[0] * 2;
-            int j = pos[1] * 2;
+        // check that all cells are on the same resolution
+        assert_eq(up[pos].getActiveLayer(),u[pos].getActiveLayer());
+        assert_eq(u[pos].getActiveLayer(),um[pos].getActiveLayer());
 
-            if(up[pos].getActiveLayer() == 1 || u[pos].getActiveLayer() == 1) {
-                ip1 = i + (pos[0] == 0 ? 2 : -1);
-                im1 = i + (pos[0] == up.size()[0] - 1 ? -1 : 2);
-                jp1 = j + (pos[1] == 0 ? 2 : -1);
-                jm1 = j + (pos[1] == up.size()[1] - 1 ? -1 : 2);
+        if (um[pos].getActiveLayer() == 1) {
 
-                ip = average(u[{ip1 / 2, j / 2}]);
-                im = average(u[{im1 / 2, j / 2}]);
-                jp = average(u[{i / 2, jp1 / 2}]);
-                jm = average(u[{i / 2, jm1 / 2}]);
-                ij = average(u[{i / 2, j / 2}]);
+            int i = pos[0];
+            int j = pos[1];
+            //set variables to handle border values
+            int im1 = i + (i == 0 ? 0 : -1);
+            int ip1 = i + (i == up.size()[0] - 1 ? 0 : 1);
+            int jm1 = j + (j == 0 ? 0 : -1);
+            int jp1 = j + (j == up.size()[1] - 1 ? 0 : 1);
 
-                prev = average(u[pos]);
-                prevm = average(um[pos]);
-            }
-            else {
-                i += cell_pos[0];
-                j += cell_pos[1];
-                ip1 = i + (pos[0] == 0 ? 1 : -1);
-                im1 = i + (pos[0] == up.size()[0] - 1 ? -1 : 1);
-                jp1 = j + (pos[1] == 0 ? 1 : -1);
-                jm1 = j + (pos[1] == up.size()[1] - 1 ? -1 : 1);
+            // extract neighbor values
+            double nu = getValue(u[{i,jm1}]);
+            double nd = getValue(u[{i,jp1}]);
+            double nl = getValue(u[{im1,j}]);
+            double nr = getValue(u[{ip1,j}]);
+            double nc = getValue(u[{i,j}]);
 
-                ip = access_index(u, ip1, j);
-                im = access_index(u, im1, j);
-                jp = access_index(u, i, jp1);
-                jm = access_index(u, i, jm1);
-                ij = access_index(u, i, j);
+            double lap = (dt/delta.x) * (dt/delta.x) * ((nr - nc) - (nc - nl))
+                + (dt/delta.y) * (dt/delta.y) * ((nd - nc) - (nc - nu));
 
+            up[{i, j}] = config::a * 2 * getValue(u[{i, j}]) - config::b * getValue(um[{i, j}]) + config::c * lap;
 
-                prev = access_index(u, i, j);
-                prevm = access_index(um, i, j);
-            }
+        } else {
 
+            // update each cell on the lower resolution independently
+            up[pos].forAllActiveNodes([&](const Point& cell_pos, auto& element) {
 
-            lap = (dt/delta.x) * (dt/delta.x) * ((ip - ij)
-            - (ij - im))
-            + (dt/delta.y) * (dt/delta.y) * ((jp - ij)
-            - (ij - jm));
+                // TODO: this is really really ugly => add hierarchical addresses
 
-            element = config::a * 2 * prev - config::b * prevm + config::c * lap;
-        });
+                // the global position
+                int i = pos[0];
+                int j = pos[1];
+
+                // the sub-cell position
+                int si = cell_pos[0];
+                int sj = cell_pos[1];
+
+                //set variables to handle border values
+                int sim1 = (si == 0) ? 1 : 0;        // < implicitly assuming a 2x2 resolution, bad!
+                int sip1 = (si == 0) ? 1 : 0;        // < implicitly assuming a 2x2 resolution, bad!
+                int sjm1 = (sj == 0) ? 1 : 0;        // < implicitly assuming a 2x2 resolution, bad!
+                int sjp1 = (sj == 0) ? 1 : 0;        // < implicitly assuming a 2x2 resolution, bad!
+
+                // compute neighbor top-level coordinates
+                int im1 = (si == 0) ? i - 1 : i;
+                int ip1 = (si == 1) ? i + 1 : i;
+                int jm1 = (sj == 0) ? j - 1 : j;
+                int jp1 = (sj == 1) ? j + 1 : j;
+
+                // avoid over-shooting boundaries
+                if (im1 < 0)             { im1 = 0;              sim1 = 0; }
+                if (ip1 >= up.size()[0]) { ip1 = up.size()[0]-1; sip1 = 1; }
+                if (jm1 < 0)             { jm1 = 0;              sjm1 = 0; }
+                if (jp1 >= up.size()[1]) { jp1 = up.size()[1]-1; sjp1 = 1; }
+
+                // extract neighbor values
+                double nu = getValue(u[{i,jm1}],{si,sjm1});
+                double nd = getValue(u[{i,jp1}],{si,sjp1});
+                double nl = getValue(u[{im1,j}],{sim1,sj});
+                double nr = getValue(u[{ip1,j}],{sip1,sj});
+                double nc = getValue(u[{i,j}],{si,sj});
+
+                double lap = (dt/(delta.x/2)) * (dt/(delta.x/2)) * ((nr - nc) - (nc - nl))
+                    + (dt/(delta.y/2)) * (dt/(delta.y/2)) * ((nd - nc) - (nc - nu));
+
+                element = config::a * 2 * getValue(u[{i, j}],{si,sj}) - config::b * getValue(um[{i, j}],{si,sj}) + config::c * lap;
+
+            });
+
+        }
+
     });
 }
 
@@ -124,64 +156,57 @@ void step(Grid& up, const Grid& u, const Grid& um, double dt, const Delta delta)
 // -- init and update wrappers --
 
 void initialize(Grid& up, const Grid& u, const Grid& um, double dt, const Delta delta) {
-	step<init_config>(up,u,um,dt,delta);
+    step<init_config>(up,u,um,dt,delta);
 }
 
 void update(Grid& up, const Grid& u, const Grid& um, double dt, const Delta delta) {
-	step<update_config>(up,u,um,dt,delta);
+    step<update_config>(up,u,um,dt,delta);
+}
+
+double id(double x) {
+    return x;
+}
+
+void refine(Cell& cell) {
+    // see whether there is something to do
+    if (cell.getActiveLayer() == 0) return;
+    // refine this cell
+    cell.refine(&id);
+}
+
+void coarsen(Cell& cell) {
+    // see whether there is something to do
+    if (cell.getActiveLayer() == 1) return;
+    // refine this cell
+    cell.coarsen(&id);
 }
 
 
 void adapt(Grid& up, Grid& u, Grid& um) {
-    const double threshold_refine = 0.05;
-    const double threshold_coarsen = threshold_refine / 100;
+    const double threshold_refine  = 0.002;
+    const double threshold_coarsen = 0.001;
 
+    // process each element independently
     pfor({0, 0}, u.size(), [&](const auto& pos) {
-        bool refine = false;
-        bool coarsen = false;
 
-        if((pos[0] > 0 && std::abs(average(u[pos]) - average(u[{pos[0] - 1, pos[1]}])) > threshold_refine)
-        || (pos[0] < u.size()[0] - 1 && std::abs(average(u[pos]) - average(u[{pos[0] + 1, pos[1]}])) > threshold_refine)
-        || (pos[1] > 0 && std::abs(average(u[pos]) - average(u[{pos[0], pos[1] - 1}])) > threshold_refine)
-        || (pos[1] < u.size()[1] - 1 && std::abs(average(u[pos]) - average(u[{pos[0], pos[1] + 1}])) > threshold_refine)) {
-            refine = true;
-        }
+        // compute the speed of change (~first derivation)
+        double change = fabs(getValue(u[pos]) - getValue(um[pos]));
 
-        if(!(pos[0] > 0 && std::abs(average(u[pos]) - average(u[{pos[0] - 1, pos[1]}])) > threshold_coarsen)
-        && !(pos[0] < u.size()[0] - 1 && std::abs(average(u[pos]) - average(u[{pos[0] + 1, pos[1]}])) > threshold_coarsen)
-        && !(pos[1] > 0 && std::abs(average(u[pos]) - average(u[{pos[0], pos[1] - 1}])) > threshold_coarsen)
-        && !(pos[1] < u.size()[1] - 1 && std::abs(average(u[pos]) - average(u[{pos[0], pos[1] + 1}])) > threshold_coarsen)) {
-            coarsen = true;
-        }
-
-        assert_false(refine && coarsen);
-
-        if(refine && up[pos].getActiveLayer() != 0) {
+        // alter refinement level if necessary
+        if (change > threshold_refine) {
+            // refine buffers
             up[pos].setActiveLayer(0);
-            u[pos].refineGrid([](const double& element) { 			
-                allscale::utils::StaticGrid<double, 2, 2> newGrid;
-                newGrid.forEach([element](auto& e) { e = element; });
-                return newGrid;
-            });
-            um[pos].refineGrid([](const double& element) { 			
-                allscale::utils::StaticGrid<double, 2, 2> newGrid;
-                newGrid.forEach([element](auto& e) { e = element; });
-                return newGrid;
-            });
-        }
-        if(coarsen && up[pos].getActiveLayer() != 1) {
+            refine(u[pos]);
+            refine(um[pos]);
+        } else if (change < threshold_coarsen) {
+            // coarsen buffers
             up[pos].setActiveLayer(1);
-            u[pos].coarsenGrid([&](const auto& grid) { 			
-                double count = 0;
-                grid.forEach([&](const double& element) { count += element; });
-                return count / (grid.size()[0] * grid.size()[1]);
-            });
-            um[pos].coarsenGrid([&](const auto& grid) { 			
-                double count = 0;
-                grid.forEach([&](const double& element) { count += element; });
-                return count / (grid.size()[0] * grid.size()[1]);
-            });
+            coarsen(u[pos]);
+            coarsen(um[pos]);
+        } else {
+            // stay as it is
         }
+
     });
 }
 
@@ -190,9 +215,9 @@ void adapt(Grid& up, Grid& u, Grid& um) {
 
 void setupWave(Grid& u, const Point& center, double amp, const Sigma s) {
     // update u to model a bell-shaped surface wave
-    algorithm::pfor({0, 0}, u.size(), [&](const auto& pos) {
+    pfor({0, 0}, u.size(), [&](const auto& pos) {
         // move to coarsest layer
-        u[pos].setActiveLayer(0);
+        u[pos].setActiveLayer(1);
 
         // set value on this layer
         int i = pos[0];
@@ -203,6 +228,18 @@ void setupWave(Grid& u, const Point& center, double amp, const Sigma s) {
     });
 }
 
+// a utility to compute the volume, which must be constant over the simulation
+double volume(const Grid& u) {
+    auto size = u.size();
+    double sum = 0;
+    for(int i=0; i<size.x;i++) {
+        for(int j=0; j<size.y; j++) {
+            sum += getValue(u[{i,j}]);
+        }
+    }
+    return sum;
+}
+
 
 int main() {
 
@@ -210,6 +247,7 @@ int main() {
 
     const int N = 51;
     const double T = 600;
+//    const double T = 2;
 
     const double dt = 0.25;
     const double dx = 2;
@@ -227,9 +265,15 @@ int main() {
 
     // set up the initial surface disturbance (in the form of a wave)
     setupWave(u,{N/4,N/4},1,{N/8,N/8});
+    setupWave(u,{N/2,N/2},1,{N/8,N/8});
 
     up.forEach([](Cell& cell) {
+        cell.setActiveLayer(1);
         cell = 0.;
+    });
+
+    um.forEach([](Cell& cell) {
+        cell.setActiveLayer(1);
     });
 
     // initialize simulation (setting up the um state)
@@ -241,18 +285,37 @@ int main() {
     for(double t=0; t<=T; t+=dt) {
         std::cout << "t=" << t << "\n";
 
+        // get the volume before
+        double vol_0 = volume(u);
+
         // adapt cell refinement to current simulation values
-//        adapt(up, u, um);
+        adapt(up, u, um);
+
+        // get the volume after adapting -- must not have changed
+        double vol_1 = volume(u);
+
+        // adapting must not change the volume
+        assert_lt(fabs(vol_0-vol_1),0.01)
+            << "Before: " << vol_0 << "\n"
+            << "After:  " << vol_1;
 
         // simulate
         update(up, u, um, dt, {dx,dy});
+
+        // compute new volume
+        vol_1 = volume(up);
+
+        // update must not have altered the volume ether
+        assert_lt(fabs(vol_0-vol_1),0.01)
+            << "Before: " << vol_0 << "\n"
+            << "After:  " << vol_1;
 
         // print out current state
         {
             double sum = 0;
             for(int i=0; i<rows;i++) {
                 for(int j=0; j<columns; j++) {
-                    auto v = average(u[{i,j}]);
+                    auto v = getValue(u[{i,j}]);
                     sum += v;
                     std::cout << (
                             (v >  0.3) ? 'X' :
@@ -265,7 +328,7 @@ int main() {
                 std::cout << "     ";
                 for(int j=0; j<columns; j++) {
                     auto layer = u[{i,j}].getActiveLayer();
-                    std::cout << ((layer == 0) ? '-' : '+');
+                    std::cout << ((layer == 1) ? '-' : '+');
                 }
 
                 std::cout << "\n";
