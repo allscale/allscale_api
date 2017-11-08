@@ -33,10 +33,10 @@ void step(Grid& up, const Grid& u, const Grid& um, double dt, const Delta delta)
         int i = pos[0];
         int j = pos[1];
         //set variables to handle border values
-        int im1 = i + (i == 0 ? 1 : -1);
-        int ip1 = i + (i == up.size()[0] - 1 ? -1 : 1);
-        int jm1 = j + (j == 0 ? 1 : -1);
-        int jp1 = j + (j == up.size()[1] - 1 ? -1 : 1);
+        int im1 = i + (i == 0 ? 0 : -1);
+        int ip1 = i + (i == up.size()[0] - 1 ? 0 : 1);
+        int jm1 = j + (j == 0 ? 0 : -1);
+        int jp1 = j + (j == up.size()[1] - 1 ? 0 : 1);
 
         double lap = (dt/delta.x) * (dt/delta.x) * ((u[{ip1, j}] - u[{i, j}])
             - (u[{i, j}] - u[{im1, j}]))
