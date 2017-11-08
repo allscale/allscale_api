@@ -216,6 +216,16 @@ namespace data {
 		}
 
 		template <typename Op>
+		void forAllOnLayer(unsigned layer, const Op& op) const {
+			if(layer == getLayerNumber()) {
+				// apply it to this value
+				data.forEach(op);
+			} else {
+				nested.forAllOnLayer(layer, op);
+			}
+		}
+
+		template <typename Op>
 		void forAllOnLayer(unsigned layer, const Op& op) {
 			if(layer == getLayerNumber()) {
 				// apply it to this value
@@ -338,9 +348,6 @@ namespace data {
 
 	};
 
-	template <typename T, typename Size, typename Layers>
-	struct GridLayerData;
-
 	template <typename T, unsigned... Sizes>
 	struct GridLayerData<T, detail::size<Sizes...>, layers<>> {
 
@@ -375,6 +382,12 @@ namespace data {
 		allscale::utils::Vector<std::size_t, sizeof...(Sizes)> getLayerSize(unsigned layer) {
 			assert_eq(layer, 0) << "Error: trying to access layer " << layer << " --no such layer!";
 			return data.size();
+		}
+
+		template <typename Op>
+		void forAllOnLayer(unsigned layer, const Op& op) const {
+			assert_eq(layer, 0) << "Error: trying to access layer " << layer << " --no such layer!";
+			data.forEach(op);
 		}
 
 		template <typename Op>
@@ -433,6 +446,7 @@ namespace data {
 
 	template<typename T, typename Layers, std::size_t Dims>
 	struct AdaptiveGridCell<T, CellConfig<Dims, Layers>> {
+		using element_type = T;
 		using unit_size = typename detail::make_size<Dims>::type;
 		using addr_type = allscale::utils::Vector<int64_t, Dims>;
 
@@ -450,6 +464,14 @@ namespace data {
 			if(this == &other) return *this;
 			active_layer = other.active_layer;
 			data = other.data;
+			return *this;
+		}
+
+		AdaptiveGridCell& operator=(const T& value) {
+			// update all active cells
+			data.forAllOnLayer(active_layer,[&](T& cur){
+				cur = value;
+			});
 			return *this;
 		}
 
@@ -481,6 +503,11 @@ namespace data {
 		template<unsigned Layer>
 		auto getLayer() const -> const decltype(data.template getLayer<Layer>())& {
 			return data.template getLayer<Layer>();
+		}
+
+		template<typename Op>
+		void forAllActiveNodes(const Op& op) const {
+			data.forAllOnLayer(active_layer, op);
 		}
 
 		template<typename Op>

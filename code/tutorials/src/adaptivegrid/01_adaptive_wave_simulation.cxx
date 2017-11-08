@@ -4,30 +4,43 @@
 #include "allscale/api/user/data/adaptive_grid.h"
 #include "allscale/api/user/algorithm/pfor.h"
 
-using namespace allscale::api::user::data;
 
-using TwoLayerCellConfig = CellConfig<2, layers<layer<2, 2>>>;
+using namespace allscale::api::user;
+using algorithm::pfor;
+
+// adaptive grid layer definition
+using TwoLayerCellConfig = data::CellConfig<
+        2,                           // < we have a 2D adaptive grid
+        data::layers<                // < with
+            data::layer<2,2>         // < one 2x2 refinement layer
+        >
+    >;
+
+using Grid = data::AdaptiveGrid<double,TwoLayerCellConfig>;
+using Cell = typename Grid::element_type;
+using Point = typename Grid::coordinate_type;
+
+using Delta = allscale::utils::Vector<double, 2>;
+using Sigma = allscale::utils::Vector<double, 2>;
+
 
 /*
 * Calculate the average of a cell
 */
-template<typename T, std::size_t Dims, typename Layers>
-T average(AdaptiveGridCell<T, CellConfig<Dims, Layers>>& cell) {
+double average(const Cell& cell) {
     int count = 0;
-    T avg{};
+    double avg = 0;
     cell.forAllActiveNodes([&](const auto& element) {
         avg += element;
         count++;
     });
-
     return avg / (double)count;
 }
 
 /*
 * Access a given index
 */
-template<typename Grid>
-double access_index(Grid& grid, int i, int j) {
+double access_index(const Grid& grid, int i, int j) {
     auto& cell = grid[{i / 2, j / 2}];
     if(cell.getActiveLayer() == 1) {
         return cell[{0, 0}];
@@ -35,9 +48,24 @@ double access_index(Grid& grid, int i, int j) {
     return cell[{i % 2, j % 2}];
 }
 
-void update(AdaptiveGrid<double, TwoLayerCellConfig>& up, AdaptiveGrid<double, TwoLayerCellConfig>& u, AdaptiveGrid<double, TwoLayerCellConfig>& um, const allscale::utils::Vector<double, 3> influence, double dt, const allscale::utils::Vector<double, 2> delta) {
+// -- a generic update function for the init and update step --
+
+struct init_config {
+	static constexpr double a = .5;
+	static constexpr double b =  0;
+	static constexpr double c = .5;
+};
+
+struct update_config {
+	static constexpr double a = 1;
+	static constexpr double b = 1;
+	static constexpr double c = 1;
+};
+
+template<typename config>
+void step(Grid& up, const Grid& u, const Grid& um, double dt, const Delta delta) {
     //inner points
-    allscale::api::user::algorithm::pfor({0, 0}, up.size(), [&](const auto& pos) {
+    pfor({0, 0}, up.size(), [&](const auto& pos) {
         up[pos].forAllActiveNodes([&](const allscale::utils::Vector<int64_t,2>& cell_pos, auto& element){
             double prev, prevm, lap;
             double ij, ip, im, jp, jm;
@@ -87,16 +115,28 @@ void update(AdaptiveGrid<double, TwoLayerCellConfig>& up, AdaptiveGrid<double, T
             + (dt/delta.y) * (dt/delta.y) * ((jp - ij)
             - (ij - jm));
 
-            element = influence[0] * 2 * prev - influence[1] * prevm + influence[2] * lap;
+            element = config::a * 2 * prev - config::b * prevm + config::c * lap;
         });
     });
 }
 
-void adapt(AdaptiveGrid<double, TwoLayerCellConfig>& up, AdaptiveGrid<double, TwoLayerCellConfig>& u, AdaptiveGrid<double, TwoLayerCellConfig>& um) {
+
+// -- init and update wrappers --
+
+void initialize(Grid& up, const Grid& u, const Grid& um, double dt, const Delta delta) {
+	step<init_config>(up,u,um,dt,delta);
+}
+
+void update(Grid& up, const Grid& u, const Grid& um, double dt, const Delta delta) {
+	step<update_config>(up,u,um,dt,delta);
+}
+
+
+void adapt(Grid& up, Grid& u, Grid& um) {
     const double threshold_refine = 0.05;
     const double threshold_coarsen = threshold_refine / 100;
 
-    allscale::api::user::algorithm::pfor({0, 0}, u.size(), [&](const auto& pos) {
+    pfor({0, 0}, u.size(), [&](const auto& pos) {
         bool refine = false;
         bool coarsen = false;
 
@@ -145,72 +185,98 @@ void adapt(AdaptiveGrid<double, TwoLayerCellConfig>& up, AdaptiveGrid<double, Tw
     });
 }
 
+
+// -- a function to create an initial wave --
+
+void setupWave(Grid& u, const Point& center, double amp, const Sigma s) {
+    // update u to model a bell-shaped surface wave
+    algorithm::pfor({0, 0}, u.size(), [&](const auto& pos) {
+        // move to coarsest layer
+        u[pos].setActiveLayer(0);
+
+        // set value on this layer
+        int i = pos[0];
+        int j = pos[1];
+        double diffx = j - center.x;
+        double diffy = i - center.y;
+        u[pos] = amp * exp(- (diffx * diffx / (2 * s.x * s.x) + diffy * diffy / (2 * s.y * s.y)));
+    });
+}
+
+
 int main() {
-    double t = 0;
-    const double tstop = 60;
+
+    // -- simulation parameters --
+
+    const int N = 51;
+    const double T = 600;
+
     const double dt = 0.25;
-    int step_no = 0;
-    const double amp = 1;
-    const double x0 = 100;
-    const double y0 = 100;
-    const double sx = 20;
-    const double sy = 20;
+    const double dx = 2;
+    const double dy = 2;
 
+    const int rows = N;
+    const int columns = N;
 
-    const int rows = 100;
-    const int columns = 100;
+    // -- initialization --
 
-    const allscale::utils::Vector<double, 2> delta(2, 2);
-    allscale::utils::Vector<double, 3> influence(0.5, 0., 0.5);
+    // initialize buffers for future, present, and past
+    Grid up({rows, columns});
+    Grid u({rows, columns});
+    Grid um({rows, columns});
 
-    AdaptiveGrid<double, TwoLayerCellConfig> up({ rows, columns });
-    AdaptiveGrid<double, TwoLayerCellConfig> u({ rows, columns });
-    AdaptiveGrid<double, TwoLayerCellConfig> um({ rows, columns });
-    AdaptiveGrid<double, TwoLayerCellConfig> init({ rows, columns });
-    um.forEach([](auto& cell) {
-        cell.forAllActiveNodes([](auto& element) {
-            element = 0.;
-        });
+    // set up the initial surface disturbance (in the form of a wave)
+    setupWave(u,{N/4,N/4},1,{N/8,N/8});
+
+    up.forEach([](Cell& cell) {
+        cell = 0.;
     });
 
-    init.forEach([](auto& cell) {
-        cell.forAllActiveNodes([](auto& element) {
-            element = 0.;
-        });
-    });
-    
-    allscale::api::user::algorithm::pfor({0, 0}, u.size(), [&](const auto& pos) {
-        u[pos].forAllActiveNodes([&](const allscale::utils::Vector<int64_t,2>& cell_pos, auto& element) {
-            int i = pos[0] * 2 + cell_pos[0];
-            int j = pos[1] * 2 + cell_pos[1];
+    // initialize simulation (setting up the um state)
+    initialize(um,u,up,dt,{dx,dy});
 
-            double diffx = j - x0;
-            double diffy = i - y0;
-            element = amp * exp(- (diffx * diffx / (2 * sx * sx) + diffy * diffy / (2 * sy * sy)));
-        });
-    });
+    // -- simulation --
 
-    //init um
-    update(um, u, init, influence, dt, delta);
+    //simulate time steps
+    for(double t=0; t<=T; t+=dt) {
+        std::cout << "t=" << t << "\n";
 
-    influence[0] = 1;
-    influence[1] = 1;
-    influence[2] = 1;
+        // adapt cell refinement to current simulation values
+//        adapt(up, u, um);
 
-    while(t <= tstop) {
-        t += dt;
-        step_no++;
+        // simulate
+        update(up, u, um, dt, {dx,dy});
 
-        /*
-        * adapt cell refinement to current simulation values
-        */
-        adapt(up, u, um);
-       
+        // print out current state
+        {
+            double sum = 0;
+            for(int i=0; i<rows;i++) {
+                for(int j=0; j<columns; j++) {
+                    auto v = average(u[{i,j}]);
+                    sum += v;
+                    std::cout << (
+                            (v >  0.3) ? 'X' :
+                            (v >  0.1) ? '+' :
+                            (v > -0.1) ? '-' :
+                            (v > -0.3) ? '.' :
+                                         ' '
+                    );
+                }
+                std::cout << "     ";
+                for(int j=0; j<columns; j++) {
+                    auto layer = u[{i,j}].getActiveLayer();
+                    std::cout << ((layer == 0) ? '-' : '+');
+                }
 
-        /*
-        * simulate
-        */
-        update(up, u, um, influence, dt, delta);
+                std::cout << "\n";
+            }
+            std::cout << "Volume: " << sum << "\n";
+            std::cout << "\n";
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+
+        // rotate buffers
         std::swap(um, u);
         std::swap(u, up);
     }
