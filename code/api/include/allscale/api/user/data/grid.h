@@ -797,6 +797,11 @@ namespace data {
 	public:
 
 		/**
+		 * The type of element stored in this grid.
+		 */
+		using element_type = T;
+
+		/**
 		 * The type of coordinate utilized by this type.
 		 */
 		using coordinate_type = GridPoint<Dims>;
