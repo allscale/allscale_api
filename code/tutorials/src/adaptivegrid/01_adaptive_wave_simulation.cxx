@@ -273,14 +273,51 @@ double volume(const Grid& u) {
     return sum;
 }
 
+// a utility to plot the current state of the adaptive mesh
+void plot(const Grid& u) {
+
+    // scale the plot down to may 51 x 51
+    auto size = u.size();
+    int scale = std::max(size.x/51,size.y/51);
+
+    double sum = 0;
+    for(int i=0; i<size.x;i+=scale) {
+
+        // plot value of the surface
+        for(int j=0; j<size.y; j+=scale) {
+            auto v = getValue(u[{i,j}]);
+            sum += v;
+            std::cout << (
+                    (v >  0.3) ? 'X' :
+                    (v >  0.1) ? '+' :
+                    (v > -0.1) ? '-' :
+                    (v > -0.3) ? '.' :
+                                 ' '
+            );
+        }
+
+        // also plot refinement level
+        std::cout << "     ";
+        for(int j=0; j<size.y; j+=scale) {
+            auto layer = u[{i,j}].getActiveLayer();
+            std::cout << ((layer == 1) ? '-' : '+');
+        }
+
+        std::cout << "\n";
+    }
+    std::cout << "Volume: " << sum << "\n";
+    std::cout << "\n";
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+}
+
 
 int main() {
 
     // -- simulation parameters --
 
-    const int N = 51;
-    const double T = 300;
-//    const double T = 2;
+    const int N = 201;
+    const double T = 400;
 
     const double dt = 0.25;
     const double dx = 2;
@@ -315,17 +352,18 @@ int main() {
     // -- simulation --
 
     //simulate time steps
+    double vol_0,vol_1;
     for(double t=0; t<=T; t+=dt) {
         std::cout << "t=" << t << "\n";
 
         // get the volume before
-        double vol_0 = volume(u);
+        vol_0 = volume(u);
 
         // adapt cell refinement to current simulation values
         adapt(up, u, um);
 
         // get the volume after adapting -- must not have changed
-        double vol_1 = volume(u);
+        vol_1 = volume(u);
 
         // adapting must not change the volume
         assert_lt(fabs(vol_0-vol_1),0.01)
@@ -339,35 +377,9 @@ int main() {
         vol_1 = volume(up);
 
         // print out current state
-        {
-            double sum = 0;
-            for(int i=0; i<rows;i++) {
-                for(int j=0; j<columns; j++) {
-                    auto v = getValue(up[{i,j}]);
-                    sum += v;
-                    std::cout << (
-                            (v >  0.3) ? 'X' :
-                            (v >  0.1) ? '+' :
-                            (v > -0.1) ? '-' :
-                            (v > -0.3) ? '.' :
-                                         ' '
-                    );
-                }
-                std::cout << "     ";
-                for(int j=0; j<columns; j++) {
-                    auto layer = up[{i,j}].getActiveLayer();
-                    std::cout << ((layer == 1) ? '-' : '+');
-                }
+        plot(up);
 
-                std::cout << "\n";
-            }
-            std::cout << "Volume: " << sum << "\n";
-            std::cout << "\n";
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        }
-
-        // update must not have altered the volume ether
+        // update must not have altered the volume either
         assert_lt(fabs(vol_0-vol_1),0.01)
             << "Before: " << vol_0 << "\n"
             << "After:  " << vol_1;
