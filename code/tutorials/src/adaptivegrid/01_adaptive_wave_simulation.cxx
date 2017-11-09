@@ -96,9 +96,42 @@ void step(Grid& up, const Grid& u, const Grid& um, double dt, const Delta delta)
             double nc = getValue(u[{i,j}]);
 
             double lap = (dt/delta.x) * (dt/delta.x) * ((nr - nc) - (nc - nl))
-                + (dt/delta.y) * (dt/delta.y) * ((nd - nc) - (nc - nu));
+                       + (dt/delta.y) * (dt/delta.y) * ((nd - nc) - (nc - nu));
 
-            up[{i, j}] = config::a * 2 * getValue(u[{i, j}]) - config::b * getValue(um[{i, j}]) + config::c * lap;
+            // flux correction for fine-grained neighbors
+            // see: https://authors.library.caltech.edu/28207/1/cit-asci-tr282.pdf
+            double dF = 0;
+
+            if (u[{i,jm1}].getActiveLayer() == 0) {
+                auto cur = - ((dt/delta.y) * (dt/delta.y) * (nc - nu));
+                cur += .25 * (dt/(delta.y/2)) * (dt/(delta.y/2)) * (nc - getValue(u[{i,jm1}],{0,1}));
+                cur += .25 * (dt/(delta.y/2)) * (dt/(delta.y/2)) * (nc - getValue(u[{i,jm1}],{1,1}));
+                dF -= cur;
+            }
+
+            if (u[{i,jp1}].getActiveLayer() == 0) {
+                auto cur = - ((dt/delta.y) * (dt/delta.y) * (nd - nc));
+                cur += .25 * (dt/(delta.y/2)) * (dt/(delta.y/2)) * (getValue(u[{i,jp1}],{0,0}) - nc);
+                cur += .25 * (dt/(delta.y/2)) * (dt/(delta.y/2)) * (getValue(u[{i,jp1}],{1,0}) - nc);
+                dF += cur;
+            }
+
+            if (u[{im1,j}].getActiveLayer() == 0) {
+                auto cur = - ((dt/delta.x) * (dt/delta.x) * (nc - nl));
+                cur += .25 * (dt/(delta.x/2)) * (dt/(delta.x/2)) * (nc - getValue(u[{im1,j}],{1,0}));
+                cur += .25 * (dt/(delta.x/2)) * (dt/(delta.x/2)) * (nc - getValue(u[{im1,j}],{1,1}));
+                dF -= cur;
+            }
+
+            if (u[{ip1,j}].getActiveLayer() == 0) {
+                auto cur = - ((dt/delta.x) * (dt/delta.x) * (nr - nc));
+                cur += .25 * (dt/(delta.x/2)) * (dt/(delta.x/2)) * (getValue(u[{ip1,j}],{0,0}) - nc);
+                cur += .25 * (dt/(delta.x/2)) * (dt/(delta.x/2)) * (getValue(u[{ip1,j}],{0,1}) - nc);
+                dF += cur;
+            }
+
+            up[{i, j}] = config::a * 2 * getValue(u[{i, j}]) - config::b * getValue(um[{i, j}]) + config::c * lap + dF;
+
 
         } else {
 
@@ -141,7 +174,7 @@ void step(Grid& up, const Grid& u, const Grid& um, double dt, const Delta delta)
                 double nc = getValue(u[{i,j}],{si,sj});
 
                 double lap = (dt/(delta.x/2)) * (dt/(delta.x/2)) * ((nr - nc) - (nc - nl))
-                    + (dt/(delta.y/2)) * (dt/(delta.y/2)) * ((nd - nc) - (nc - nu));
+                           + (dt/(delta.y/2)) * (dt/(delta.y/2)) * ((nd - nc) - (nc - nu));
 
                 element = config::a * 2 * getValue(u[{i, j}],{si,sj}) - config::b * getValue(um[{i, j}],{si,sj}) + config::c * lap;
 
@@ -246,7 +279,7 @@ int main() {
     // -- simulation parameters --
 
     const int N = 51;
-    const double T = 600;
+    const double T = 300;
 //    const double T = 2;
 
     const double dt = 0.25;
@@ -305,17 +338,12 @@ int main() {
         // compute new volume
         vol_1 = volume(up);
 
-        // update must not have altered the volume ether
-        assert_lt(fabs(vol_0-vol_1),0.01)
-            << "Before: " << vol_0 << "\n"
-            << "After:  " << vol_1;
-
         // print out current state
         {
             double sum = 0;
             for(int i=0; i<rows;i++) {
                 for(int j=0; j<columns; j++) {
-                    auto v = getValue(u[{i,j}]);
+                    auto v = getValue(up[{i,j}]);
                     sum += v;
                     std::cout << (
                             (v >  0.3) ? 'X' :
@@ -327,7 +355,7 @@ int main() {
                 }
                 std::cout << "     ";
                 for(int j=0; j<columns; j++) {
-                    auto layer = u[{i,j}].getActiveLayer();
+                    auto layer = up[{i,j}].getActiveLayer();
                     std::cout << ((layer == 1) ? '-' : '+');
                 }
 
@@ -338,6 +366,11 @@ int main() {
 
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
+
+        // update must not have altered the volume ether
+        assert_lt(fabs(vol_0-vol_1),0.01)
+            << "Before: " << vol_0 << "\n"
+            << "After:  " << vol_1;
 
         // rotate buffers
         std::swap(um, u);
