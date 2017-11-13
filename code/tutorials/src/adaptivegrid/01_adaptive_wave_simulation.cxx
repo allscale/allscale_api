@@ -4,6 +4,7 @@
 #include "allscale/api/user/data/adaptive_grid.h"
 #include "allscale/api/user/algorithm/pfor.h"
 
+#include "wave_log.h"
 
 using namespace allscale::api::user;
 using algorithm::pfor;
@@ -278,7 +279,7 @@ void plot(const Grid& u) {
 
     // scale the plot down to may 51 x 51
     auto size = u.size();
-    int scale = std::max(size.x/51,size.y/51);
+    int scale = std::max({size.x/51,size.y/51,1L});
 
     double sum = 0;
     for(int i=0; i<size.x;i+=scale) {
@@ -316,8 +317,8 @@ int main() {
 
     // -- simulation parameters --
 
-    const int N = 201;
-    const double T = 400;
+    const int N = 100;
+    const double T = 200;
 
     const double dt = 0.25;
     const double dx = 2;
@@ -325,6 +326,10 @@ int main() {
 
     const int rows = N;
     const int columns = N;
+
+    // -- output csv for plot.rb script to draw gnuplot or asciiplot --
+    const bool gnuplot = std::getenv("WAVE_GNUPLOT") != nullptr;
+    const bool asciiplot = std::getenv("WAVE_ASCIIPLOT") != nullptr;
 
     // -- initialization --
 
@@ -349,12 +354,16 @@ int main() {
     // initialize simulation (setting up the um state)
     initialize(um,u,up,dt,{dx,dy});
 
+    // enable printing for gnuplot
+    std::unique_ptr<WaveLog> log = nullptr;
+    if(gnuplot)
+        log = std::make_unique<WaveLog>(std::cout, 2 * rows, 2 * columns);
+
     // -- simulation --
 
     //simulate time steps
     double vol_0,vol_1;
     for(double t=0; t<=T; t+=dt) {
-        std::cout << "t=" << t << "\n";
 
         // get the volume before
         vol_0 = volume(u);
@@ -377,7 +386,10 @@ int main() {
         vol_1 = volume(up);
 
         // print out current state
-        plot(up);
+        if(gnuplot)
+            log->print(std::cout, t, up);
+        else if(asciiplot)
+            plot(up);
 
         // update must not have altered the volume either
         assert_lt(fabs(vol_0-vol_1),0.01)
