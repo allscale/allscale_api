@@ -131,7 +131,7 @@ int main() {
     const int rows = N;
     const int columns = N;
 
-    // -- output csv for plot.rb script to draw gnuplot or asciiplot --
+    // -- output csv for plot.rb script to draw gnuplot or output ascii plot --
     bool gnuplot = std::getenv("WAVE_GNUPLOT") != nullptr;
     bool asciiplot = std::getenv("WAVE_ASCIIPLOT") != nullptr;
 
