@@ -321,13 +321,13 @@ int main() {
     const double T = 200;
 
     const double dt = 0.25;
-    const double dx = 2;
-    const double dy = 2;
+    const double dx = 4;
+    const double dy = 4;
 
     const int rows = N;
     const int columns = N;
 
-    // -- output csv for plot.rb script to draw gnuplot or asciiplot --
+    // -- output csv for plot.rb script to draw gnuplot or output ascii plot --
     const bool gnuplot = std::getenv("WAVE_GNUPLOT") != nullptr;
     const bool asciiplot = std::getenv("WAVE_ASCIIPLOT") != nullptr;
 
@@ -340,7 +340,6 @@ int main() {
 
     // set up the initial surface disturbance (in the form of a wave)
     setupWave(u,{N/4,N/4},1,{N/8,N/8});
-    setupWave(u,{N/2,N/2},1,{N/8,N/8});
 
     up.forEach([](Cell& cell) {
         cell.setActiveLayer(1);
