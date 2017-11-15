@@ -116,3 +116,17 @@ namespace utils {
 
 #define assert_false(_COND) assert_true(!(_COND))
 #define assert_not_implemented() assert_fail() << "Not implemented functionality in " __FILE__ ":" __allscale_xstr_(__LINE__) "\n"
+
+// --------- bounds checks ---------
+
+#if defined(ALLSCALE_CHECK_BOUNDS)
+
+#define allscale_check_bounds(_INDEX, _CONTAINER)																												\
+	assert_true((_INDEX) >= 0 && (_INDEX) < (_CONTAINER).size()) << "Index " << (_INDEX) << " out of bounds " << (_CONTAINER).size();
+
+#else
+
+#define allscale_check_bounds(_INDEX, _CONTAINER)																												\
+	if(false) std::cerr << ""
+
+#endif

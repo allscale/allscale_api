@@ -6,6 +6,8 @@ option(USE_ASSERT "Enable assertions" ON)
 option(USE_VALGRIND "Allow Valgrind for unit tests" OFF)
 option(ENABLE_PROFILING "Enable AllScale profiling support" OFF)
 
+# ALLSCALE_CHECK_BOUNDS ... Enable bounds checks for AllScale data items and utility structures
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -26,6 +28,14 @@ endif()
 
 if(ENABLE_PROFILING)
 	add_definitions(-DENABLE_PROFILING)
+endif()
+
+if(NOT DEFINED ALLSCALE_CHECK_BOUNDS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+	set(ALLSCALE_CHECK_BOUNDS "ON")
+endif()
+
+if(ALLSCALE_CHECK_BOUNDS)
+	add_definitions(-DALLSCALE_CHECK_BOUNDS)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
