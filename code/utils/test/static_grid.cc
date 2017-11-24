@@ -55,13 +55,15 @@ namespace utils {
 	
 	TEST(StaticGrid2D, Indexing) {
 
-		StaticGrid<int, 3, 5> grid;
+		const int M = 3;
+		const int N = 5;
+		StaticGrid<int, M, N> grid;
 
 		EXPECT_EQ((Vector<size_t, 2>{3, 5}), grid.size());
 
 		int count = 0;
-		for(size_t i = 0; i < grid.size().x; ++i) {
-			for(size_t j = 0; j < grid.size().y; ++j) {
+		for(int i = 0; i < M; ++i) {
+			for(int j = 0; j < N; ++j) {
 				grid[{i, j}] = count++;
 			}
 		}

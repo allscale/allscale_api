@@ -39,8 +39,7 @@ namespace utils {
 		Vector(const std::array<R,Dims>& other)
 			: data(other) {}
 
-		template<typename R>
-		Vector(const std::initializer_list<R>& values) {
+		Vector(const std::initializer_list<T>& values) {
 			assert_eq(Dims,values.size());
 			init(values);
 		}
@@ -249,8 +248,7 @@ namespace utils {
 
 		Vector(const T& e) : x(e), y(e), z(e) { }
 
-		template<typename R>
-		Vector(R x, R y, R z) : x(x), y(y), z(z) { }
+		Vector(T x, T y, T z) : x(x), y(y), z(z) { }
 
 		Vector(const Vector&) = default;
 		Vector(Vector&&) = default;
@@ -339,8 +337,7 @@ namespace utils {
 
 		Vector(const T& e) : x(e), y(e) { }
 
-		template<typename R>
-		Vector(R x, R y) : x(x), y(y) { }
+		Vector(T x, T y) : x(x), y(y) { }
 
 		Vector(const Vector&) = default;
 		Vector(Vector&&) = default;
