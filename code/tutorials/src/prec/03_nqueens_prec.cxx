@@ -15,7 +15,7 @@ auto reduceIf(const Iter& a, const Iter& b, const Filter& filter, const Map& map
     // spawn tasks and collect without heap allocation
     assert_lt(b-a,32);
     std::bitset<32> mask;
-    treeture_type tasks[b-a];
+    std::array<treeture_type, 32> tasks;
     std::size_t j = 0;
     for(Iter i = a; i<b; ++i,++j) {
         if (!filter(i)) continue;
