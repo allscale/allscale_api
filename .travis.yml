@@ -64,19 +64,15 @@ matrix:
           packages: [ clang-5.0, g++-5 ]
     # ------------- OS X ------------- #
     - os: osx
-      osx_image: xcode8
+      osx_image: xcode8.3
       compiler: clang
       env: BUILD_TYPE=Debug
     - os: osx
-      osx_image: xcode8.1
+      osx_image: xcode9
       compiler: clang
-      # bug, xcode8.1 is missing cmake, https://github.com/travis-ci/travis-ci/issues/6258
-      before_install:
-        - brew update
-        - brew install cmake
       env: BUILD_TYPE=Debug
     - os: osx
-      osx_image: xcode8.2
+      osx_image: xcode9.1
       compiler: clang
       env: BUILD_TYPE=Debug
     ####################################
@@ -137,19 +133,15 @@ matrix:
           packages: [ clang-5.0, g++-5 ]
     # ------------- OS X ------------- #
     - os: osx
-      osx_image: xcode8
+      osx_image: xcode8.3
       compiler: clang
       env: BUILD_TYPE=Release
     - os: osx
-      osx_image: xcode8.1
+      osx_image: xcode9
       compiler: clang
-      # bug, xcode8.1 is missing cmake, https://github.com/travis-ci/travis-ci/issues/6258
-      before_install:
-        - brew update
-        - brew install cmake
       env: BUILD_TYPE=Release
     - os: osx
-      osx_image: xcode8.2
+      osx_image: xcode9.1
       compiler: clang
       env: BUILD_TYPE=Release
 
