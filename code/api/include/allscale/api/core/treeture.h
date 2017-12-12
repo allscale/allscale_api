@@ -253,22 +253,22 @@ namespace core {
 
 			template<typename A, typename FA, typename B, typename FB>
 			auto sequential(impl::sequential::lazy_unreleased_treeture<A,FA>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b) {
-				return impl::sequential::sequential(std::move(a),std::move(b));
+				return impl::sequential::seq(std::move(a),std::move(b));
 			}
 
 			template<typename A, typename FA, typename B, typename FB>
 			auto sequential(impl::sequential::dependencies&& deps, impl::sequential::lazy_unreleased_treeture<A,FA>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b) {
-				return impl::sequential::sequential(std::move(deps),std::move(a),std::move(b));
+				return impl::sequential::seq(std::move(deps),std::move(a),std::move(b));
 			}
 
 			template<typename A, typename FA, typename B, typename FB>
 			auto parallel(impl::sequential::lazy_unreleased_treeture<A,FA>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b) {
-				return impl::sequential::parallel(std::move(a),std::move(b));
+				return impl::sequential::par(std::move(a),std::move(b));
 			}
 
 			template<typename A, typename FA, typename B, typename FB>
 			auto parallel(impl::sequential::dependencies&& deps, impl::sequential::lazy_unreleased_treeture<A,FA>&& a, impl::sequential::lazy_unreleased_treeture<B,FB>&& b) {
-				return impl::sequential::parallel(std::move(deps),std::move(a),std::move(b));
+				return impl::sequential::par(std::move(deps),std::move(a),std::move(b));
 			}
 
 			template<typename A, typename FA, typename B, typename FB, typename M>
@@ -296,22 +296,22 @@ namespace core {
 
 			template<typename A, typename B>
 			auto sequential(impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b) {
-				return impl::reference::sequential(std::move(a),std::move(b));
+				return impl::reference::seq(std::move(a),std::move(b));
 			}
 
 			template<typename DepsKind, typename A, typename B>
 			auto sequential(impl::reference::dependencies<DepsKind>&& deps, impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b) {
-				return impl::reference::sequential(std::move(deps),std::move(a),std::move(b));
+				return impl::reference::seq(std::move(deps),std::move(a),std::move(b));
 			}
 
 			template<typename A, typename B>
 			auto parallel(impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b) {
-				return impl::reference::parallel(std::move(a),std::move(b));
+				return impl::reference::par(std::move(a),std::move(b));
 			}
 
 			template<typename DepsKind, typename A, typename B>
 			auto parallel(impl::reference::dependencies<DepsKind>&& deps, impl::reference::unreleased_treeture<A>&& a, impl::reference::unreleased_treeture<B>&& b) {
-				return impl::reference::parallel(std::move(deps),std::move(a),std::move(b));
+				return impl::reference::par(std::move(deps),std::move(a),std::move(b));
 			}
 
 			template<typename A, typename B, typename M>
@@ -371,8 +371,8 @@ namespace core {
 
 	// -- sequential --
 
-	template<typename D, typename A, typename B, typename std::enable_if<is_dependency<D>::value,int>::type ... >
-	auto sequential(D&& deps, A&& a, B&& b) {
+	template<typename D, typename A, typename B>
+	auto sequential(D&& deps, A&& a, B&& b, typename std::enable_if<is_dependency<D>::value,int>::type = 1) {
 		detail::implementation<A,B> impl;
 		return impl.sequential(std::move(deps),impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)));
 	}
@@ -391,8 +391,8 @@ namespace core {
 
 	// -- parallel --
 
-	template<typename D, typename A, typename B, typename std::enable_if<is_dependency<D>::value,int>::type ... >
-	auto parallel(D&& deps, A&& a, B&& b) {
+	template<typename D, typename A, typename B>
+	auto parallel(D&& deps, A&& a, B&& b, typename std::enable_if<is_dependency<D>::value,int>::type = 1) {
 		detail::implementation<A,B> impl;
 		return impl.parallel(std::move(deps),impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)));
 	}

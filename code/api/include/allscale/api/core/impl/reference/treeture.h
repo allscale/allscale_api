@@ -2236,63 +2236,63 @@ namespace reference {
 	}
 
 	template<typename Deps>
-	unreleased_treeture<void> sequential(Deps&& deps) {
+	unreleased_treeture<void> seq(Deps&& deps) {
 		return done(std::move(deps));
 	}
 
-	inline unreleased_treeture<void> sequential() {
+	inline unreleased_treeture<void> seq() {
 		return done();
 	}
 
 	template<typename DepsKind, typename A, typename B>
-	unreleased_treeture<void> sequential(dependencies<DepsKind>&& deps, unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
+	unreleased_treeture<void> seq(dependencies<DepsKind>&& deps, unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
 		return make_split_task(std::move(deps),std::move(a).toTask(),std::move(b).toTask(),false);
 	}
 
 	template<typename A, typename B>
-	unreleased_treeture<void> sequential(unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
-		return sequential(after(),std::move(a),std::move(b));
+	unreleased_treeture<void> seq(unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
+		return seq(after(),std::move(a),std::move(b));
 	}
 
 	template<typename DepsKind, typename F, typename ... R>
-	unreleased_treeture<void> sequential(dependencies<DepsKind>&& deps, unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
+	unreleased_treeture<void> seq(dependencies<DepsKind>&& deps, unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
 		// TODO: conduct a binary split to create a balanced tree
-		return make_split_task(std::move(deps),std::move(f).toTask(),sequential(std::move(rest)...).toTask(),false);
+		return make_split_task(std::move(deps),std::move(f).toTask(),seq(std::move(rest)...).toTask(),false);
 	}
 
 	template<typename F, typename ... R>
-	unreleased_treeture<void> sequential(unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
-		return sequential(after(), std::move(f),std::move(rest)...);
+	unreleased_treeture<void> seq(unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
+		return seq(after(), std::move(f),std::move(rest)...);
 	}
 
 	template<typename Deps>
-	unreleased_treeture<void> parallel(Deps&& deps) {
+	unreleased_treeture<void> par(Deps&& deps) {
 		return done(std::move(deps));
 	}
 
-	inline unreleased_treeture<void> parallel() {
+	inline unreleased_treeture<void> par() {
 		return done();
 	}
 
 	template<typename DepsKind, typename A, typename B>
-	unreleased_treeture<void> parallel(dependencies<DepsKind>&& deps, unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
+	unreleased_treeture<void> par(dependencies<DepsKind>&& deps, unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
 		return make_split_task(std::move(deps),std::move(a).toTask(),std::move(b).toTask(),true);
 	}
 
 	template<typename A, typename B>
-	unreleased_treeture<void> parallel(unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
-		return parallel(after(),std::move(a),std::move(b));
+	unreleased_treeture<void> par(unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
+		return par(after(),std::move(a),std::move(b));
 	}
 
 	template<typename DepsKind, typename F, typename ... R>
-	unreleased_treeture<void> parallel(dependencies<DepsKind>&& deps, unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
+	unreleased_treeture<void> par(dependencies<DepsKind>&& deps, unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
 		// TODO: conduct a binary split to create a balanced tree
-		return make_split_task(std::move(deps),std::move(f).toTask(),parallel(std::move(deps),std::move(rest)...).toTask(),true);
+		return make_split_task(std::move(deps),std::move(f).toTask(),par(std::move(deps),std::move(rest)...).toTask(),true);
 	}
 
 	template<typename F, typename ... R>
-	unreleased_treeture<void> parallel(unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
-		return parallel(after(), std::move(f),std::move(rest)...);
+	unreleased_treeture<void> par(unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
+		return par(after(), std::move(f),std::move(rest)...);
 	}
 
 

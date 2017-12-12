@@ -124,7 +124,7 @@ namespace reference {
 
 			treeture<void> t = spawn<false>(
 				[&]{ x++; },
-				[&]{ return parallel(
+				[&]{ return par(
 						spawn<false>([&]{ y++; }),
 						spawn<false>([&]{ z++; })
 					);
@@ -190,7 +190,7 @@ namespace reference {
 					for(int i=begin; i<end; i++) body(i);
 				},
 				[=]() {
-					return parallel(
+					return par(
 							forEach(begin,mid,body),
 							forEach(mid,end,body)
 					);
@@ -265,7 +265,7 @@ namespace reference {
 					for(int i=begin; i<end; i++) body(i);
 				},
 				[=]() {
-					return sequential(
+					return seq(
 							forEachAfter(begin,mid,body),
 							forEachAfter(mid,end,body)
 					);

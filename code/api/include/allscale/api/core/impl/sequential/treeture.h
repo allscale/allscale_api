@@ -277,36 +277,36 @@ namespace sequential {
 	}
 
 
-	inline auto sequential() {
+	inline auto seq() {
 		return done();
 	}
 
 	template<typename F, typename FA, typename ... R, typename ... RA>
-	auto sequential(dependencies&&, lazy_unreleased_treeture<F,FA>&& f, lazy_unreleased_treeture<R,RA>&& ... rest) {
+	auto seq(dependencies&&, lazy_unreleased_treeture<F,FA>&& f, lazy_unreleased_treeture<R,RA>&& ... rest) {
 		return make_lazy_unreleased_treeture([f,rest...]() mutable {
 			return make_unreleased_treeture([f,rest...]() mutable {
 				return make_treeture([f,rest...]() mutable {
 					f.get();
-					sequential(std::move(rest)...).get();
+					seq(std::move(rest)...).get();
 				});
 			});
 		});
 	}
 
 	template<typename F, typename FA, typename ... R, typename ... RA>
-	auto sequential(lazy_unreleased_treeture<F,FA>&& f, lazy_unreleased_treeture<R,RA>&& ... rest) {
-		return sequential(after(), std::move(f),std::move(rest)...);
+	auto seq(lazy_unreleased_treeture<F,FA>&& f, lazy_unreleased_treeture<R,RA>&& ... rest) {
+		return seq(after(), std::move(f),std::move(rest)...);
 	}
 
 	template<typename ... T, typename ... TA>
-	auto parallel(dependencies&&, lazy_unreleased_treeture<T,TA>&& ... tasks) {
+	auto par(dependencies&&, lazy_unreleased_treeture<T,TA>&& ... tasks) {
 		// for the sequential implementation, parallel is the same as sequential
-		return sequential(std::move(tasks)...);
+		return seq(std::move(tasks)...);
 	}
 
 	template<typename ... T, typename ... TA>
-	auto parallel(lazy_unreleased_treeture<T,TA>&& ... tasks) {
-		return parallel(after(), std::move(tasks)...);
+	auto par(lazy_unreleased_treeture<T,TA>&& ... tasks) {
+		return par(after(), std::move(tasks)...);
 	}
 
 

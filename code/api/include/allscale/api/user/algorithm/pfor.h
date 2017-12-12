@@ -1111,7 +1111,7 @@ namespace algorithm {
 					auto& left = fragments.left;
 					auto& right = fragments.right;
 					auto dep = rg.dependencies.split(left,right);
-					return parallel(
+					return core::parallel(
 						nested(dep.left.toCoreDependencies(), RecArgs{rg.depth+1, left, dep.left} ),
 						nested(dep.right.toCoreDependencies(), RecArgs{rg.depth+1, right,dep.right})
 					);
@@ -1146,7 +1146,7 @@ namespace algorithm {
 				[](const RecArgs& r, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
 					auto fragments = r.range.split(r.depth);
-					return parallel(
+					return core::parallel(
 						nested(RecArgs{r.depth+1,fragments.left}),
 						nested(RecArgs{r.depth+1,fragments.right})
 					);
@@ -1650,7 +1650,7 @@ namespace algorithm {
 					auto& left = fragments.left;
 					auto& right = fragments.right;
 					auto dep = rg.dependencies.split(left,right);
-					return parallel(
+					return core::parallel(
 						nested(dep.left.toCoreDependencies(), RecArgs{rg.depth+1,left, dep.left} ),
 						nested(dep.right.toCoreDependencies(), RecArgs{rg.depth+1,right,dep.right})
 					);
@@ -1690,7 +1690,7 @@ namespace algorithm {
 					auto fragments = r.range.split(r.depth);
 					auto& left = fragments.left;
 					auto& right = fragments.right;
-					return parallel(
+					return core::parallel(
 						nested(RecArgs{ r.depth+1, left }),
 						nested(RecArgs{ r.depth+1, right })
 					);
@@ -1739,7 +1739,7 @@ namespace algorithm {
 					auto& left = fragments.left;
 					auto& right = fragments.right;
 					auto dep = rg.dependencies.split(left,right);
-					return parallel(
+					return core::parallel(
 						nested(dep.left.toCoreDependencies(), RecArgs{rg.depth+1, left, dep.left} ),
 						nested(dep.right.toCoreDependencies(), RecArgs{rg.depth+1, right,dep.right})
 					);
