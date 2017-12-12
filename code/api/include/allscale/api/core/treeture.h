@@ -123,6 +123,20 @@ namespace core {
 
 	};
 
+	// --- utility to identify dependencies ---
+
+	template<typename T>
+	struct is_dependency : public std::false_type {};
+
+	template<>
+	struct is_dependency<no_dependencies> : public std::true_type {};
+
+	template<>
+	struct is_dependency<impl::sequential::dependencies> : public std::true_type {};
+
+	template<typename S>
+	struct is_dependency<impl::reference::dependencies<S>> : public std::true_type {};
+
 
 	// -- no dependencies --
 
@@ -357,7 +371,7 @@ namespace core {
 
 	// -- sequential --
 
-	template<typename D, typename A, typename B>
+	template<typename D, typename A, typename B, typename std::enable_if<is_dependency<D>::value,int>::type ... >
 	auto sequential(D&& deps, A&& a, B&& b) {
 		detail::implementation<A,B> impl;
 		return impl.sequential(std::move(deps),impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)));
@@ -369,10 +383,15 @@ namespace core {
 		return impl.sequential(impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)));
 	}
 
+	template<typename A, typename B, typename ... Rest>
+	auto sequential(A&& a, B&& b, Rest&& ... rest) {
+		return sequential(sequential(std::move(a),std::move(b)),std::move(rest)...);
+	}
+
 
 	// -- parallel --
 
-	template<typename D, typename A, typename B>
+	template<typename D, typename A, typename B, typename std::enable_if<is_dependency<D>::value,int>::type ... >
 	auto parallel(D&& deps, A&& a, B&& b) {
 		detail::implementation<A,B> impl;
 		return impl.parallel(std::move(deps),impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)));
@@ -384,6 +403,10 @@ namespace core {
 		return impl.parallel(impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)));
 	}
 
+	template<typename A, typename B, typename ... Rest>
+	auto parallel(A&& a, B&& b, Rest&& ... rest) {
+		return parallel(parallel(std::move(a),std::move(b)),std::move(rest)...);
+	}
 
 	// --- aggregation ---
 
