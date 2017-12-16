@@ -2375,12 +2375,13 @@ namespace reference {
 
 			unsigned id;
 
-			std::minstd_rand randGenerator;			
+			// the list of workers to attempt to steel from, in order
+			std::vector<Worker*> stealingOrder;
 
 		public:
 
 			Worker(WorkerPool& pool, unsigned id)
-				: pool(pool), alive(true), id(id), randGenerator(id) { }
+				: pool(pool), alive(true), id(id) { }
 
 			Worker(const Worker&) = delete;
 			Worker(Worker&&) = delete;
@@ -2519,6 +2520,10 @@ namespace reference {
 				return *workers[i];
 			}
 
+			const std::vector<Worker*>& getWorkers() const {
+				return workers;
+			}
+
 			Worker& getWorker() {
 				return getWorker(0);
 			}
@@ -2557,6 +2562,22 @@ namespace reference {
 
 			// fix worker ID
 			setCurrentWorkerID(id);
+
+			// copy worker list
+			auto allWorkers = pool.getWorkers();
+
+			// a utility to add new steel targets
+			auto addStealTarget = [&](std::size_t idx) {
+				if (idx == id) return;
+				stealingOrder.push_back(allWorkers[idx]);
+			};
+
+			// create list of workers to steel from
+			auto numWorkers = allWorkers.size();
+			for(std::size_t d=1; d<numWorkers; ++d) {
+				addStealTarget((id + d) % numWorkers);
+				addStealTarget((id - d + numWorkers) % numWorkers);
+			}
 
 			// log creation of worker event
 			logProfilerEvent(ProfileLogEntry::createWorkerCreatedEntry());
@@ -2800,36 +2821,34 @@ namespace reference {
 				return true;
 			}
 
-			// check that there are other workers
-			auto numWorker = pool.getNumWorkers();
-			if (numWorker <= 1) return false;
+			// look through potential targets to steel a task
+			for(const auto& cur : stealingOrder) {
 
-			// otherwise, steal a task from another worker
-			Worker& other = pool.getWorker(randGenerator() % numWorker);
-			if (this == &other) {
-				return schedule_step();
-			}
+				// otherwise, steal a task from another worker
+				Worker& other = *cur;
 
-			// try to steal a task from another queue
-			if (TaskBase* t = other.queue.try_pop_back()) {
+				// try to steal a task from another queue
+				if (TaskBase* t = other.queue.try_pop_back()) {
 
-				// the task should not have a substitute
-				assert_false(t->isSubstituted());
+					// the task should not have a substitute
+					assert_false(t->isSubstituted());
 
-				// log creation of worker event
-				logProfilerEvent(ProfileLogEntry::createTaskStolenEntry(t->getId()));
+					// log creation of worker event
+					logProfilerEvent(ProfileLogEntry::createTaskStolenEntry(t->getId()));
 
-				LOG_SCHEDULE( "Stolen task: " << t );
+					LOG_SCHEDULE( "Stolen task: " << t );
 
-				// split task the task (since there is not enough work in the queue)
-				if (splitTask(*t)) return true;
+					// split task the task (since there is not enough work in the queue)
+					if (splitTask(*t)) return true;
 
-				// the task should not have a substitute
-				assert_false(t->isSubstituted());
+					// the task should not have a substitute
+					assert_false(t->isSubstituted());
 
-				// process task
-				runTask(*t);
-				return true;	// successfully completed a task
+					// process task
+					runTask(*t);
+					return true;	// successfully completed a task
+				}
+
 			}
 
 			// no task found => wait a moment
