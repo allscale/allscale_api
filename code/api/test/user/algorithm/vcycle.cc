@@ -66,9 +66,9 @@ namespace algorithm {
 
 		// set up ops buffer
 		std::vector<std::string> buffer;
-		vcycle.getStageBody<0>().ops = &buffer;
-		vcycle.getStageBody<1>().ops = &buffer;
-		vcycle.getStageBody<2>().ops = &buffer;
+		vcycle.forEachStage([&](unsigned, auto& body){
+			body.ops = &buffer;
+		});
 
 		// run the cycle
 		vcycle.run(2);
@@ -313,6 +313,58 @@ namespace algorithm {
 
 		// run the diffusion simulation
 		vcycle.run(T);
+	}
+
+	template<
+		typename Mesh,
+		unsigned Level
+	>
+	struct TestValueStage {
+		int value;
+
+		TestValueStage(const Mesh&) : value(42) {}
+
+		void computeFineToCoarse() {}
+
+		void computeCoarseToFine() {}
+
+		void restrictFrom(const TestValueStage<Mesh,Level-1>&) {}
+
+		void prolongateTo(TestValueStage<Mesh,Level-1>&) {}
+
+	};
+
+	TEST(VCycle,ForEachStage) {
+
+		const int N = 10;
+
+		using vcycle_type = VCycle<
+				TestValueStage,
+				BarMesh<5,10>
+			>;
+
+		// create a sample bar, 5 layers
+		auto bar = createBarMesh<5,10>(N);
+
+		// create vcycle instance
+		vcycle_type vcycle(bar);
+
+		// check if value was initialized correctly
+		vcycle.forEachStage([&](unsigned level, auto& body){
+			EXPECT_EQ(body.value, 42);
+			body.value = level;
+		});
+
+
+		int i = 0;
+		const_cast<const vcycle_type&>(vcycle).forEachStage([&](unsigned level, auto& body){
+			i++;
+			EXPECT_EQ(body.value, level);
+		});
+
+		EXPECT_EQ(i, 5);
+
+
 	}
 
 } // end namespace algorithm

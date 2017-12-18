@@ -130,6 +130,18 @@ namespace algorithm {
 				return nested.template getStageBody<Lvl>();
 			}
 
+			template<typename Op>
+			void forEachStage(const Op& op) {
+				op(Level, this->body);
+				nested.template forEachStage(op);
+			}
+
+			template<typename Op>
+			void forEachStage(const Op& op) const {
+				op(Level, this->body);
+				nested.template forEachStage(op);
+			}
+
 		};
 
 
@@ -187,6 +199,16 @@ namespace algorithm {
 				return body;
 			}
 
+			template<typename Op>
+			void forEachStage(const Op& op) {
+				op(0, this->body);
+			}
+
+			template<typename Op>
+			void forEachStage(const Op& op) const {
+				op(0, this->body);
+			}
+
 		};
 
 
@@ -230,6 +252,17 @@ namespace algorithm {
 		StageBody<Mesh,Level>& getStageBody() {
 			return topStage.template getStageBody<Level>();
 		}
+
+		template<typename Op>
+		void forEachStage(const Op& op) {
+			topStage.template forEachStage(op);
+		}
+
+		template<typename Op>
+		void forEachStage(const Op& op) const {
+			topStage.template forEachStage(op);
+		}
+
 	};
 
 
