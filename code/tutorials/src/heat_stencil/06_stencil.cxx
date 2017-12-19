@@ -11,13 +11,13 @@ using namespace allscale::api::user::algorithm;
 
 int main() {
 
-	const std::size_t N = 200;
+	const int N = 200;
 	const int T = 100;
 
 	const double k = 0.001;
 
 	using Grid = data::StaticGrid<double,N,N>;
-	using Point = allscale::utils::Vector<std::size_t,2>;
+	using Point = Grid::coordinate_type;
 
 	Grid temp;
 

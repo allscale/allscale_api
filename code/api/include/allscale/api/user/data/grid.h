@@ -605,6 +605,9 @@ namespace data {
 
 		size_type size;
 
+        GridSharedData()
+        {}
+
 		GridSharedData(const size_type& size)
 			: size(size) {}
 
@@ -845,6 +848,7 @@ namespace data {
 		 * Provides read/write access to one of the values stored within this grid.
 		 */
 		T& operator[](const coordinate_type& index) {
+			allscale_check_bounds(index, (*this));
 			return data_item_element_access(*this, region_type::single(index), (*base)[index]);
 		}
 
@@ -852,6 +856,7 @@ namespace data {
 		 * Provides read access to one of the values stored within this grid.
 		 */
 		const T& operator[](const coordinate_type& index) const {
+			allscale_check_bounds(index, (*this));
 			return data_item_element_access(*this, region_type::single(index), (*base)[index]);
 		}
 

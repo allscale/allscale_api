@@ -147,8 +147,11 @@ namespace core {
 	template<typename F>
 	struct is_facade<F,typename std::enable_if<
 
-			// facade need to be constructible for a given region
-			std::is_same<decltype(F(std::declval<const typename F::region_type&>())),F>::value &&
+			// facade must not be copy-constructible
+			!std::is_copy_constructible<F>::value &&
+
+			// nor copy-assignable
+			!std::is_copy_assignable<F>::value &&
 
 			// fragments need to be destructible
 			std::is_destructible<F>::value,
@@ -167,6 +170,7 @@ namespace core {
 	template<typename D>
 	struct is_data_item<D,typename std::enable_if<
 			std::is_same<D,typename D::facade_type>::value &&
+			is_facade<D>::value &&
 			is_fragment<typename D::fragment_type>::value &&
 			is_shared_data<typename D::shared_data_type>::value,
 		void>::type> : public std::true_type {};
@@ -186,6 +190,15 @@ namespace core {
 		using region_type = typename Fragment::region_type;
 		using facade_type = typename Fragment::facade_type;
 		using shared_data_type = typename Fragment::shared_data_type;
+
+		// define default init/copy/move support
+
+		data_item() = default;
+		data_item(data_item&&) = default;
+		data_item(const data_item&) = delete;
+
+		data_item& operator=(const data_item&) = delete;
+		data_item& operator=(data_item&&) = default;
 	};
 
 

@@ -17,6 +17,66 @@ namespace api {
 namespace user {
 namespace algorithm {
 
+	// --- scanner tests ---
+
+	TEST(Scanner,ScanOrder1D) {
+
+		auto range = detail::range<int>(0,100);
+
+		int last = -1;
+		range.forEach([&](int x){
+			EXPECT_EQ(last+1,x);
+			last = x;
+		});
+
+		EXPECT_EQ(99,last);
+	}
+
+	namespace {
+
+		template<typename T, std::size_t D>
+		utils::Vector<T,D> inc(const utils::Vector<T,D>& in, const T& limit) {
+			auto res = in;
+			for(int i = D-1; i>=0; --i) {
+				res[i]++;
+				if (res[i] < limit) return res;
+				res[i] = 0;
+			}
+			return res;
+		}
+
+	}
+
+
+	TEST(Scanner,ScanOrder2D) {
+
+		using Point = utils::Vector<int,2>;
+		auto range = detail::range<Point>(Point(0,0),Point(100,100));
+
+		Point last(0,-1);
+		range.forEach([&](Point x){
+			EXPECT_EQ(inc(last,100),x);
+			last = x;
+		});
+
+		EXPECT_EQ(Point(99,99),last);
+	}
+
+	TEST(Scanner,ScanOrder3D) {
+
+		using Point = utils::Vector<int,3>;
+		auto range = detail::range<Point>(Point(0,0,0),Point(100,100,100));
+
+		Point last(0,0,-1);
+		range.forEach([&](Point x){
+			EXPECT_EQ(inc(last,100),x);
+			last = x;
+		});
+
+		EXPECT_EQ(Point(99,99,99),last);
+	}
+
+
 	// --- basic parallel loop usage ---
 
 
@@ -892,9 +952,9 @@ namespace algorithm {
 			for(std::size_t i=0; i<Dims; ++i) {
 				auto s = p;
 				for(std::size_t j = 1; j<=width; j++) {
-					s[i] = p[i] - j;
+					s[i] = p[i] - (int)j;
 					EXPECT_PRED1(isCovered,s) << "Point " << s << " in hull of range " << range << " at depth " << depth << " not covered by " << coverage << "\n";
-					s[i] = p[i] + j;
+					s[i] = p[i] + (int)j;
 					EXPECT_PRED1(isCovered,s) << "Point " << s << " in hull of range " << range << " at depth " << depth << " not covered by " << coverage << "\n";
 				}
 			}

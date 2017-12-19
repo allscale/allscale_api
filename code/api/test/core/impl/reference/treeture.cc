@@ -66,7 +66,7 @@ namespace reference {
 		int x = 3;
 
 		// build a not-yet started sequential tasks
-		auto ls = sequential(
+		auto ls = seq(
 				spawn<false>([&]{ x++; }),
 				spawn<false>([&]{ x*=2; }),
 				spawn<false>([&]{ x-=1; x*=2; })
@@ -93,7 +93,7 @@ namespace reference {
 		int z = 5;
 
 		// build a not-yet started sequential tasks
-		auto ls = parallel(
+		auto ls = par(
 				spawn<false>([&]{ EXPECT_EQ(3,x); x++; }),
 				spawn<false>([&]{ EXPECT_EQ(4,y); y++; }),
 				spawn<false>([&]{ EXPECT_EQ(5,z); z++; })

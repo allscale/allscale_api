@@ -544,6 +544,131 @@ namespace core {
 
 	}
 
+	// test support for sequential
+
+	TEST(Treeture, Sequential) {
+
+		int x = 0;
+
+		auto op2 = prec(
+				[](int p) { return p < 10; },
+				[&](int p) {
+					EXPECT_EQ(p,x);
+					x++;
+				},
+				[](int, auto& rec) {
+					return sequential(
+						rec(0), rec(1)
+					);
+				}
+		);
+
+		EXPECT_EQ(0,x);
+		op2(10).get();
+		EXPECT_EQ(2,x);
+
+		x = 0;
+
+		auto op3 = prec(
+				[](int p) { return p < 10; },
+				[&](int p) {
+					EXPECT_EQ(p,x);
+					x++;
+				},
+				[](int, auto& rec) {
+					return sequential(
+						rec(0), rec(1), rec(2)
+					);
+				}
+		);
+
+		EXPECT_EQ(0,x);
+		op3(10).get();
+		EXPECT_EQ(3,x);
+
+		x = 0;
+
+		auto op4 = prec(
+				[](int p) { return p < 10; },
+				[&](int p) {
+					EXPECT_EQ(p,x);
+					x++;
+				},
+				[](int, auto& rec) {
+					return sequential(
+						rec(0), rec(1), rec(2), rec(3)
+					);
+				}
+		);
+
+		EXPECT_EQ(0,x);
+		op4(10).get();
+		EXPECT_EQ(4,x);
+
+	}
+
+
+	TEST(Treeture, Parallel) {
+
+		std::atomic<int> x;
+
+		x = 0;
+
+		auto op2 = prec(
+				[](int p) { return p < 10; },
+				[&](int) {
+					x++;
+				},
+				[](int, auto& rec) {
+					return parallel(
+						rec(0), rec(1)
+					);
+				}
+		);
+
+		EXPECT_EQ(0,x);
+		op2(10).get();
+		EXPECT_EQ(2,x);
+
+		x = 0;
+
+		auto op3 = prec(
+				[](int p) { return p < 10; },
+				[&](int) {
+					x++;
+				},
+				[](int, auto& rec) {
+					return parallel(
+						rec(0), rec(1), rec(2)
+					);
+				}
+		);
+
+		EXPECT_EQ(0,x);
+		op3(10).get();
+		EXPECT_EQ(3,x);
+
+		x = 0;
+
+		auto op4 = prec(
+				[](int p) { return p < 10; },
+				[&](int) {
+					x++;
+				},
+				[](int, auto& rec) {
+					return parallel(
+						rec(0), rec(1), rec(2), rec(3)
+					);
+				}
+		);
+
+		EXPECT_EQ(0,x);
+		op4(10).get();
+		EXPECT_EQ(4,x);
+
+	}
+
+
 
 	int fib(int x) {
 		return prec(

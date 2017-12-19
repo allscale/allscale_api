@@ -52,11 +52,13 @@ namespace utils {
 
 		template<std::size_t D>
 		Cell& operator[](const utils::Vector<int64_t,D>& addr) {
+			allscale_check_bounds((size_t)addr[D - sizeof...(rest)-1], data);
 			return data[addr[D-sizeof...(rest)-1]][addr];
 		}
 
 		template<std::size_t D>
 		const Cell& operator[](const utils::Vector<int64_t,D>& addr) const {
+			allscale_check_bounds((size_t)addr[D - sizeof...(rest)-1], data);
 			return data[addr[D-sizeof...(rest)-1]][addr];
 		}
 

@@ -1062,15 +1062,15 @@ namespace data {
 
 	TEST(Grid2D, PforEach) {
 
-		const std::size_t N = 10;
-		const std::size_t M = 20;
+		const int N = 10;
+		const int M = 20;
 
 		Grid<double,2> grid({ N,M });
 
 		grid.pforEach([](double& element) { element = 3.5; });
 
-		for(std::size_t i = 0; i < N; ++i) {
-			for(std::size_t j = 0; j < M; ++j) {
+		for(int i = 0; i < N; ++i) {
+			for(int j = 0; j < M; ++j) {
 				EXPECT_EQ(3.5, (grid[{i, j}]));
 			}
 		}

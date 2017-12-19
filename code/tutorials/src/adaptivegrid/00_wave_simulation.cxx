@@ -31,8 +31,8 @@ struct update_config {
 template<typename config>
 void step(Grid& up, const Grid& u, const Grid& um, double dt, const Delta delta) {
     pfor({0, 0}, up.size(), [&](const auto& pos) {
-        int i = pos[0];
-        int j = pos[1];
+        int i = (int)pos[0];
+        int j = (int)pos[1];
         //set variables to handle border values
         int im1 = i + (i == 0 ? 0 : -1);
         int ip1 = i + (i == up.size()[0] - 1 ? 0 : 1);
@@ -64,10 +64,8 @@ void update(Grid& up, const Grid& u, const Grid& um, double dt, const Delta delt
 void setupWave(Grid& u, const Point& center, double amp, const Sigma s) {
     // update u to model a bell-shaped surface wave
     algorithm::pfor({0, 0}, u.size(), [&](const auto& pos) {
-        int i = pos[0];
-        int j = pos[1];
-        double diffx = j - center.x;
-        double diffy = i - center.y;
+        double diffx = (double)(pos[0] - center.x);
+        double diffy = (double)(pos[1] - center.y);
         u[pos] = amp * exp(- (diffx * diffx / (2 * s.x * s.x) + diffy * diffy / (2 * s.y * s.y)));
     });
 }
@@ -90,7 +88,7 @@ void plot(const Grid& u) {
 
     // scale the plot down to may 51 x 51
     auto size = u.size();
-    int scale = std::max({size.x/51,size.y/51,1L});
+    int scale = std::max({(int)(size.x/51),(int)(size.y/51),1});
 
     double sum = 0;
     for(int i=0; i<size.x;i+=scale) {

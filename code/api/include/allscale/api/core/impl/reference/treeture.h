@@ -1195,7 +1195,7 @@ namespace reference {
 		virtual void aggregate() =0;
 
 		void setSplitable(bool value = true) {
-			splitable = value;
+			splitable = value && getDepth() < 60;
 		}
 
 		void setSubstitute(TaskBase* newSub) {
@@ -2236,63 +2236,63 @@ namespace reference {
 	}
 
 	template<typename Deps>
-	unreleased_treeture<void> sequential(Deps&& deps) {
+	unreleased_treeture<void> seq(Deps&& deps) {
 		return done(std::move(deps));
 	}
 
-	inline unreleased_treeture<void> sequential() {
+	inline unreleased_treeture<void> seq() {
 		return done();
 	}
 
 	template<typename DepsKind, typename A, typename B>
-	unreleased_treeture<void> sequential(dependencies<DepsKind>&& deps, unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
+	unreleased_treeture<void> seq(dependencies<DepsKind>&& deps, unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
 		return make_split_task(std::move(deps),std::move(a).toTask(),std::move(b).toTask(),false);
 	}
 
 	template<typename A, typename B>
-	unreleased_treeture<void> sequential(unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
-		return sequential(after(),std::move(a),std::move(b));
+	unreleased_treeture<void> seq(unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
+		return seq(after(),std::move(a),std::move(b));
 	}
 
 	template<typename DepsKind, typename F, typename ... R>
-	unreleased_treeture<void> sequential(dependencies<DepsKind>&& deps, unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
+	unreleased_treeture<void> seq(dependencies<DepsKind>&& deps, unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
 		// TODO: conduct a binary split to create a balanced tree
-		return make_split_task(std::move(deps),std::move(f).toTask(),sequential(std::move(rest)...).toTask(),false);
+		return make_split_task(std::move(deps),std::move(f).toTask(),seq(std::move(rest)...).toTask(),false);
 	}
 
 	template<typename F, typename ... R>
-	unreleased_treeture<void> sequential(unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
-		return sequential(after(), std::move(f),std::move(rest)...);
+	unreleased_treeture<void> seq(unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
+		return seq(after(), std::move(f),std::move(rest)...);
 	}
 
 	template<typename Deps>
-	unreleased_treeture<void> parallel(Deps&& deps) {
+	unreleased_treeture<void> par(Deps&& deps) {
 		return done(std::move(deps));
 	}
 
-	inline unreleased_treeture<void> parallel() {
+	inline unreleased_treeture<void> par() {
 		return done();
 	}
 
 	template<typename DepsKind, typename A, typename B>
-	unreleased_treeture<void> parallel(dependencies<DepsKind>&& deps, unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
+	unreleased_treeture<void> par(dependencies<DepsKind>&& deps, unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
 		return make_split_task(std::move(deps),std::move(a).toTask(),std::move(b).toTask(),true);
 	}
 
 	template<typename A, typename B>
-	unreleased_treeture<void> parallel(unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
-		return parallel(after(),std::move(a),std::move(b));
+	unreleased_treeture<void> par(unreleased_treeture<A>&& a, unreleased_treeture<B>&& b) {
+		return par(after(),std::move(a),std::move(b));
 	}
 
 	template<typename DepsKind, typename F, typename ... R>
-	unreleased_treeture<void> parallel(dependencies<DepsKind>&& deps, unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
+	unreleased_treeture<void> par(dependencies<DepsKind>&& deps, unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
 		// TODO: conduct a binary split to create a balanced tree
-		return make_split_task(std::move(deps),std::move(f).toTask(),parallel(std::move(deps),std::move(rest)...).toTask(),true);
+		return make_split_task(std::move(deps),std::move(f).toTask(),par(std::move(deps),std::move(rest)...).toTask(),true);
 	}
 
 	template<typename F, typename ... R>
-	unreleased_treeture<void> parallel(unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
-		return parallel(after(), std::move(f),std::move(rest)...);
+	unreleased_treeture<void> par(unreleased_treeture<F>&& f, unreleased_treeture<R>&& ... rest) {
+		return par(after(), std::move(f),std::move(rest)...);
 	}
 
 
@@ -2375,12 +2375,13 @@ namespace reference {
 
 			unsigned id;
 
-			std::minstd_rand randGenerator;			
+			// the list of workers to attempt to steel from, in order
+			std::vector<Worker*> stealingOrder;
 
 		public:
 
 			Worker(WorkerPool& pool, unsigned id)
-				: pool(pool), alive(true), id(id), randGenerator(id) { }
+				: pool(pool), alive(true), id(id) { }
 
 			Worker(const Worker&) = delete;
 			Worker(Worker&&) = delete;
@@ -2519,6 +2520,10 @@ namespace reference {
 				return *workers[i];
 			}
 
+			const std::vector<Worker*>& getWorkers() const {
+				return workers;
+			}
+
 			Worker& getWorker() {
 				return getWorker(0);
 			}
@@ -2557,6 +2562,22 @@ namespace reference {
 
 			// fix worker ID
 			setCurrentWorkerID(id);
+
+			// copy worker list
+			auto allWorkers = pool.getWorkers();
+
+			// a utility to add new steel targets
+			auto addStealTarget = [&](std::size_t idx) {
+				if (idx == id) return;
+				stealingOrder.push_back(allWorkers[idx]);
+			};
+
+			// create list of workers to steel from
+			auto numWorkers = allWorkers.size();
+			for(std::size_t d=1; d<numWorkers; ++d) {
+				addStealTarget((id + d) % numWorkers);
+				addStealTarget((id - d + numWorkers) % numWorkers);
+			}
 
 			// log creation of worker event
 			logProfilerEvent(ProfileLogEntry::createWorkerCreatedEntry());
@@ -2800,36 +2821,34 @@ namespace reference {
 				return true;
 			}
 
-			// check that there are other workers
-			auto numWorker = pool.getNumWorkers();
-			if (numWorker <= 1) return false;
+			// look through potential targets to steel a task
+			for(const auto& cur : stealingOrder) {
 
-			// otherwise, steal a task from another worker
-			Worker& other = pool.getWorker(randGenerator() % numWorker);
-			if (this == &other) {
-				return schedule_step();
-			}
+				// otherwise, steal a task from another worker
+				Worker& other = *cur;
 
-			// try to steal a task from another queue
-			if (TaskBase* t = other.queue.try_pop_back()) {
+				// try to steal a task from another queue
+				if (TaskBase* t = other.queue.try_pop_back()) {
 
-				// the task should not have a substitute
-				assert_false(t->isSubstituted());
+					// the task should not have a substitute
+					assert_false(t->isSubstituted());
 
-				// log creation of worker event
-				logProfilerEvent(ProfileLogEntry::createTaskStolenEntry(t->getId()));
+					// log creation of worker event
+					logProfilerEvent(ProfileLogEntry::createTaskStolenEntry(t->getId()));
 
-				LOG_SCHEDULE( "Stolen task: " << t );
+					LOG_SCHEDULE( "Stolen task: " << t );
 
-				// split task the task (since there is not enough work in the queue)
-				if (splitTask(*t)) return true;
+					// split task the task (since there is not enough work in the queue)
+					if (splitTask(*t)) return true;
 
-				// the task should not have a substitute
-				assert_false(t->isSubstituted());
+					// the task should not have a substitute
+					assert_false(t->isSubstituted());
 
-				// process task
-				runTask(*t);
-				return true;	// successfully completed a task
+					// process task
+					runTask(*t);
+					return true;	// successfully completed a task
+				}
+
 			}
 
 			// no task found => wait a moment

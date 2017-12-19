@@ -26,16 +26,17 @@ Simply execute the following commands to build the project and run all tests.
 
 Following options can be supplied to CMake
 
-| Option              | Values          |
-| ------------------- | --------------- |
-| -DCMAKE_BUILD_TYPE  | Release / Debug |
-| -DBUILD_SHARED_LIBS | ON / OFF        |
-| -DBUILD_TESTS       | ON / OFF        |
-| -DBUILD_DOCS        | ON / OFF        |
-| -DBUILD_COVERAGE    | ON / OFF        |
-| -DUSE_ASSERT        | ON / OFF        |
-| -DUSE_VALGRIND      | ON / OFF        |
-| -DENABLE_PROFILING  | ON / OFF        |
+| Option                  | Values          |
+| ----------------------- | --------------- |
+| -DCMAKE_BUILD_TYPE      | Release / Debug |
+| -DBUILD_SHARED_LIBS     | ON / OFF        |
+| -DBUILD_TESTS           | ON / OFF        |
+| -DBUILD_DOCS            | ON / OFF        |
+| -DBUILD_COVERAGE        | ON / OFF        |
+| -DUSE_ASSERT            | ON / OFF        |
+| -DALLSCALE_CHECK_BOUNDS | ON / OFF        |
+| -DUSE_VALGRIND          | ON / OFF        |
+| -DENABLE_PROFILING      | ON / OFF        |
 
 The files `cmake/build_settings.cmake` and `code/CMakeLists.txt` state their
 default value.

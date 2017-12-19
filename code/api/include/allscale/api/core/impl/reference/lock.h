@@ -3,10 +3,12 @@
 #include <atomic>
 #include <thread>
 
-#ifdef _MSC_VER
+#if defined _MSC_VER
 // required for YieldProcessor macro
 #define NOMINMAX
 #include "windows.h"
+//#elif defined (__ppc64__) || defined (_ARCH_PPC64)
+
 #endif
 
 namespace allscale {
@@ -16,11 +18,16 @@ inline namespace simple {
 
 	/* Pause instruction to prevent excess processor bus usage */
 	
-	#ifdef _MSC_VER
-		#define cpu_relax() YieldProcessor()
-	#else
-		#define cpu_relax() __builtin_ia32_pause()
-	#endif
+#ifdef _MSC_VER
+#define cpu_relax() YieldProcessor()
+#elif defined (__ppc64__) || defined (_ARCH_PPC64)
+#define __barrier() __asm__ volatile("": : :"memory")
+#define __HMT_low() __asm__ volatile("or 1,1,1     # low priority")
+#define __HMT_medium() __asm__ volatile("or 2,2,2     # medium priority")
+#define cpu_relax() do { __HMT_low(); __HMT_medium(); __barrier(); } while (0)
+#else
+#define cpu_relax() __builtin_ia32_pause()
+#endif
 
 	class Waiter {
 		int i;

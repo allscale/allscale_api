@@ -17,7 +17,7 @@ int main() {
 	const double k = 0.001;
 
 	using Grid = data::StaticGrid<double,N,N>;
-	using Point = allscale::utils::Vector<int,2>;
+	using Point = Grid::coordinate_type;
 
 	Grid bufferA;
 	Grid bufferB;
@@ -40,8 +40,8 @@ int main() {
 	for(int t=0; t<T; t++) {
 
 		ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,k](const Point& p){
-			int i = p.x;
-			int j = p.y;
+			auto i = p.x;
+			auto j = p.y;
 			(*B)[{i,j}] = (*A)[{i,j}] + k * (
 					 (*A)[{i-1,j}] +
 					 (*A)[{i+1,j}] +

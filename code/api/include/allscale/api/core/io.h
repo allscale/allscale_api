@@ -73,7 +73,7 @@ namespace core {
 	/**
 	 * A converter between this interface and the reference implementation
 	 */
-	impl::reference::Mode toRefMode(Mode mode) {
+	inline impl::reference::Mode toRefMode(Mode mode) {
 		switch(mode) {
 		case Mode::Text: 	return impl::reference::Mode::Text;
 		case Mode::Binary: 	return impl::reference::Mode::Binary;

@@ -2,7 +2,7 @@ language: c++
 
 # options common to all linux builds (ignored by osx)
 dist: trusty
-sudo: false
+sudo: required
     
 matrix:
   include:
@@ -17,13 +17,13 @@ matrix:
         apt:
           sources: ubuntu-toolchain-r-test
           packages: g++-5
-#    - os: linux
-#      compiler: gcc
-#      env: BUILD_TYPE=Debug CXX_EVAL="g++-6" CC_EVAL="gcc-6"
-#      addons:
-#        apt:
-#          sources: ubuntu-toolchain-r-test
-#          packages: g++-6
+    - os: linux
+      compiler: gcc
+      env: BUILD_TYPE=Debug CXX_EVAL="g++-6" CC_EVAL="gcc-6"
+      addons:
+        apt:
+          sources: ubuntu-toolchain-r-test
+          packages: g++-6
     - os: linux
       compiler: gcc
       env: BUILD_TYPE=Debug CXX_EVAL="g++-7" CC_EVAL="gcc-7"
@@ -64,19 +64,15 @@ matrix:
           packages: [ clang-5.0, g++-5 ]
     # ------------- OS X ------------- #
     - os: osx
-      osx_image: xcode8
+      osx_image: xcode8.3
       compiler: clang
       env: BUILD_TYPE=Debug
     - os: osx
-      osx_image: xcode8.1
+      osx_image: xcode9
       compiler: clang
-      # bug, xcode8.1 is missing cmake, https://github.com/travis-ci/travis-ci/issues/6258
-      before_install:
-        - brew update
-        - brew install cmake
       env: BUILD_TYPE=Debug
     - os: osx
-      osx_image: xcode8.2
+      osx_image: xcode9.1
       compiler: clang
       env: BUILD_TYPE=Debug
     ####################################
@@ -137,19 +133,15 @@ matrix:
           packages: [ clang-5.0, g++-5 ]
     # ------------- OS X ------------- #
     - os: osx
-      osx_image: xcode8
+      osx_image: xcode8.3
       compiler: clang
       env: BUILD_TYPE=Release
     - os: osx
-      osx_image: xcode8.1
+      osx_image: xcode9
       compiler: clang
-      # bug, xcode8.1 is missing cmake, https://github.com/travis-ci/travis-ci/issues/6258
-      before_install:
-        - brew update
-        - brew install cmake
       env: BUILD_TYPE=Release
     - os: osx
-      osx_image: xcode8.2
+      osx_image: xcode9.1
       compiler: clang
       env: BUILD_TYPE=Release
 

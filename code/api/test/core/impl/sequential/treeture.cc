@@ -40,7 +40,7 @@ namespace sequential {
 		int x = 3;
 
 		// build a not-yet started sequential tasks
-		auto ls = sequential(
+		auto ls = seq(
 				spawn([&]{ x++; }),
 				spawn([&]{ x*=2; }),
 				spawn([&]{ x-=1; x*=2; })
