@@ -133,13 +133,13 @@ namespace algorithm {
 			template<typename Op>
 			void forEachStage(const Op& op) {
 				op(Level, this->body);
-				nested.template forEachStage(op);
+				nested.forEachStage(op);
 			}
 
 			template<typename Op>
 			void forEachStage(const Op& op) const {
 				op(Level, this->body);
-				nested.template forEachStage(op);
+				nested.forEachStage(op);
 			}
 
 		};
@@ -255,12 +255,12 @@ namespace algorithm {
 
 		template<typename Op>
 		void forEachStage(const Op& op) {
-			topStage.template forEachStage(op);
+			topStage.forEachStage(op);
 		}
 
 		template<typename Op>
 		void forEachStage(const Op& op) const {
-			topStage.template forEachStage(op);
+			topStage.forEachStage(op);
 		}
 
 	};
