@@ -285,6 +285,7 @@ namespace reference {
 	template<std::size_t max_depth>
 	class TaskDependencyManager {
 
+		// dependencies are stored in a linked list
 		struct Entry {
 			TaskBase* task;
 			Entry* next;
@@ -297,7 +298,7 @@ namespace reference {
 		// an epoch counter to facilitate re-use
 		std::atomic<std::size_t> epoch;
 
-		// the container for storing task dependencies
+		// the container for storing task dependencies, pointer tagging is used to test for completeness
 		cell_type data[num_entries];
 
 	public:
@@ -353,12 +354,19 @@ namespace reference {
 	private:
 
 		std::size_t getPosition(const TaskPath& path) const {
-			std::size_t res = 1;
-			for(const auto& cur : path) {
-				res = res * 2 + cur;
-				if (res >= num_entries) return res / 2;
+
+			// get length and path
+			auto l = path.getLength();
+			auto p = path.getPath();
+
+			// limit length to max_depth
+			if (l > max_depth) {
+				p = p >> (l - max_depth);	// effective path
+				l = max_depth;				// effective depth
 			}
-			return res;
+
+			// compute result
+			return (1 << l) | p;
 		}
 
 		bool isDone(const Entry* ptr) const {
