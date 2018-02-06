@@ -208,7 +208,7 @@ namespace data {
 			return nested.getData(layer, addr);
 		}
 
-		allscale::utils::Vector<std::size_t, sizeof...(Sizes)> getLayerSize(unsigned layer) {
+		allscale::utils::Vector<std::size_t, sizeof...(Sizes)> getLayerSize(unsigned layer) const {
 			if(layer == getLayerNumber()) {
 				return data.size();
 			}
@@ -379,7 +379,7 @@ namespace data {
 			return data[addr];
 		}
 
-		allscale::utils::Vector<std::size_t, sizeof...(Sizes)> getLayerSize(unsigned layer) {
+		allscale::utils::Vector<std::size_t, sizeof...(Sizes)> getLayerSize(unsigned layer) const {
 			assert_eq(layer, 0) << "Error: trying to access layer " << layer << " --no such layer!";
 			return data.size();
 		}
@@ -483,7 +483,7 @@ namespace data {
 			return data.getData(active_layer, addr);
 		}
 
-		allscale::utils::Vector<std::size_t, Dims> getActiveLayerSize() {
+		allscale::utils::Vector<std::size_t, Dims> getActiveLayerSize() const {
 			return data.getLayerSize(active_layer);
 		}
 
