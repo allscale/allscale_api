@@ -22,6 +22,27 @@ namespace core {
 			return ref;
 		}
 
+		/**
+		 * A user-defined read requirement on a region of a data item.
+		 */
+		template<typename DataItem>
+		void needs_read_access(const DataItem& item, const typename DataItem::region_type& region) {
+			int a = 0; a = _data_item_element_access(item,region,a);
+		};
+
+		/**
+		 * A user-defined write requirement on a region of a data item.
+		 */
+		template<typename DataItem>
+		void needs_write_access(const DataItem& item, const typename DataItem::region_type& region) {
+			int a = 0; _data_item_element_access(item,region,a) = 0;
+		};
+
+		/**
+		 * Instruct compiler to ignore dependencies in the enclosing scope.
+		 */
+		inline void no_more_dependencies() {};
+
 	}
 
 	// a macro to wrap up data_item_element_access calls,
