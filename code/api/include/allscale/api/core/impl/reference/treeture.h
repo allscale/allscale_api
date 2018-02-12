@@ -2516,10 +2516,22 @@ namespace reference {
 				return (int)workers.size();
 			}
 
+		private:
+
+			mutable std::size_t initialLimit = std::numeric_limits<std::size_t>::max();
+
+		public:
+
 			std::size_t getInitialSplitDepthLimit() const {
-				auto num_workers = getNumWorkers();
-				// we go down to ~ 4 times the number of threads
-				return sizeof(num_workers) * 8 - utils::countLeadingZeros((int)num_workers-1) + 2;
+			    if (initialLimit == std::numeric_limits<std::size_t>::max()) {
+			        std::size_t i = 0;
+	                auto num_workers = getNumWorkers();
+                    while ((1<<i) < (num_workers * 2)) {
+                        i++;
+                    }
+                    initialLimit = i;
+			    }
+			    return initialLimit;
 			}
 
 			Worker& getWorker(int i) {
@@ -2621,7 +2633,7 @@ namespace reference {
 
 						// report awakening
 						logProfilerEvent(ProfileLogEntry::createWorkerResumedEntry());
-				
+
 						// reset cycles counter
 						idle_cycles = 0;
 					}
@@ -3012,5 +3024,3 @@ inline void __dumpRuntimeState() {
 	allscale::api::core::impl::reference::TaskBase::dumpAllTasks(std::cout);
 	std::cout << "\n ----------------------------------------------------------------------\n";
 }
-
-

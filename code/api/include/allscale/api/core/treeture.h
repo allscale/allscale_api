@@ -371,8 +371,8 @@ namespace core {
 
 	// -- sequential --
 
-	template<typename D, typename A, typename B>
-	auto sequential(D&& deps, A&& a, B&& b, typename std::enable_if<is_dependency<D>::value,int>::type = 1) {
+	template<typename D, typename A, typename B, typename std::enable_if<is_dependency<D>::value,int>::type = 1>
+	auto sequential(D&& deps, A&& a, B&& b) {
 		detail::implementation<A,B> impl;
 		return impl.sequential(std::move(deps),impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)));
 	}
@@ -391,8 +391,8 @@ namespace core {
 
 	// -- parallel --
 
-	template<typename D, typename A, typename B>
-	auto parallel(D&& deps, A&& a, B&& b, typename std::enable_if<is_dependency<D>::value,int>::type = 1) {
+	template<typename D, typename A, typename B, typename std::enable_if<is_dependency<D>::value,int>::type = 1>
+	auto parallel(D&& deps, A&& a, B&& b) {
 		detail::implementation<A,B> impl;
 		return impl.parallel(std::move(deps),impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)));
 	}
