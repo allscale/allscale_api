@@ -658,9 +658,9 @@ namespace data {
 		}
 
 		GridFragment(const shared_data_type& sharedData, const region_type& region = region_type())
-				: totalSize(sharedData.size), coveredRegion(region), data(area(totalSize)) {
+				: totalSize(sharedData.size), coveredRegion(region_type::intersect(totalSize,region)), data(area(totalSize)) {
 			// allocate covered data space
-			region.scanByLines([&](const point& a, const point& b) {
+			coveredRegion.scanByLines([&](const point& a, const point& b) {
 				data.allocate(flatten(a),flatten(b));
 			});
 		}
@@ -687,12 +687,15 @@ namespace data {
 
 		void resize(const region_type& newCoveredRegion) {
 
+			// get region to be covered within the requested region
+			region_type newRegion = region_type::intersect(getTotalSize(),newCoveredRegion);
+
 			// get the difference
-			region_type plus  = region_type::difference(newCoveredRegion,coveredRegion);
-			region_type minus = region_type::difference(coveredRegion,newCoveredRegion);
+			region_type plus  = region_type::difference(newRegion,coveredRegion);
+			region_type minus = region_type::difference(coveredRegion,newRegion);
 
 			// update the size
-			coveredRegion = newCoveredRegion;
+			coveredRegion = newRegion;
 
 			// allocated new data
 			plus.scanByLines([&](const point& a, const point& b){
