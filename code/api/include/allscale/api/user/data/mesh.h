@@ -2533,6 +2533,8 @@ namespace data {
 
 			~scan_reference() { handle.wait(); }
 
+			void wait() const { handle.wait(); }
+
 		};
 
 	} // end namespace detail
