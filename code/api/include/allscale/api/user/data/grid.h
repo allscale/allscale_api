@@ -729,10 +729,17 @@ namespace data {
 			// write the requested region to the archive
 			writer.write(region);
 
+#if defined(ALLSCALE_WITH_HPX)
+            region.scanByLines([&](const point& a, const point& b)
+                {
+                    writer.write(&(*this)[a], flatten(b)-flatten(a));
+                });
+#else
 			// add the data
 			region.scan([&](const point& p){
 				writer.write((*this)[p]);
 			});
+#endif
 		}
 
 		void insert(utils::ArchiveReader& reader) {
@@ -744,10 +751,19 @@ namespace data {
 			assert_pred2(core::isSubRegion, region, getCoveredRegion())
 				<< "Targeted fragment does not cover data to be inserted!";
 
+#if defined(ALLSCALE_WITH_HPX)
+            region.scanByLines([&](const point& a, const point& b)
+                {
+                    T* dst = &(*this)[a];
+                    std::size_t count = flatten(b)-flatten(a);
+                    reader.read(dst, count);
+                });
+#else
 			// insert the data
 			region.scan([&](const point& p){
 				(*this)[p] = reader.read<T>();
 			});
+#endif
 		}
 
 	private:
@@ -917,3 +933,20 @@ namespace data {
 } // end namespace user
 } // end namespace api
 } // end namespace allscale
+
+#if defined(ALLSCALE_WITH_HPX)
+#include <hpx/traits/is_bitwise_serializable.hpp>
+
+namespace hpx { namespace traits {
+    template <std::size_t Dim>
+    struct is_bitwise_serializable<allscale::api::user::data::GridBox<Dim>>
+      : std::true_type
+    {};
+
+    template <std::size_t Dim>
+    struct is_bitwise_serializable<allscale::api::user::data::GridSharedData<Dim>>
+      : std::true_type
+    {};
+}}
+
+#endif

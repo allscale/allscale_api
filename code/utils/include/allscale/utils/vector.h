@@ -413,3 +413,15 @@ namespace utils {
 
 } // end namespace utils
 } // end namespace allscale
+
+#if defined(ALLSCALE_WITH_HPX)
+#include <hpx/traits/is_bitwise_serializable.hpp>
+
+namespace hpx { namespace traits {
+    template <typename T, std::size_t Dims>
+    struct is_bitwise_serializable<allscale::utils::Vector<T, Dims>>
+      : is_bitwise_serializable<T>
+    {};
+}}
+
+#endif

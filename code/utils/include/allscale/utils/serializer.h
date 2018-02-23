@@ -253,6 +253,12 @@ namespace utils {
             ar_ & hpx::serialization::make_array(src, count);
 		}
 
+        template <typename T>
+        void write(const T* value, std::size_t count)
+        {
+            ar_ & hpx::serialization::make_array(value, count);
+        }
+
 		/**
 		 * A utility function wrapping the invocation of the serialization mechanism.
 		 */
@@ -332,6 +338,12 @@ namespace utils {
 		void read(char* dst, std::size_t count) {
             ar_ & hpx::serialization::make_array(dst, count);
 		}
+
+        template <typename T>
+        void read(T* dst, std::size_t count) {
+            hpx::serialization::array<T> arr(dst, count);
+            ar_ & arr;
+        }
 
 		/**
 		 * A utility function wrapping up the de-serialization of an object
