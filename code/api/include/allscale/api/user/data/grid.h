@@ -515,6 +515,7 @@ namespace data {
 			// combine regions
 			for(const auto& curB : b.regions) {
 				std::vector<box_type> next;
+				next.reserve(res.regions.size());
 				for(const auto& curA : res.regions) {
 					for(const auto& n : box_type::difference(curA,curB)) {
 						next.push_back(n);
