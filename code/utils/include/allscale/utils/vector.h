@@ -156,6 +156,14 @@ namespace utils {
 		return a;
 	}
 
+	template<typename T, std::size_t Dims>
+	Vector<T,Dims>& operator%=(Vector<T,Dims>& a, const Vector<T,Dims>& b) {
+		for(size_t i =0; i<Dims; i++) {
+			a[i] %= b[i];
+		}
+		return a;
+	}
+
 
 	template<typename T, std::size_t Dims>
 	Vector<T,Dims> operator+(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
@@ -184,6 +192,12 @@ namespace utils {
 	Vector<T,Dims> operator/(const Vector<T, Dims>& vec, const S& fac) {
 		Vector<T,Dims> res(vec);
 		return res /= fac;
+	}
+
+	template<typename T, std::size_t Dims>
+	Vector<T,Dims> operator%(const Vector<T, Dims>& a, const Vector<T,Dims>& b) {
+		Vector<T,Dims> res(a);
+		return res %= b;
 	}
 
 	template<typename T, std::size_t Dims, typename Lambda>
