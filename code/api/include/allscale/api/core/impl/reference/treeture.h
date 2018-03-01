@@ -366,7 +366,7 @@ namespace reference {
 			}
 
 			// compute result
-			return (1 << l) | p;
+			return (decltype(p)(1) << l) | p;
 		}
 
 		bool isDone(const Entry* ptr) const {
