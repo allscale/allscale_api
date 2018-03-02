@@ -181,6 +181,10 @@ namespace data {
 				body(a,b);
 			}
 		};
+
+		template<unsigned level>
+		struct box_spanner;
+
 	}
 
 
@@ -194,6 +198,9 @@ namespace data {
 
 		template<std::size_t I>
 		friend struct detail::line_scanner;
+
+		template<unsigned level>
+		friend struct detail::box_spanner;
 
 		template<std::size_t D>
 		friend class GridRegion;
@@ -311,13 +318,6 @@ namespace data {
 			return res;
 		}
 
-		static GridBox span(const GridBox& a, const GridBox& b) {
-			return GridBox(
-				allscale::utils::elementwiseMin(a.min,b.min),
-				allscale::utils::elementwiseMax(a.max,b.max)
-			);
-		}
-
 		template<typename Lambda>
 		void scanByLines(const Lambda& body) const {
 			if (empty()) return;
@@ -349,7 +349,23 @@ namespace data {
 		}
 
 		friend std::ostream& operator<<(std::ostream& out, const GridBox& box) {
-			return out << "[" << box.min << " - " << box.max << "]";
+			auto printPoint = [&](const point_type& point) {
+				out << "[" << allscale::utils::join(",",(const std::array<coordinate_type,Dims>&)point,[](std::ostream& out, const int64_t& cur) {
+					if (cur == std::numeric_limits<coordinate_type>::min()) {
+						out << "-inf";
+					} else if (cur == std::numeric_limits<coordinate_type>::max()) {
+						out << "+inf";
+					} else {
+						out << cur;
+					}
+				}) << "]";
+			};
+			out << "[";
+			printPoint(box.min);
+			out << " - ";
+			printPoint(box.max);
+			out << ")";
+			return out;
 		}
 
 		/**
@@ -530,11 +546,25 @@ namespace data {
 			return res;
 		}
 
+		static GridRegion span(const box_type& a, const box_type& b) {
+
+			GridRegion res;
+			box_type cur(coordinate_type(0));
+			detail::box_spanner<Dims>()(res,cur,a,b);
+			return res;
+
+
+			return box_type(
+				allscale::utils::elementwiseMin(a.min,b.min),
+				allscale::utils::elementwiseMax(a.max,b.max)
+			);
+		}
+
 		static GridRegion span(const GridRegion& a, const GridRegion& b) {
 			GridRegion res;
 			for(const auto& ba : a.regions) {
 				for(const auto& bb : b.regions) {
-					res = merge(res,GridRegion(box_type::span(ba,bb)));
+					res = merge(res,span(ba,bb));
 				}
 			}
 			return res;
@@ -596,6 +626,59 @@ namespace data {
 		}
 
 	};
+
+	namespace detail {
+
+		template<unsigned level>
+		struct box_spanner {
+			template<typename Region, typename Box>
+			void operator()(Region& region, Box& cur, const Box& low, const Box& high) {
+				constexpr unsigned pos = level-1;
+
+				constexpr auto neg_inf = std::numeric_limits<coordinate_type>::min();
+				constexpr auto pos_inf = std::numeric_limits<coordinate_type>::max();
+
+				// get boundaries
+				auto l1 = low.min[pos];
+				auto h1 = low.max[pos];
+				auto l2 = high.min[pos];
+				auto h2 = high.max[pos];
+
+				// if the high range is enclosing the low range
+				if (l2 < l1 && h1 < h2) {
+					cur.min[pos] = l2;
+					cur.max[pos] = h2;
+					box_spanner<level-1>()(region,cur,low,high);
+					return;
+				}
+
+				// decide, based on relation
+				if (l1 < h2) {
+					cur.min[pos] = l1;
+					cur.max[pos] = std::max(h1,h2);
+					box_spanner<level-1>()(region,cur,low,high);
+				} else {
+					cur.min[pos] = neg_inf;
+					cur.max[pos] = h2;
+					box_spanner<level-1>()(region,cur,low,high);
+					cur.min[pos] = l1;
+					cur.max[pos] = pos_inf;
+					box_spanner<level-1>()(region,cur,low,high);
+				}
+			}
+		};
+
+		template<>
+		struct box_spanner<0> {
+			template<typename Region, typename Box>
+			void operator()(Region& region, Box& cur, const Box&, const Box&) {
+				if (cur.empty()) return;
+				region = Region::merge(region,Region(cur));
+			}
+		};
+
+	} // end namespace detail
+
 
 
 	template<std::size_t Dims>
