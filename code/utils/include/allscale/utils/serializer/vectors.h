@@ -15,7 +15,39 @@ namespace utils {
 	 * Add support for serializing / de-serializing std::vectors.
 	 */
 	template<typename T, typename Allocator>
-	struct serializer<std::vector<T,Allocator>,typename std::enable_if<is_serializable<T>::value,void>::type> {
+	struct serializer<std::vector<T,Allocator>,typename std::enable_if<is_trivially_serializable<T>::value,void>::type> {
+
+		static std::vector<T,Allocator> load(ArchiveReader& reader) {
+
+			// create the result
+			std::vector<T,Allocator> res;
+
+			// load the size
+			auto size = reader.read<std::size_t>();
+
+			// load all in one step
+			res.resize(size);
+			reader.read(&res[0],size);
+
+			// done
+			return res;
+		}
+		static void store(ArchiveWriter& writer, const std::vector<T,Allocator>& value) {
+
+			// start with the size
+			writer.write(value.size());
+
+			// followed by all the elements
+			writer.write(&value[0],value.size());
+		}
+	};
+
+
+	/**
+	 * Add support for serializing / de-serializing std::vectors.
+	 */
+	template<typename T, typename Allocator>
+	struct serializer<std::vector<T,Allocator>,typename std::enable_if<!is_trivially_serializable<T>::value && is_serializable<T>::value,void>::type> {
 
 		static std::vector<T,Allocator> load(ArchiveReader& reader) {
 
@@ -42,9 +74,7 @@ namespace utils {
 			writer.write(value.size());
 
 			// followed by all the elements
-			for(const auto& cur : value) {
-				writer.write(cur);
-			}
+			writer.write(&value[0],value.size());
 		}
 	};
 

@@ -185,7 +185,7 @@ namespace data {
 
 
 	template<std::size_t Dims>
-	class GridBox {
+	class GridBox : public utils::trivially_serializable {
 
 		static_assert(Dims >= 1, "0-dimension Grids (=Scalars) not yet supported.");
 
@@ -350,23 +350,6 @@ namespace data {
 
 		friend std::ostream& operator<<(std::ostream& out, const GridBox& box) {
 			return out << "[" << box.min << " - " << box.max << "]";
-		}
-
-		/**
-		 * An operator to load an instance of this range from the given archive.
-		 */
-		static GridBox load(utils::ArchiveReader& reader) {
-			auto min = reader.read<point_type>();
-			auto max = reader.read<point_type>();
-			return { min, max };
-		}
-
-		/**
-		 * An operator to store an instance of this range into the given archive.
-		 */
-		void store(utils::ArchiveWriter& writer) const {
-			writer.write(min);
-			writer.write(max);
 		}
 
 	};
@@ -600,31 +583,16 @@ namespace data {
 
 
 	template<std::size_t Dims>
-	struct GridSharedData {
+	struct GridSharedData : public utils::trivially_serializable {
 
 		using size_type = GridPoint<Dims>;
 
 		size_type size;
 
-        GridSharedData()
-        {}
+		GridSharedData() {}
 
 		GridSharedData(const size_type& size)
 			: size(size) {}
-
-		/**
-		 * An operator to load an instance of this shared data from the given archive.
-		 */
-		static GridSharedData load(utils::ArchiveReader& reader) {
-			return { reader.read<size_type>() };
-		}
-
-		/**
-		 * An operator to store an instance of this shared data into the given archive.
-		 */
-		void store(utils::ArchiveWriter& writer) const {
-			writer.write(size);
-		}
 
 	};
 
@@ -730,17 +698,11 @@ namespace data {
 			// write the requested region to the archive
 			writer.write(region);
 
-#if defined(ALLSCALE_WITH_HPX)
-            region.scanByLines([&](const point& a, const point& b)
-                {
-                    writer.write(&(*this)[a], flatten(b)-flatten(a));
-                });
-#else
-			// add the data
-			region.scan([&](const point& p){
-				writer.write((*this)[p]);
+			// insert the data, line by line
+			region.scanByLines([&](const point& a, const point& b) {
+				writer.write(&(*this)[a], flatten(b)-flatten(a));
 			});
-#endif
+
 		}
 
 		void insert(utils::ArchiveReader& reader) {
@@ -752,19 +714,10 @@ namespace data {
 			assert_pred2(core::isSubRegion, region, getCoveredRegion())
 				<< "Targeted fragment does not cover data to be inserted!";
 
-#if defined(ALLSCALE_WITH_HPX)
-            region.scanByLines([&](const point& a, const point& b)
-                {
-                    T* dst = &(*this)[a];
-                    std::size_t count = flatten(b)-flatten(a);
-                    reader.read(dst, count);
-                });
-#else
 			// insert the data
-			region.scan([&](const point& p){
-				(*this)[p] = reader.read<T>();
+			region.scanByLines([&](const point& a, const point& b) {
+				reader.read(&(*this)[a], flatten(b)-flatten(a));
 			});
-#endif
 		}
 
 	private:
