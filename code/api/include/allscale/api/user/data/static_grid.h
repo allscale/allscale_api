@@ -62,7 +62,7 @@ namespace data {
 		StaticGridFragment(const region_type& size = region_type())
 			: StaticGridFragment(core::no_shared_data(), size) {}
 
-		StaticGridFragment(const core::no_shared_data&, const region_type& size = region_type()) : size(size), data(area(totalSize())) {
+		StaticGridFragment(const core::no_shared_data&, const region_type& size = region_type()) : size(size), data(area(getTotalSize())) {
 			// allocate covered data space
 			size.scanByLines([&](const point& a, const point& b) {
 				data.allocate(flatten(a),flatten(b));
@@ -89,7 +89,7 @@ namespace data {
 			return size;
 		}
 
-		point totalSize() const {
+		point getTotalSize() const {
 			return point({ Sizes... });
 		}
 
@@ -153,6 +153,25 @@ namespace data {
 			region.scan([&](const point& p){
 				(*this)[p] = reader.read<T>();
 			});
+		}
+
+		/**
+		 * An operator to load an instance of this shared data from the given archive.
+		 */
+		static StaticGridFragment load(utils::ArchiveReader& reader) {
+            StaticGridFragment res;
+            region_type covered(reader.read<region_type>());
+            res.resize(covered);
+            res.insert(reader);
+			return res;
+		}
+
+		/**
+		 * An operator to store an instance of this shared data into the given archive.
+		 */
+		void store(utils::ArchiveWriter& writer) const {
+            writer.write(getCoveredRegion());
+            extract(writer, getCoveredRegion());
 		}
 
 	private:
