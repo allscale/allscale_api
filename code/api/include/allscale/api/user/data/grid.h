@@ -136,29 +136,27 @@ namespace data {
 					return false;
 				};
 
+				// get number of elements before
+				auto numEntries = boxes.size();
+
 				// sort by all but current dimension
 				std::sort(boxes.begin(),boxes.end(),less);
 
 				// merge along current dimension
-				std::vector<GridBox<Dims>> res;
-				res.reserve(boxes.size());
-
-				// mark consumed entries
-				std::vector<bool> consumed(boxes.size(),false);
-
 				for(std::size_t i=0; i<boxes.size(); i++) {
-
-					// see whether this has already been consumed
-					if (consumed[i]) continue;
 
 					// see whether it can be merged with something
 					auto& a = boxes[i];
+
+					// see whether this has already been consumed
+					if (a.empty()) continue;
+
 					for(std::size_t j=i+1; j<boxes.size(); j++) {
 
-						// ignore consumed entries
-						if (consumed[j]) continue;
-
 						auto& b = boxes[j];
+
+						// ignore consumed entries
+						if (b.empty()) continue;
 
 						// if other dimensions are no longer equal => stop
 						if (less(a,b)) break;
@@ -170,21 +168,21 @@ namespace data {
 						a = GridBox<Dims>::template fuse<I-1>(a,b);
 
 						// mark b as consumed
-						consumed[j] = true;
+						b.max = b.min;
 					}
 
-					// add a to results
-					res.push_back(a);
 				}
 
-				// merge next level
-				box_fuser<I-1>().applyIteration(res);
+				// filter out empty boxes
+				boxes.erase(std::remove_if(boxes.begin(),boxes.end(),[](const auto& cur){
+					return cur.empty();
+				}), boxes.end());
 
-				// swap list of boxes
-				boxes.swap(res);
+				// merge next level
+				box_fuser<I-1>().applyIteration(boxes);
 
 				// return whether a merge happened
-				return boxes.size() != res.size();
+				return numEntries != boxes.size();
 
 			}
 		};
