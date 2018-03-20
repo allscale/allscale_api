@@ -143,6 +143,7 @@ namespace data {
 				std::sort(boxes.begin(),boxes.end(),less);
 
 				// merge along current dimension
+				bool merged = false;
 				for(std::size_t i=0; i<boxes.size(); i++) {
 
 					// see whether it can be merged with something
@@ -169,14 +170,19 @@ namespace data {
 
 						// mark b as consumed
 						b.max = b.min;
+
+						// remember merged
+						merged = true;
 					}
 
 				}
 
 				// filter out empty boxes
-				boxes.erase(std::remove_if(boxes.begin(),boxes.end(),[](const auto& cur){
-					return cur.empty();
-				}), boxes.end());
+				if (merged) {
+					boxes.erase(std::remove_if(boxes.begin(),boxes.end(),[](const auto& cur){
+						return cur.empty();
+					}), boxes.end());
+				}
 
 				// merge next level
 				box_fuser<I-1>().applyIteration(boxes);
