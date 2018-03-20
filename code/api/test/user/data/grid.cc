@@ -497,7 +497,7 @@ namespace data {
 		Region cd = Region::merge(c,d);
 
 		EXPECT_EQ("{[[3,3] - [5,5]),[[5,5] - [8,8])}",toString(ab));
-		EXPECT_EQ("{[[3,5] - [5,8]),[[5,3] - [8,5])}",toString(cd));
+		EXPECT_EQ("{[[5,3] - [8,5]),[[3,5] - [5,8])}",toString(cd));
 
 
 		Region abc = Region::merge(ab,c);
@@ -527,6 +527,91 @@ namespace data {
 
 		EXPECT_EQ(f.boundingBox(),ab.boundingBox());
 		EXPECT_EQ(f.boundingBox(),cd.boundingBox());
+	}
+
+	TEST(GridRegion,StressTest_1d) {
+		int N = 100;
+		using Region = GridRegion<1>;
+
+		// we create a large number of regions
+		std::vector<Region> regions;
+		for(int i=0; i<N; i++) {
+			regions.push_back(Region({i},{i+1}));
+		}
+
+		// shuffle them
+		std::random_shuffle(regions.begin(),regions.end());
+
+		// and now we fuse all of them
+		Region res;
+		EXPECT_TRUE(res.empty());
+
+		for(const auto& cur : regions) {
+			res = Region::merge(res,cur);
+		}
+
+		EXPECT_EQ(Region({0},{N}),res);
+//		EXPECT_EQ(toString(Region({0},{N})),toString(res));
+
+	}
+
+	TEST(GridRegion,StressTest_2d) {
+		int N = 30;
+		using Region = GridRegion<2>;
+
+		// we create a large number of regions
+		std::vector<Region> regions;
+		for(int i=0; i<N; i++) {
+			for(int j=0; j<N; j++) {
+				regions.push_back(Region({i,j},{i+1,j+1}));
+			}
+		}
+
+		// shuffle them
+		std::random_shuffle(regions.begin(),regions.end());
+
+		// and now we fuse all of them
+		Region res;
+		EXPECT_TRUE(res.empty());
+
+		for(const auto& cur : regions) {
+			res = Region::merge(res,cur);
+		}
+
+		EXPECT_EQ(Region({0,0},{N,N}),res);
+//		EXPECT_EQ(toString(Region({0,0},{N,N})),toString(res));
+
+	}
+
+
+	TEST(GridRegion,StressTest_3d) {
+		int N = 12;
+		using Region = GridRegion<3>;
+
+		// we create a large number of regions
+		std::vector<Region> regions;
+		for(int i=0; i<N; i++) {
+			for(int j=0; j<N; j++) {
+				for(int k=0; k<N; k++) {
+					regions.push_back(Region({i,j,k},{i+1,j+1,k+1}));
+				}
+			}
+		}
+
+		// shuffle them
+		std::random_shuffle(regions.begin(),regions.end());
+
+		// and now we fuse all of them
+		Region res;
+		EXPECT_TRUE(res.empty());
+
+		for(const auto& cur : regions) {
+			res = Region::merge(res,cur);
+		}
+
+		EXPECT_EQ(Region({0,0,0},{N,N,N}),res);
+//		EXPECT_EQ(toString(Region({0,0,0},{N,N,N})),toString(res));
+
 	}
 
 	TEST(GridRegion,RegionTestBasic) {
@@ -1170,7 +1255,6 @@ namespace data {
 		}
 
 	}
-
 
 } // end namespace data
 } // end namespace user

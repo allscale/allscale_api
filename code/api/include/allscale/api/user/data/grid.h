@@ -118,46 +118,86 @@ namespace data {
 
 		template<std::size_t I>
 		struct box_fuser {
+
+			void apply(std::vector<GridBox<I>>& boxes) {
+				while(applyIteration(boxes)) {}
+			}
+
 			template<std::size_t Dims>
-			bool apply(std::vector<GridBox<Dims>>& boxes) {
+			bool applyIteration(std::vector<GridBox<Dims>>& boxes) {
 
-				// try fuse I-th dimension
-				for(std::size_t i = 0; i<boxes.size(); i++) {
-					for(std::size_t j = i+1; j<boxes.size(); j++) {
-
-						// check whether a fusion is possible
-						GridBox<Dims>& a = boxes[i];
-						GridBox<Dims>& b = boxes[j];
-						if (GridBox<Dims>::template areFusable<I-1>(a,b)) {
-
-							// fuse the boxes
-							GridBox<Dims> f = GridBox<Dims>::template fuse<I-1>(a,b);
-							boxes.erase(boxes.begin() + j);
-							boxes[i] = f;
-
-							// start over again
-							apply(boxes);
-							return true;
-						}
+				// a comperator comparing all but the current dimension
+				auto less = [](const auto& a, const auto& b) {
+					for(std::size_t i=0; i<Dims; i++) {
+						if (i == (I-1)) continue;
+						if (a.min[i]  < b.min[i]) return true;
+						if (a.min[i] != b.min[i]) return false;
 					}
+					return false;
+				};
+
+				// sort by all but current dimension
+				std::sort(boxes.begin(),boxes.end(),less);
+
+				// merge along current dimension
+				std::vector<GridBox<Dims>> res;
+				res.reserve(boxes.size());
+
+				// mark consumed entries
+				std::vector<bool> consumed(boxes.size(),false);
+
+				for(std::size_t i=0; i<boxes.size(); i++) {
+
+					// see whether this has already been consumed
+					if (consumed[i]) continue;
+
+					// see whether it can be merged with something
+					auto& a = boxes[i];
+					for(std::size_t j=i+1; j<boxes.size(); j++) {
+
+						// ignore consumed entries
+						if (consumed[j]) continue;
+
+						auto& b = boxes[j];
+
+						// if other dimensions are no longer equal => stop
+						if (less(a,b)) break;
+
+						// if not fusable => skip
+						if (!GridBox<Dims>::template areFusable<I-1>(a,b)) continue;
+
+						// fuse b into a
+						a = GridBox<Dims>::template fuse<I-1>(a,b);
+
+						// mark b as consumed
+						consumed[j] = true;
+					}
+
+					// add a to results
+					res.push_back(a);
 				}
 
-				// fuse smaller dimensions
-				if (box_fuser<I-1>().apply(boxes)) {
-					// start over again
-					apply(boxes);
-					return true;
-				}
+				// merge next level
+				box_fuser<I-1>().applyIteration(res);
 
-				// no more changes
-				return false;
+				// swap list of boxes
+				boxes.swap(res);
+
+				// return whether a merge happened
+				return boxes.size() != res.size();
+
 			}
 		};
 
 		template<>
 		struct box_fuser<0> {
+
+			void apply(std::vector<GridBox<0>>&) {
+				// nothing to do
+			}
+
 			template<std::size_t Dims>
-			bool apply(std::vector<GridBox<Dims>>&) { return false; }
+			bool applyIteration(std::vector<GridBox<Dims>>&) { return false; }
 		};
 
 		template<std::size_t I>
@@ -195,6 +235,9 @@ namespace data {
 
 		template<std::size_t I>
 		friend struct detail::difference_computer;
+
+		template<unsigned level>
+		friend struct detail::box_fuser;
 
 		template<std::size_t I>
 		friend struct detail::line_scanner;
