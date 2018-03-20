@@ -329,8 +329,7 @@ namespace data {
 		template<std::size_t D>
 		static bool areFusable(const GridBox& a, const GridBox& b) {
 			static_assert(D < Dims, "Can not fuse on non-existing dimension.");
-			if (a.min > b.min) return areFusable<D>(b,a);
-			if (a.max[D] != b.min[D]) return false;
+			if (a.max[D] != b.min[D] && b.max[D] != a.min[D]) return false;
 			for(std::size_t i = 0; i<Dims; i++) {
 				if (i == D) continue;
 				if (a.min[i] != b.min[i]) return false;
