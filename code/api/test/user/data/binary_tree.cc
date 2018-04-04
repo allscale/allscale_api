@@ -240,8 +240,8 @@ namespace data {
 		int counterA = 1000000000;
 		int counterB = 2000000000;
 		forAllNodes<20>([&](const auto& cur) {
-			if (a.contains(cur)) EXPECT_EQ(fA[cur],counterA++);
-			if (b.contains(cur)) EXPECT_EQ(fB[cur],counterB++);
+			if (a.contains(cur)) { EXPECT_EQ(fA[cur],counterA++); }
+			if (b.contains(cur)) { EXPECT_EQ(fB[cur],counterB++); }
 		});
 
 		EXPECT_EQ(1000002046,counterA);
@@ -261,7 +261,7 @@ namespace data {
 				}
 				counterA++;
 			}
-			if (b.contains(cur)) EXPECT_EQ(fB[cur],counterB++);
+			if (b.contains(cur))  { EXPECT_EQ(fB[cur],counterB++); }
 		});
 
 		EXPECT_EQ(1000002046,counterA);
@@ -277,7 +277,7 @@ namespace data {
 		counterA = 1000000000;
 		counterB = 2000000000;
 		forAllNodes<20>([&](const auto& cur) {
-			if (a.contains(cur)) EXPECT_EQ(fA[cur],counterA++);
+			if (a.contains(cur)) { EXPECT_EQ(fA[cur],counterA++); }
 			if (b.contains(cur)) {
 				if (a.contains(cur)) {
 					EXPECT_EQ(fB[cur],fA[cur]);

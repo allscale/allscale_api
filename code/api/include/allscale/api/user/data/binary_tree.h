@@ -98,7 +98,7 @@ namespace data {
 			return a.mask & (~b.mask);
 		}
 
-		static StaticBalancedBinaryTreeRegion span(const StaticBalancedBinaryTreeRegion& a, const StaticBalancedBinaryTreeRegion& b) {
+		static StaticBalancedBinaryTreeRegion span(const StaticBalancedBinaryTreeRegion&, const StaticBalancedBinaryTreeRegion&) {
 			assert_fail() << "Invalid operation!";
 			return {};
 		}
