@@ -198,6 +198,103 @@ namespace data {
 	}
 
 
+	TEST(StaticBalancedBinaryTreeFragment, ManipulationTest) {
+
+		using region = StaticBalancedBinaryTreeRegion<20>;
+		using fragment = StaticBalancedBinaryTreeFragment<int,20>;
+
+		region a = region::merge(region::root(), region::subtree(3));
+		region b = region::merge(region::root(), region::subtree(7));
+
+		// test that this version of tree properly works
+		testFragment<fragment>(a,b);
+
+		// -- simulate manipulation --
+
+		// create some shared data
+		core::no_shared_data shared;
+
+		// create two fragments
+		fragment fA(shared,a);
+		fragment fB(shared,b);
+
+		// mask and fill with data
+		auto mA = fA.mask();
+		auto mB = fB.mask();
+
+		// insert some data
+		auto reset = [&]() {
+			int counterA = 1000000000;
+			int counterB = 2000000000;
+			forAllNodes<20>([&](const auto& cur) {
+				if (a.contains(cur)) fA[cur] = (counterA++);
+				if (b.contains(cur)) fB[cur] = (counterB++);
+			});
+
+			EXPECT_EQ(1000002046,counterA);
+			EXPECT_EQ(2000002046,counterB);
+		};
+		reset();
+
+		// check data
+		int counterA = 1000000000;
+		int counterB = 2000000000;
+		forAllNodes<20>([&](const auto& cur) {
+			if (a.contains(cur)) EXPECT_EQ(fA[cur],counterA++);
+			if (b.contains(cur)) EXPECT_EQ(fB[cur],counterB++);
+		});
+
+		EXPECT_EQ(1000002046,counterA);
+		EXPECT_EQ(2000002046,counterB);
+
+		// transfer data from B to A (direct)
+		fA.insert(fB,region::root());
+
+		counterA = 1000000000;
+		counterB = 2000000000;
+		forAllNodes<20>([&](const auto& cur) {
+			if (a.contains(cur)) {
+				if (b.contains(cur)) {
+					EXPECT_EQ(fA[cur],fB[cur]);
+				} else {
+					EXPECT_EQ(fA[cur],counterA);
+				}
+				counterA++;
+			}
+			if (b.contains(cur)) EXPECT_EQ(fB[cur],counterB++);
+		});
+
+		EXPECT_EQ(1000002046,counterA);
+		EXPECT_EQ(2000002046,counterB);
+
+		// reset
+		reset();
+
+		// transfer data from A to B through serialization
+		auto archive = extract(fA,region::root());
+		insert(fB,archive);
+
+		counterA = 1000000000;
+		counterB = 2000000000;
+		forAllNodes<20>([&](const auto& cur) {
+			if (a.contains(cur)) EXPECT_EQ(fA[cur],counterA++);
+			if (b.contains(cur)) {
+				if (a.contains(cur)) {
+					EXPECT_EQ(fB[cur],fA[cur]);
+				} else {
+					EXPECT_EQ(fB[cur],counterB);
+				}
+				counterB++;
+			}
+		});
+
+		EXPECT_EQ(1000002046,counterA);
+		EXPECT_EQ(2000002046,counterB);
+
+
+	}
+
+
 } // end namespace data
 } // end namespace user
 } // end namespace api

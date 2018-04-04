@@ -5,6 +5,8 @@
 #include <bitset>
 
 #include "allscale/utils/serializer.h"
+#include "allscale/utils/serializer/arrays.h"
+
 #include "allscale/api/core/data.h"
 
 
@@ -131,6 +133,10 @@ namespace data {
 			return 0 <= i && i < num_leaf_trees && mask.test(i);
 		}
 
+		bool contains(const StaticBalancedBinaryTreeElementAddress<depth>& addr) const {
+			return mask.test(addr.getSubtreeIndex());
+		}
+
 		template<typename Lambda>
 		void forEachSubTree(const Lambda& op) const {
 			for(std::size_t i=0; i<num_leaf_trees; i++) {
@@ -239,12 +245,16 @@ namespace data {
 			// the flattened tree
 			data_t data;
 
+			StaticBalancedBinarySubTree(data_t&& data) : data(std::move(data)) {}
+
 		public:
+
+			StaticBalancedBinarySubTree() {}
 
 			// -- serialization support --
 
 			static StaticBalancedBinarySubTree load(utils::ArchiveReader& reader) {
-				return { reader.read<data_t>() };
+				return reader.read<data_t>();
 			}
 
 			void store(utils::ArchiveWriter& writer) const {
