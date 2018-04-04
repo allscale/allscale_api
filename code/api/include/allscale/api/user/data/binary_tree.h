@@ -119,7 +119,7 @@ namespace data {
 
 		static StaticBalancedBinaryTreeRegion subtree(int i) {
 			assert_le(0,i);
-			assert_lt(i,int(num_leaf_trees));
+			assert_le(i,int(num_leaf_trees));
 			mask_t res;
 			res.set(i);
 			return res;
@@ -444,14 +444,14 @@ namespace data {
 		 * Provide constant element access.
 		 */
 		const T& operator[](const address_t& addr) const {
-			return base[addr];
+			return data_item_element_access(*this,region_t::subtree(addr.getSubtreeIndex()),base[addr]);
 		}
 
 		/**
 		 * Provide immutable element access.
 		 */
 		T& operator[](const address_t& addr) {
-			return base[addr];
+			return data_item_element_access(*this,region_t::subtree(addr.getSubtreeIndex()),base[addr]);
 		}
 	};
 
