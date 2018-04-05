@@ -305,7 +305,7 @@ namespace data {
 
 	public:
 
-		StaticBalancedBinaryTreeFragment(const shared_data_type&, const region_type& region) : covered() {
+		StaticBalancedBinaryTreeFragment(const shared_data_type&, const region_type& region = region_type()) : covered() {
 			// create covered data
 			resize(region);
 		}

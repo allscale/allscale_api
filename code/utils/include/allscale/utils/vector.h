@@ -39,17 +39,10 @@ namespace utils {
 		Vector(const std::array<R,Dims>& other)
 			: data(other) {}
 
-		Vector(const std::initializer_list<T>& values) {
-			assert_true(values.size() == 1 || values.size() == Dims);
-			if (values.size() == 1) { *this = Vector(*values.begin()); }
-			else { init(values); }
-		}
-
 		template<typename ... Rest>
-		Vector(T a, T b, Rest ... rest) : data{ {a,b,rest...} } {
-			static_assert(Dims == sizeof...(rest)+2, "Invalid number of components!");
+		Vector(T a, Rest ... rest) : data{ {a,T(rest)...} } {
+			static_assert(Dims == sizeof...(rest)+1, "Invalid number of components!");
 		}
-
 
 		Vector& operator=(const Vector& other) = default;
 		Vector& operator=(Vector&& other) = default;
@@ -109,18 +102,6 @@ namespace utils {
 		// Adds printer support to this vector.
 		friend std::ostream& operator<<(std::ostream& out, const Vector& vec) {
 			return out << vec.data;
-		}
-
-	private:
-
-		template<typename R, std::size_t ... Index>
-		void init_internal(const std::initializer_list<R>& list, const std::integer_sequence<std::size_t,Index...>&) {
-			__allscale_unused auto bla = { data[Index] = *(list.begin() + Index) ... };
-		}
-
-		template<typename R>
-		void init(const std::initializer_list<R>& list) {
-			init_internal(list,std::make_index_sequence<Dims>());
 		}
 
 	};
