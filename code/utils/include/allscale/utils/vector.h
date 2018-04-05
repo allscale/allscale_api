@@ -40,8 +40,9 @@ namespace utils {
 			: data(other) {}
 
 		Vector(const std::initializer_list<T>& values) {
-			assert_eq(Dims,values.size());
-			init(values);
+			assert_true(values.size() == 1 || values.size() == Dims);
+			if (values.size() == 1) { *this = Vector(*values.begin()); }
+			else { init(values); }
 		}
 
 		template<typename ... Rest>
