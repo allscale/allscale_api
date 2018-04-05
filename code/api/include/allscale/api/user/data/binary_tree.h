@@ -147,7 +147,7 @@ namespace data {
 		friend std::ostream& operator<<(std::ostream& out, const StaticBalancedBinaryTreeRegion& region) {
 			out << "{";
 			if (region.containsRootTree()) out << " R";
-			region.forEachSubTree([&](int i){
+			region.forEachSubTree([&](std::size_t i){
 				out << ' ' << i;
 			});
 			return out << " }";
@@ -322,13 +322,13 @@ namespace data {
 
 			// remove no longer needed regions first
 			if (remove.containsRootTree()) root.reset();
-			remove.forEachSubTree([&](int i){
+			remove.forEachSubTree([&](std::size_t i){
 				leafs[i].reset();
 			});
 
 			// allocate new regions
 			if (add.containsRootTree()) root = std::make_unique<root_tree_type>();
-			add.forEachSubTree([&](int i) {
+			add.forEachSubTree([&](std::size_t i) {
 				leafs[i] = std::make_unique<leaf_tree_type>();
 			});
 
@@ -342,7 +342,7 @@ namespace data {
 
 			// copy data from source fragment
 			if (region.containsRootTree()) *root = *src.root;
-			region.forEachSubTree([&](int i){
+			region.forEachSubTree([&](std::size_t i){
 				*leafs[i] = *src.leafs[i];
 			});
 		}
@@ -355,7 +355,7 @@ namespace data {
 
 			// write selected regions to stream
 			if (region.containsRootTree()) writer.write(*root);
-			region.forEachSubTree([&](int i){
+			region.forEachSubTree([&](std::size_t i){
 				writer.write(*leafs[i]);
 			});
 		}
@@ -369,7 +369,7 @@ namespace data {
 
 			// insert selected regions from stream
 			if (region.containsRootTree()) *root = reader.read<root_tree_type>();
-			region.forEachSubTree([&](int i){
+			region.forEachSubTree([&](std::size_t i){
 				*leafs[i] = reader.read<leaf_tree_type>();
 			});
 		}
