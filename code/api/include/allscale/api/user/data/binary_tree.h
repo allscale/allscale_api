@@ -103,6 +103,16 @@ namespace data {
 			return {};
 		}
 
+		static StaticBalancedBinaryTreeRegion closure(const StaticBalancedBinaryTreeRegion& r) {
+			if (r.containsRootTree()) return full();
+			return r;
+		}
+
+		static StaticBalancedBinaryTreeRegion closure(int i) {
+			if (i == num_leaf_trees) return full();
+			return subtree(i);
+		}
+
 		static StaticBalancedBinaryTreeRegion full() {
 			StaticBalancedBinaryTreeRegion res;
 			res.mask.flip();

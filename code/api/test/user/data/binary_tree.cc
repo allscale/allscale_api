@@ -54,6 +54,24 @@ namespace data {
 
 	}
 
+	TEST(StaticBalancedBinaryTreeRegion, Closure) {
+
+		using region = StaticBalancedBinaryTreeRegion<3>;
+
+		EXPECT_EQ("{ }",toString(region()));
+		EXPECT_EQ("{ R }",toString(region::root()));
+		EXPECT_EQ("{ 0 }",toString(region::subtree(0)));
+		EXPECT_EQ("{ 1 }",toString(region::subtree(1)));
+		EXPECT_EQ("{ R }",toString(region::subtree(2)));
+
+		EXPECT_EQ("{ }",toString(region::closure(region())));
+		EXPECT_EQ("{ R 0 1 }",toString(region::closure(region::root())));
+		EXPECT_EQ("{ 0 }",toString(region::closure(region::subtree(0))));
+		EXPECT_EQ("{ 1 }",toString(region::closure(region::subtree(1))));
+		EXPECT_EQ("{ R 0 1 }",toString(region::closure(region::subtree(2))));
+
+	}
+
 	TEST(StaticBalancedBinaryTreeFragment,Traits) {
 
 		// test the fragment concept
