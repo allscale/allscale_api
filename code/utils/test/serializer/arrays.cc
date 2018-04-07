@@ -91,5 +91,77 @@ namespace utils {
 		EXPECT_EQ(in,out);
 	}
 
+	TEST(Serializer,TrivialSerializable) {
+
+		EXPECT_TRUE(is_serializable<int>::value);
+		EXPECT_TRUE(is_serializable<std::string>::value);
+
+		EXPECT_TRUE((is_serializable<std::array<int,20>>::value));
+		EXPECT_TRUE((is_serializable<std::array<std::string,20>>::value));
+
+
+		EXPECT_TRUE(is_trivially_serializable<int>::value);
+		EXPECT_FALSE(is_trivially_serializable<std::string>::value);
+
+		EXPECT_TRUE((is_trivially_serializable<std::array<int,20>>::value));
+		EXPECT_FALSE((is_trivially_serializable<std::array<std::string,20>>::value));
+
+	}
+
+	TEST(Serializer,LargeArrayTrivial) {
+
+		const std::size_t N = 1<<20;
+
+		// make sure the point is serializable but not trivially serializable
+		EXPECT_TRUE(is_serializable<int>::value);
+		EXPECT_TRUE(is_trivially_serializable<int>::value);
+
+		// create a large instance and serialize it
+		using ary = std::array<int,N>;
+		using ptr = std::unique_ptr<ary>;
+
+		ptr p = std::make_unique<ary>();
+		auto archive = serialize(*p);
+		ptr q = std::make_unique<ary>(deserialize<ary>(archive));
+
+		EXPECT_EQ(*p,*q);
+
+	}
+
+	struct Point {
+		static Point load(ArchiveReader&) {
+			return {};
+		}
+		void store(ArchiveWriter&) const {
+			// nothing to do
+		}
+		bool operator==(const Point&) const {
+			return true;
+		}
+	};
+
+	TEST(Serializer,LargeArrayNonTrivial) {
+
+		// Known bug: too large arrays of non-trivially serializable data
+		// can not be reloaded due to extensive template unfolding
+
+		const std::size_t N = 1<<4;
+
+		// make sure the point is serializable but not trivially serializable
+		EXPECT_TRUE(is_serializable<Point>::value);
+		EXPECT_FALSE(is_trivially_serializable<Point>::value);
+
+		// create a large instance and serialize it
+		using ary = std::array<Point,N>;
+		using ptr = std::unique_ptr<ary>;
+
+		ptr p = std::make_unique<ary>();
+		auto archive = serialize(*p);
+		ptr q = std::make_unique<ary>(deserialize<ary>(archive));
+
+		EXPECT_EQ(*p,*q);
+
+	}
+
 } // end namespace utils
 } // end namespace allscale
