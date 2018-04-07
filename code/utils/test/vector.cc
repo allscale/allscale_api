@@ -382,5 +382,16 @@ namespace utils {
 		EXPECT_EQ(in,out);
 	}
 
+	TEST(Serializer,VectorTriviallySerializable) {
+
+		EXPECT_TRUE((is_serializable<Vector<int,2>>::value));
+		EXPECT_TRUE((is_trivially_serializable<Vector<int,2>>::value));
+
+		EXPECT_TRUE((is_serializable<Vector<std::string,2>>::value));
+		EXPECT_FALSE((is_trivially_serializable<Vector<std::string,2>>::value));
+
+	}
+
+
 } // end namespace utils
 } // end namespace allscale
