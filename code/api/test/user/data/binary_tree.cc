@@ -2,6 +2,7 @@
 
 #include "allscale/api/user/data/binary_tree.h"
 #include "allscale/utils/string_utils.h"
+#include "allscale/utils/serializer/strings.h"
 
 namespace allscale {
 namespace api {
@@ -72,6 +73,55 @@ namespace data {
 
 	}
 
+	TEST(StaticBalancedBinarySubTree,Traits) {
+
+		// test serializability
+		EXPECT_TRUE((allscale::utils::is_serializable<detail::StaticBalancedBinarySubTree<int,5>>::value));
+		EXPECT_TRUE((allscale::utils::is_serializable<detail::StaticBalancedBinarySubTree<int,20>>::value));
+
+		EXPECT_TRUE((allscale::utils::is_trivially_serializable<std::array<int,20>>::value));
+		EXPECT_TRUE((allscale::utils::is_trivially_serializable<std::array<int,1<<20>>::value));
+
+	}
+
+	TEST(StaticBalancedBinarySubTree,Serialization) {
+
+		// test whether large sub-trees can be serialized
+
+		{
+			// test serializability
+			using tree = detail::StaticBalancedBinarySubTree<int,24>;
+			EXPECT_TRUE(allscale::utils::is_serializable<tree>::value);
+
+			tree a;
+			for(std::size_t i=1; i<tree::num_elements; i++) {
+				a.get(i) = i;
+			}
+			auto archive = allscale::utils::serialize(a);
+			tree b = allscale::utils::deserialize<tree>(archive);
+			for(std::size_t i=1; i<tree::num_elements; i++) {
+				EXPECT_EQ(i,b.get(i));
+			}
+		}
+
+		{
+			// test serializability
+			using tree = detail::StaticBalancedBinarySubTree<std::string,20>;
+			EXPECT_TRUE(allscale::utils::is_serializable<tree>::value);
+
+			tree a;
+			for(std::size_t i=1; i<tree::num_elements; i++) {
+				a.get(i) = toString(i);
+			}
+			auto archive = allscale::utils::serialize(a);
+			tree b = allscale::utils::deserialize<tree>(archive);
+			for(std::size_t i=1; i<tree::num_elements; i++) {
+				EXPECT_EQ(toString(i),b.get(i));
+			}
+		}
+	}
+
+
 	TEST(StaticBalancedBinaryTreeFragment,Traits) {
 
 		// test the fragment concept
@@ -79,6 +129,7 @@ namespace data {
 		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<double,1>>::value));
 		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<char,2>>::value));
 		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<std::string,32>>::value));
+
 	}
 
 

@@ -5,7 +5,7 @@
 #include <bitset>
 
 #include "allscale/utils/serializer.h"
-#include "allscale/utils/serializer/arrays.h"
+#include "allscale/utils/serializer/vectors.h"
 
 #include "allscale/api/core/data.h"
 
@@ -246,11 +246,11 @@ namespace data {
 		public:
 
 			// the number of elements stored in this tree
-			constexpr static std::size_t num_elements = (1 << depth) - 1;
+			constexpr static std::size_t num_elements = (std::size_t(1) << depth) - 1;
 
 		private:
 
-			using data_t = std::array<T,num_elements>;
+			using data_t = std::vector<T>;
 
 			// the flattened tree
 			data_t data;
@@ -259,7 +259,7 @@ namespace data {
 
 		public:
 
-			StaticBalancedBinarySubTree() {}
+			StaticBalancedBinarySubTree() : data(num_elements) {}
 
 			// -- serialization support --
 
