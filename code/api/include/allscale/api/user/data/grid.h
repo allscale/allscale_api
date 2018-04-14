@@ -126,7 +126,7 @@ namespace data {
 			template<std::size_t Dims>
 			bool applyIteration(std::vector<GridBox<Dims>>& boxes) {
 
-				// a comperator comparing all but the current dimension
+				// a comparator comparing all but the current dimension
 				auto less = [](const auto& a, const auto& b) {
 					for(std::size_t i=0; i<Dims; i++) {
 						if (i == (I-1)) continue;
@@ -240,7 +240,7 @@ namespace data {
 		template<std::size_t I>
 		friend struct detail::difference_computer;
 
-		template<unsigned level>
+		template<std::size_t I>
 		friend struct detail::box_fuser;
 
 		template<std::size_t I>

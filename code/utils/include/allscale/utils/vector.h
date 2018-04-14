@@ -39,16 +39,10 @@ namespace utils {
 		Vector(const std::array<R,Dims>& other)
 			: data(other) {}
 
-		Vector(const std::initializer_list<T>& values) {
-			assert_eq(Dims,values.size());
-			init(values);
-		}
-
 		template<typename ... Rest>
-		Vector(T a, T b, Rest ... rest) : data{ {a,b,rest...} } {
-			static_assert(Dims == sizeof...(rest)+2, "Invalid number of components!");
+		Vector(T a, Rest ... rest) : data{ {a,T(rest)...} } {
+			static_assert(Dims == sizeof...(rest)+1, "Invalid number of components!");
 		}
-
 
 		Vector& operator=(const Vector& other) = default;
 		Vector& operator=(Vector&& other) = default;
@@ -447,11 +441,17 @@ namespace utils {
 
 #ifndef ALLSCALE_WITH_HPX
 	/**
+	 * Add support for trivially serializing / de-serializing Vector instances.
+	 */
+	template<typename T, std::size_t Dims>
+	struct is_trivially_serializable<Vector<T,Dims>, typename std::enable_if<is_trivially_serializable<T>::value>::type> : public std::true_type {};
+
+	/**
 	 * Add support for serializing / de-serializing Vector instances.
 	 * The implementation is simply re-using the serializing capabilities of arrays.
 	 */
 	template<typename T, std::size_t Dims>
-	struct serializer<Vector<T,Dims>,typename std::enable_if<is_serializable<T>::value,void>::type> : public serializer<std::array<T,Dims>> {};
+	struct serializer<Vector<T,Dims>,typename std::enable_if<!is_trivially_serializable<T>::value && is_serializable<T>::value,void>::type> : public serializer<std::array<T,Dims>> {};
 #endif
 
 } // end namespace utils

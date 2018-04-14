@@ -41,17 +41,7 @@ namespace utils {
 	 * Add support for serializing / de-serializing arrays of trivial element types.
 	 */
 	template<typename T, std::size_t size>
-	struct serializer<std::array<T,size>,typename std::enable_if<is_trivially_serializable<T>::value,void>::type> {
-
-		static std::array<T,size> load(ArchiveReader& reader) {
-			std::array<T,size> res;
-			reader.read(&res[0],size);
-			return res;
-		}
-		static void store(ArchiveWriter& writer, const std::array<T,size>& value) {
-			writer.write(&value[0],size);
-		}
-	};
+	struct is_trivially_serializable<std::array<T,size>, typename std::enable_if<is_trivially_serializable<T>::value>::type> : public std::true_type {};
 
 	/**
 	 * Add support for serializing / de-serializing arrays of non-trivial element types.

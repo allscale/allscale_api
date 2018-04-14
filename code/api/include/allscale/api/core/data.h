@@ -234,7 +234,7 @@ namespace core {
 	template<typename R>
 	typename std::enable_if<is_region<R>::value,bool>::type
 	isSubRegion(const R& a, const R& b) {
-		return R::difference(a,b, false).empty();
+		return R::difference(a,b).empty();
 	}
 
 	/**
