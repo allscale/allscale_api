@@ -2,7 +2,7 @@
 
 #ifdef ALLSCALE_WITH_HPX
 	#include <hpx/runtime/serialization/array.hpp>
-#endif
+#else
 
 #include "allscale/utils/serializer.h"
 
@@ -73,3 +73,4 @@ namespace utils {
 } // end namespace utils
 } // end namespace allscale
 
+#endif

@@ -2,7 +2,8 @@
 
 #ifdef ALLSCALE_WITH_HPX
 	#include "allscale/utils/serializer.h"
-#endif
+	#include <hpx/runtime/serialization/vector.hpp>
+#else
 
 #include <vector>
 
@@ -80,3 +81,4 @@ namespace utils {
 
 } // end namespace utils
 } // end namespace allscale
+#endif
