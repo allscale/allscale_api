@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <memory>
+
 #include "allscale/utils/serializer/arrays.h"
 #include "allscale/utils/serializer/strings.h"
 
