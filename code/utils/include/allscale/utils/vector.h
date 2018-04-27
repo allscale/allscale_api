@@ -12,6 +12,13 @@
 namespace allscale {
 namespace utils {
 
+	namespace detail {
+
+		template<typename T, std::size_t Dims>
+		std::array<T,Dims> fill(const T&);
+
+	}
+
 	// generic vector implementation
 	template<typename T, std::size_t Dims>
 	class Vector {
@@ -24,9 +31,7 @@ namespace utils {
 
 		Vector() = default;
 
-		Vector(const T& e) {
-			data.fill(e);
-		}
+		Vector(const T& e) : data(detail::fill<T,Dims>(e)) {}
 
 		Vector(const Vector&) = default;
 		Vector(Vector&&) = default;
@@ -105,6 +110,31 @@ namespace utils {
 		}
 
 	};
+
+	namespace detail {
+
+		template<typename T, std::size_t Dims, std::size_t Index>
+		struct filler {
+			template<typename ... Args>
+			static std::array<T,Dims> fill(const T& e, const Args& ... a) {
+				return filler<T,Dims,Index-1>::fill(e,e,a...);
+			}
+		};
+
+		template<typename T, std::size_t Dims>
+		struct filler<T,Dims,0> {
+			template<typename ... Args>
+			static std::array<T,Dims> fill(const T&, const Args& ... a) {
+				return {a...};
+			}
+		};
+
+		template<typename T, std::size_t Dims>
+		std::array<T,Dims> fill(const T& e) {
+			return filler<T,Dims,Dims>::fill(e);
+		}
+
+	}
 
 	template<typename T, std::size_t Dims, typename S>
 	Vector<T,Dims>& operator+=(Vector<T,Dims>& a, const Vector<S,Dims>& b) {
