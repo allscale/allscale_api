@@ -11,6 +11,68 @@ namespace data {
 
 	#include "data_item_test.inl"
 
+	TEST(StaticBalancedBinaryTreeBlockedRegion,Traits) {
+
+		EXPECT_TRUE(std::is_default_constructible<StaticBalancedBinaryTreeBlockedRegion<0>>::value);
+		EXPECT_TRUE(std::is_copy_constructible<StaticBalancedBinaryTreeBlockedRegion<0>>::value);
+		EXPECT_TRUE(std::is_copy_assignable<StaticBalancedBinaryTreeBlockedRegion<0>>::value);
+		EXPECT_TRUE(std::is_move_assignable<StaticBalancedBinaryTreeBlockedRegion<0>>::value);
+
+		EXPECT_TRUE(allscale::utils::is_value<StaticBalancedBinaryTreeBlockedRegion<0>>::value);
+		EXPECT_TRUE(allscale::utils::is_serializable<StaticBalancedBinaryTreeBlockedRegion<0>>::value);
+		EXPECT_TRUE(allscale::utils::is_trivially_serializable<StaticBalancedBinaryTreeBlockedRegion<0>>::value);
+
+		EXPECT_TRUE(allscale::utils::is_value<StaticBalancedBinaryTreeBlockedRegion<1>>::value);
+		EXPECT_TRUE(allscale::utils::is_serializable<StaticBalancedBinaryTreeBlockedRegion<1>>::value);
+		EXPECT_TRUE(allscale::utils::is_trivially_serializable<StaticBalancedBinaryTreeBlockedRegion<1>>::value);
+
+		EXPECT_TRUE(allscale::utils::is_value<StaticBalancedBinaryTreeBlockedRegion<32>>::value);
+		EXPECT_TRUE(allscale::utils::is_serializable<StaticBalancedBinaryTreeBlockedRegion<32>>::value);
+		EXPECT_TRUE(allscale::utils::is_trivially_serializable<StaticBalancedBinaryTreeBlockedRegion<32>>::value);
+
+		EXPECT_TRUE(allscale::api::core::is_region<StaticBalancedBinaryTreeBlockedRegion<0>>::value);
+		EXPECT_TRUE(allscale::api::core::is_region<StaticBalancedBinaryTreeBlockedRegion<1>>::value);
+		EXPECT_TRUE(allscale::api::core::is_region<StaticBalancedBinaryTreeBlockedRegion<2>>::value);
+		EXPECT_TRUE(allscale::api::core::is_region<StaticBalancedBinaryTreeBlockedRegion<32>>::value);
+
+	}
+
+	TEST(StaticBalancedBinaryTreeBlockedRegion, Semantic) {
+
+		using region = StaticBalancedBinaryTreeBlockedRegion<8>;
+
+		region a = region::merge(region::root(), region::subtree(3));
+		region b = region::merge(region::root(), region::subtree(7));
+		region c = region::merge(region::subtree(3), region::subtree(7));
+
+		EXPECT_EQ("{ R 3 }",toString(a));
+		EXPECT_EQ("{ R 7 }",toString(b));
+		EXPECT_EQ("{ 3 7 }",toString(c));
+
+		testRegion(a,b);
+		testRegion(a,c);
+		testRegion(b,c);
+
+	}
+
+	TEST(StaticBalancedBinaryTreeBlockedRegion, Closure) {
+
+		using region = StaticBalancedBinaryTreeBlockedRegion<3>;
+
+		EXPECT_EQ("{ }",toString(region()));
+		EXPECT_EQ("{ R }",toString(region::root()));
+		EXPECT_EQ("{ 0 }",toString(region::subtree(0)));
+		EXPECT_EQ("{ 1 }",toString(region::subtree(1)));
+		EXPECT_EQ("{ R }",toString(region::subtree(2)));
+
+		EXPECT_EQ("{ }",toString(region::closure(region())));
+		EXPECT_EQ("{ R 0 1 }",toString(region::closure(region::root())));
+		EXPECT_EQ("{ 0 }",toString(region::closure(region::subtree(0))));
+		EXPECT_EQ("{ 1 }",toString(region::closure(region::subtree(1))));
+		EXPECT_EQ("{ R 0 1 }",toString(region::closure(region::subtree(2))));
+
+	}
+
 	TEST(StaticBalancedBinaryTreeRegion,Traits) {
 
 		EXPECT_TRUE(std::is_default_constructible<StaticBalancedBinaryTreeRegion<0>>::value);
@@ -45,9 +107,9 @@ namespace data {
 		region b = region::merge(region::root(), region::subtree(7));
 		region c = region::merge(region::subtree(3), region::subtree(7));
 
-		EXPECT_EQ("{ R 3 }",toString(a));
-		EXPECT_EQ("{ R 7 }",toString(b));
-		EXPECT_EQ("{ 3 7 }",toString(c));
+		EXPECT_EQ("{ N1 S3 }",toString(a));
+		EXPECT_EQ("{ N1 S7 }",toString(b));
+		EXPECT_EQ("{ S3 S7 }",toString(c));
 
 		testRegion(a,b);
 		testRegion(a,c);
@@ -55,23 +117,182 @@ namespace data {
 
 	}
 
+	TEST(StaticBalancedBinaryTreeRegion, Contains) {
+
+		using region = StaticBalancedBinaryTreeRegion<8>;
+
+		StaticBalancedBinaryTreeElementAddress<region> root;
+
+		region a = core::merge(region::root(), region::node(root.getLeftChild().getRightChild()), region::subtree(3));
+		region b = core::merge(region::root(), region::node(root.getRightChild().getLeftChild()), region::subtree(7));
+		region c = core::merge(region::subtree(2), region::subtree(8));
+
+		EXPECT_EQ("{ N1 N5 S3 }",toString(a));
+		EXPECT_EQ("{ N1 N6 S7 }",toString(b));
+		EXPECT_EQ("{ S2 S8 }",toString(c));
+
+		// test contains function
+
+		EXPECT_TRUE(a.contains(root));
+		EXPECT_TRUE(b.contains(root));
+		EXPECT_FALSE(c.contains(root));
+
+		EXPECT_FALSE(a.contains(root.getLeftChild()));
+		EXPECT_FALSE(b.contains(root.getLeftChild()));
+		EXPECT_FALSE(c.contains(root.getLeftChild()));
+
+		EXPECT_TRUE(a.contains(root.getLeftChild().getRightChild()));
+		EXPECT_FALSE(b.contains(root.getLeftChild().getRightChild()));
+		EXPECT_FALSE(c.contains(root.getLeftChild().getRightChild()));
+
+		EXPECT_FALSE(a.contains(root.getRightChild().getLeftChild()));
+		EXPECT_TRUE(b.contains(root.getRightChild().getLeftChild()));
+		EXPECT_FALSE(c.contains(root.getRightChild().getLeftChild()));
+
+
+		auto s0root = root.getLeftChild().getLeftChild().getLeftChild().getLeftChild();
+		auto s2root = root.getLeftChild().getLeftChild().getRightChild().getLeftChild();
+		auto s3root = root.getLeftChild().getLeftChild().getRightChild().getRightChild();
+		auto s7root = root.getLeftChild().getRightChild().getRightChild().getRightChild();
+		auto s8root = root.getRightChild().getLeftChild().getLeftChild().getLeftChild();
+
+		EXPECT_EQ("0/1(l=4)",toString(s0root));
+		EXPECT_EQ("2/1(l=4)",toString(s2root));
+		EXPECT_EQ("3/1(l=4)",toString(s3root));
+		EXPECT_EQ("7/1(l=4)",toString(s7root));
+		EXPECT_EQ("8/1(l=4)",toString(s8root));
+
+
+		EXPECT_FALSE(a.contains(s0root));
+		EXPECT_FALSE(b.contains(s0root));
+		EXPECT_FALSE(c.contains(s0root));
+
+		EXPECT_FALSE(a.contains(s2root));
+		EXPECT_FALSE(b.contains(s2root));
+		EXPECT_TRUE(c.contains(s2root));
+
+		EXPECT_TRUE(a.contains(s3root));
+		EXPECT_FALSE(b.contains(s3root));
+		EXPECT_FALSE(c.contains(s3root));
+
+		EXPECT_FALSE(a.contains(s7root));
+		EXPECT_TRUE(b.contains(s7root));
+		EXPECT_FALSE(c.contains(s7root));
+
+		EXPECT_FALSE(a.contains(s8root));
+		EXPECT_FALSE(b.contains(s8root));
+		EXPECT_TRUE(c.contains(s8root));
+
+		// same holds for children of subtrees
+		EXPECT_FALSE(a.contains(s0root.getLeftChild()));
+		EXPECT_FALSE(b.contains(s0root.getLeftChild()));
+		EXPECT_FALSE(c.contains(s0root.getLeftChild()));
+
+		EXPECT_FALSE(a.contains(s2root.getLeftChild()));
+		EXPECT_FALSE(b.contains(s2root.getLeftChild()));
+		EXPECT_TRUE(c.contains(s2root.getLeftChild()));
+
+		EXPECT_TRUE(a.contains(s3root.getLeftChild()));
+		EXPECT_FALSE(b.contains(s3root.getLeftChild()));
+		EXPECT_FALSE(c.contains(s3root.getLeftChild()));
+
+		EXPECT_FALSE(a.contains(s7root.getLeftChild()));
+		EXPECT_TRUE(b.contains(s7root.getLeftChild()));
+		EXPECT_FALSE(c.contains(s7root.getLeftChild()));
+
+		EXPECT_FALSE(a.contains(s8root.getLeftChild()));
+		EXPECT_FALSE(b.contains(s8root.getLeftChild()));
+		EXPECT_TRUE(c.contains(s8root.getLeftChild()));
+
+
+	}
+
+
 	TEST(StaticBalancedBinaryTreeRegion, Closure) {
 
 		using region = StaticBalancedBinaryTreeRegion<3>;
 
 		EXPECT_EQ("{ }",toString(region()));
-		EXPECT_EQ("{ R }",toString(region::root()));
-		EXPECT_EQ("{ 0 }",toString(region::subtree(0)));
-		EXPECT_EQ("{ 1 }",toString(region::subtree(1)));
-		EXPECT_EQ("{ R }",toString(region::subtree(2)));
+		EXPECT_EQ("{ N1 }",toString(region::root()));
+		EXPECT_EQ("{ S0 }",toString(region::subtree(0)));
+		EXPECT_EQ("{ S1 }",toString(region::subtree(1)));
 
 		EXPECT_EQ("{ }",toString(region::closure(region())));
-		EXPECT_EQ("{ R 0 1 }",toString(region::closure(region::root())));
-		EXPECT_EQ("{ 0 }",toString(region::closure(region::subtree(0))));
-		EXPECT_EQ("{ 1 }",toString(region::closure(region::subtree(1))));
-		EXPECT_EQ("{ R 0 1 }",toString(region::closure(region::subtree(2))));
+		EXPECT_EQ("{ N1 S0 S1 }",toString(region::closure(region::root())));
+		EXPECT_EQ("{ S0 }",toString(region::closure(region::subtree(0))));
+		EXPECT_EQ("{ S1 }",toString(region::closure(region::subtree(1))));
 
 	}
+
+	TEST(StaticBalancedBinaryTreeRegion, Closure_2) {
+
+		using region = StaticBalancedBinaryTreeRegion<8,3>;
+
+		EXPECT_EQ("{ }",toString(region()));
+		EXPECT_EQ("{ N1 }",toString(region::root()));
+		EXPECT_EQ("{ S0 }",toString(region::subtree(0)));
+		EXPECT_EQ("{ S1 }",toString(region::subtree(1)));
+
+		EXPECT_EQ("{ }",toString(region::closure(region())));
+		EXPECT_EQ("{ N1 N2 N3 N4 N5 N6 N7 S0 S1 S2 S3 S4 S5 S6 S7 }",toString(region::closure(region::root())));
+		EXPECT_EQ("{ S0 }",toString(region::closure(region::subtree(0))));
+		EXPECT_EQ("{ S1 }",toString(region::closure(region::subtree(1))));
+
+		// more fragmented closures
+		StaticBalancedBinaryTreeElementAddress<region> root;
+		auto rl = root.getLeftChild();
+		auto rr = root.getRightChild();
+
+		auto rll = rl.getLeftChild();
+		auto rlr = rl.getRightChild();
+
+		auto rrl = rr.getLeftChild();
+		auto rrr = rr.getRightChild();
+
+		EXPECT_EQ("{ N1 }",toString(region::node(root)));
+		EXPECT_EQ("{ N2 }",toString(region::node(rl)));
+		EXPECT_EQ("{ N3 }",toString(region::node(rr)));
+		EXPECT_EQ("{ N4 }",toString(region::node(rll)));
+		EXPECT_EQ("{ N5 }",toString(region::node(rlr)));
+		EXPECT_EQ("{ N6 }",toString(region::node(rrl)));
+		EXPECT_EQ("{ N7 }",toString(region::node(rrr)));
+
+		// below we reach the sub-tree level
+		EXPECT_EQ("{ S0 }",toString(region::node(rll.getLeftChild())));
+		EXPECT_EQ("{ S1 }",toString(region::node(rll.getRightChild())));
+
+		EXPECT_EQ("{ S2 }",toString(region::node(rlr.getLeftChild())));
+		EXPECT_EQ("{ S3 }",toString(region::node(rlr.getRightChild())));
+
+		EXPECT_EQ("{ S4 }",toString(region::node(rrl.getLeftChild())));
+		EXPECT_EQ("{ S5 }",toString(region::node(rrl.getRightChild())));
+
+		EXPECT_EQ("{ S6 }",toString(region::node(rrr.getLeftChild())));
+		EXPECT_EQ("{ S7 }",toString(region::node(rrr.getRightChild())));
+
+
+		// - compute closure -
+
+		EXPECT_EQ("{ N1 N2 N3 N4 N5 N6 N7 S0 S1 S2 S3 S4 S5 S6 S7 }", toString(region::closure(region::node(root))));
+		EXPECT_EQ("{ N2 N4 N5 S0 S1 S2 S3 }", toString(region::closure(region::node(rl))));
+		EXPECT_EQ("{ N3 N6 N7 S4 S5 S6 S7 }", toString(region::closure(region::node(rr))));
+
+		EXPECT_EQ("{ N4 S0 S1 }", toString(region::closure(region::node(rll))));
+		EXPECT_EQ("{ N5 S2 S3 }", toString(region::closure(region::node(rlr))));
+		EXPECT_EQ("{ N6 S4 S5 }", toString(region::closure(region::node(rrl))));
+		EXPECT_EQ("{ N7 S6 S7 }", toString(region::closure(region::node(rrr))));
+
+
+		// - and closures of combinations -
+
+		EXPECT_EQ("{ N4 N7 }", toString(region::merge(region::node(rll),region::node(rrr))));
+		EXPECT_EQ("{ N4 N7 S0 S1 S6 S7 }", toString(region::closure(region::merge(region::node(rll),region::node(rrr)))));
+
+		EXPECT_EQ("{ N2 N5 }", toString(region::merge(region::node(rl),region::node(rlr))));
+		EXPECT_EQ("{ N2 N4 N5 S0 S1 S2 S3 }", toString(region::closure(region::merge(region::node(rl),region::node(rlr)))));
+
+	}
+
 
 	TEST(StaticBalancedBinarySubTree,Traits) {
 
@@ -124,27 +345,47 @@ namespace data {
 
 	TEST(StaticBalancedBinaryTreeFragment,Traits) {
 
-		// test the fragment concept
-		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<int,0>>::value));
-		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<double,1>>::value));
-		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<char,2>>::value));
-		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<std::string,32>>::value));
+		// test the fragment concept -- for blocked regions
+		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<int,StaticBalancedBinaryTreeBlockedRegion<0>>>::value));
+		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<double,StaticBalancedBinaryTreeBlockedRegion<1>>>::value));
+		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<char,StaticBalancedBinaryTreeBlockedRegion<2>>>::value));
+		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<std::string,StaticBalancedBinaryTreeBlockedRegion<32>>>::value));
+
+		// test the fragment concept -- for non-blocked regions
+		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<int,StaticBalancedBinaryTreeRegion<0>>>::value));
+		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<double,StaticBalancedBinaryTreeRegion<1>>>::value));
+		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<char,StaticBalancedBinaryTreeRegion<2>>>::value));
+		EXPECT_TRUE((allscale::api::core::is_fragment<StaticBalancedBinaryTreeFragment<std::string,StaticBalancedBinaryTreeRegion<32>>>::value));
 
 	}
 
 
 	TEST(StaticBalancedBinaryTree,Traits) {
 
-		// test the fragment concept
+		// test the data item concept -- the default
 		EXPECT_TRUE((allscale::api::core::is_data_item<StaticBalancedBinaryTree<int,0>>::value));
 		EXPECT_TRUE((allscale::api::core::is_data_item<StaticBalancedBinaryTree<double,1>>::value));
 		EXPECT_TRUE((allscale::api::core::is_data_item<StaticBalancedBinaryTree<char,2>>::value));
 		EXPECT_TRUE((allscale::api::core::is_data_item<StaticBalancedBinaryTree<std::string,32>>::value));
+
+
+		// test the data item concept -- for blocked regions
+		EXPECT_TRUE((allscale::api::core::is_data_item<StaticBalancedBinaryTree<int,0,StaticBalancedBinaryTreeBlockedRegion>>::value));
+		EXPECT_TRUE((allscale::api::core::is_data_item<StaticBalancedBinaryTree<double,1,StaticBalancedBinaryTreeBlockedRegion>>::value));
+		EXPECT_TRUE((allscale::api::core::is_data_item<StaticBalancedBinaryTree<char,2,StaticBalancedBinaryTreeBlockedRegion>>::value));
+		EXPECT_TRUE((allscale::api::core::is_data_item<StaticBalancedBinaryTree<std::string,32,StaticBalancedBinaryTreeBlockedRegion>>::value));
+
+		// test the data item concept -- for none-blocked regions
+		EXPECT_TRUE((allscale::api::core::is_data_item<StaticBalancedBinaryTree<int,0,StaticBalancedBinaryTreeRegion>>::value));
+		EXPECT_TRUE((allscale::api::core::is_data_item<StaticBalancedBinaryTree<double,1,StaticBalancedBinaryTreeRegion>>::value));
+		EXPECT_TRUE((allscale::api::core::is_data_item<StaticBalancedBinaryTree<char,2,StaticBalancedBinaryTreeRegion>>::value));
+		EXPECT_TRUE((allscale::api::core::is_data_item<StaticBalancedBinaryTree<std::string,32,StaticBalancedBinaryTreeRegion>>::value));
 	}
 
 	TEST(StaticBalancedBinaryTreeElementAddress, Basic) {
 
-		using addr_t = StaticBalancedBinaryTreeElementAddress<8>;
+		using region = StaticBalancedBinaryTreeBlockedRegion<8>;
+		using addr_t = StaticBalancedBinaryTreeElementAddress<region>;
 
 		// this test assumes a root-tree depth of 4
 		EXPECT_EQ(16,1 << 4);
@@ -177,19 +418,19 @@ namespace data {
 
 	namespace {
 
-		template<std::size_t depth, typename Operator>
-		void forAllNodes(const Operator& op, const StaticBalancedBinaryTreeElementAddress<depth>& cur = StaticBalancedBinaryTreeElementAddress<depth>()) {
+		template<typename Region, typename Operator>
+		void forAllNodes(const Operator& op, const StaticBalancedBinaryTreeElementAddress<Region>& cur = StaticBalancedBinaryTreeElementAddress<Region>()) {
 			op(cur);
 			if (cur.isLeaf()) return;
-			forAllNodes<depth>(op,cur.getLeftChild());
-			forAllNodes<depth>(op,cur.getRightChild());
+			forAllNodes<Region>(op,cur.getLeftChild());
+			forAllNodes<Region>(op,cur.getRightChild());
 		}
 
 	}
 
-	TEST(StaticBalancedBinaryTree, Basic) {
+	TEST(StaticBalancedBinaryTree, BasicBlocked) {
 
-		using tree_t = StaticBalancedBinaryTree<int,8>;
+		using tree_t = StaticBalancedBinaryTree<int,8,StaticBalancedBinaryTreeBlockedRegion>;
 		using addr_t = typename tree_t::address_t;
 
 		// create a tree
@@ -202,12 +443,29 @@ namespace data {
 
 	}
 
+	TEST(StaticBalancedBinaryTree, BasicNonBlocked) {
+
+		using tree_t = StaticBalancedBinaryTree<int,8,StaticBalancedBinaryTreeRegion>;
+		using addr_t = typename tree_t::address_t;
+
+		// create a tree
+		tree_t tree;
+
+		// get the root node
+		addr_t root;
+
+		tree[root] = 12;
+
+	}
+
+
 	namespace {
 
-		template<std::size_t depth>
+		template<std::size_t depth,template<std::size_t,std::size_t> class Region>
 		void checkAddressing() {
 
-			using tree_t = StaticBalancedBinaryTree<int,depth>;
+			using tree_t = StaticBalancedBinaryTree<int,depth,Region>;
+			using region = typename tree_t::region_type;
 
 			// create a tree
 			tree_t tree;
@@ -216,7 +474,7 @@ namespace data {
 			std::set<int*> all;
 			std::map<int*,typename tree_t::address_t> index;
 			int count = 0;
-			forAllNodes<depth>([&](const auto& cur) {
+			forAllNodes<region>([&](const auto& cur) {
 				count++;
 				all.insert(&tree[cur]);
 
@@ -235,22 +493,35 @@ namespace data {
 
 	}
 
-	TEST(StaticBalancedBinaryTree, Addressing) {
+	TEST(StaticBalancedBinaryTree, AddressingBlocked) {
 
-		checkAddressing<4>();
-		checkAddressing<5>();
-		checkAddressing<6>();
-		checkAddressing<7>();
-		checkAddressing<8>();
+		checkAddressing<4, StaticBalancedBinaryTreeBlockedRegion>();
+		checkAddressing<5, StaticBalancedBinaryTreeBlockedRegion>();
+		checkAddressing<6, StaticBalancedBinaryTreeBlockedRegion>();
+		checkAddressing<7, StaticBalancedBinaryTreeBlockedRegion>();
+		checkAddressing<8, StaticBalancedBinaryTreeBlockedRegion>();
 
-		checkAddressing<20>();
+		checkAddressing<20, StaticBalancedBinaryTreeBlockedRegion>();
 
 	}
 
-	TEST(StaticBalancedBinaryTreeFragment, Semantic) {
+	TEST(StaticBalancedBinaryTree, AddressingNonBlocked) {
 
-		using region = StaticBalancedBinaryTreeRegion<8>;
-		using fragment = StaticBalancedBinaryTreeFragment<int,8>;
+		checkAddressing<4, StaticBalancedBinaryTreeRegion>();
+		checkAddressing<5, StaticBalancedBinaryTreeRegion>();
+		checkAddressing<6, StaticBalancedBinaryTreeRegion>();
+		checkAddressing<7, StaticBalancedBinaryTreeRegion>();
+		checkAddressing<8, StaticBalancedBinaryTreeRegion>();
+
+		checkAddressing<20, StaticBalancedBinaryTreeRegion>();
+
+	}
+
+
+	TEST(StaticBalancedBinaryTreeFragment, SemanticBlocked) {
+
+		using region = StaticBalancedBinaryTreeBlockedRegion<8>;
+		using fragment = StaticBalancedBinaryTreeFragment<int,region>;
 
 		region a = region::merge(region::root(), region::subtree(3));
 		region b = region::merge(region::root(), region::subtree(7));
@@ -266,11 +537,30 @@ namespace data {
 
 	}
 
+	TEST(StaticBalancedBinaryTreeFragment, SemanticNonBlocked) {
 
-	TEST(StaticBalancedBinaryTreeFragment, ManipulationTest) {
+		using region = StaticBalancedBinaryTreeRegion<8>;
+		using fragment = StaticBalancedBinaryTreeFragment<int,region>;
 
-		using region = StaticBalancedBinaryTreeRegion<20>;
-		using fragment = StaticBalancedBinaryTreeFragment<int,20>;
+		region a = region::merge(region::root(), region::subtree(3));
+		region b = region::merge(region::root(), region::subtree(7));
+		region c = region::merge(region::subtree(3), region::subtree(7));
+
+		EXPECT_EQ("{ N1 S3 }",toString(a));
+		EXPECT_EQ("{ N1 S7 }",toString(b));
+		EXPECT_EQ("{ S3 S7 }",toString(c));
+
+		testFragment<fragment>(a,b);
+		testFragment<fragment>(a,c);
+		testFragment<fragment>(b,c);
+
+	}
+
+
+	TEST(StaticBalancedBinaryTreeFragment, ManipulationTestBlocked) {
+
+		using region = StaticBalancedBinaryTreeBlockedRegion<20>;
+		using fragment = StaticBalancedBinaryTreeFragment<int,region>;
 
 		region a = region::merge(region::root(), region::subtree(3));
 		region b = region::merge(region::root(), region::subtree(7));
@@ -295,7 +585,7 @@ namespace data {
 		auto reset = [&]() {
 			int counterA = 1000000000;
 			int counterB = 2000000000;
-			forAllNodes<20>([&](const auto& cur) {
+			forAllNodes<region>([&](const auto& cur) {
 				if (a.contains(cur)) fA[cur] = (counterA++);
 				if (b.contains(cur)) fB[cur] = (counterB++);
 			});
@@ -308,7 +598,7 @@ namespace data {
 		// check data
 		int counterA = 1000000000;
 		int counterB = 2000000000;
-		forAllNodes<20>([&](const auto& cur) {
+		forAllNodes<region>([&](const auto& cur) {
 			if (a.contains(cur)) { EXPECT_EQ(fA[cur],counterA++); }
 			if (b.contains(cur)) { EXPECT_EQ(fB[cur],counterB++); }
 		});
@@ -321,7 +611,7 @@ namespace data {
 
 		counterA = 1000000000;
 		counterB = 2000000000;
-		forAllNodes<20>([&](const auto& cur) {
+		forAllNodes<region>([&](const auto& cur) {
 			if (a.contains(cur)) {
 				if (b.contains(cur)) {
 					EXPECT_EQ(fA[cur],fB[cur]);
@@ -345,7 +635,7 @@ namespace data {
 
 		counterA = 1000000000;
 		counterB = 2000000000;
-		forAllNodes<20>([&](const auto& cur) {
+		forAllNodes<region>([&](const auto& cur) {
 			if (a.contains(cur)) { EXPECT_EQ(fA[cur],counterA++); }
 			if (b.contains(cur)) {
 				if (a.contains(cur)) {
@@ -363,6 +653,106 @@ namespace data {
 
 	}
 
+
+	TEST(StaticBalancedBinaryTreeFragment, ManipulationTestNonBlocked) {
+
+		using region = StaticBalancedBinaryTreeRegion<20>;
+		using fragment = StaticBalancedBinaryTreeFragment<int,region>;
+
+		StaticBalancedBinaryTreeElementAddress<region> root;
+
+		region a = core::merge(region::root(), region::node(root.getLeftChild().getRightChild()), region::subtree(3));
+		region b = core::merge(region::root(), region::node(root.getRightChild().getLeftChild()), region::subtree(7));
+
+		EXPECT_EQ("{ N1 N5 S3 }",toString(a));
+		EXPECT_EQ("{ N1 N6 S7 }",toString(b));
+
+		// test that this version of tree properly works
+		testFragment<fragment>(a,b);
+
+		// -- simulate manipulation --
+
+		// create some shared data
+		core::no_shared_data shared;
+
+		// create two fragments
+		fragment fA(shared,a);
+		fragment fB(shared,b);
+
+		// mask and fill with data
+		auto mA = fA.mask();
+		auto mB = fB.mask();
+
+		// insert some data
+		auto reset = [&]() {
+			int counterA = 1000000000;
+			int counterB = 2000000000;
+			forAllNodes<region>([&](const auto& cur) {
+				if (a.contains(cur)) fA[cur] = (counterA++);
+				if (b.contains(cur)) fB[cur] = (counterB++);
+			});
+
+			EXPECT_EQ(1000001025,counterA);
+			EXPECT_EQ(2000001025,counterB);
+		};
+		reset();
+
+		// check data
+		int counterA = 1000000000;
+		int counterB = 2000000000;
+		forAllNodes<region>([&](const auto& cur) {
+			if (a.contains(cur)) { EXPECT_EQ(fA[cur],counterA++); }
+			if (b.contains(cur)) { EXPECT_EQ(fB[cur],counterB++); }
+		});
+
+		EXPECT_EQ(1000001025,counterA);
+		EXPECT_EQ(2000001025,counterB);
+
+		// transfer data from B to A (direct)
+		fA.insert(fB,region::root());
+
+		counterA = 1000000000;
+		counterB = 2000000000;
+		forAllNodes<region>([&](const auto& cur) {
+			if (a.contains(cur)) {
+				if (b.contains(cur)) {
+					EXPECT_EQ(fA[cur],fB[cur]);
+				} else {
+					EXPECT_EQ(fA[cur],counterA);
+				}
+				counterA++;
+			}
+			if (b.contains(cur))  { EXPECT_EQ(fB[cur],counterB++); }
+		});
+
+		EXPECT_EQ(1000001025,counterA);
+		EXPECT_EQ(2000001025,counterB);
+
+		// reset
+		reset();
+
+		// transfer data from A to B through serialization
+		auto archive = extract(fA,region::root());
+		insert(fB,archive);
+
+		counterA = 1000000000;
+		counterB = 2000000000;
+		forAllNodes<region>([&](const auto& cur) {
+			if (a.contains(cur)) { EXPECT_EQ(fA[cur],counterA++); }
+			if (b.contains(cur)) {
+				if (a.contains(cur)) {
+					EXPECT_EQ(fB[cur],fA[cur]);
+				} else {
+					EXPECT_EQ(fB[cur],counterB);
+				}
+				counterB++;
+			}
+		});
+
+		EXPECT_EQ(1000001025,counterA);
+		EXPECT_EQ(2000001025,counterB);
+
+	}
 
 } // end namespace data
 } // end namespace user
