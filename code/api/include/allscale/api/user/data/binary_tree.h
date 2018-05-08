@@ -129,9 +129,8 @@ namespace data {
 			return r;
 		}
 
-		static StaticBalancedBinaryTreeBlockedRegion closure(int i) {
-			if (i == num_leaf_trees) return full();
-			return subtree(i);
+		static StaticBalancedBinaryTreeBlockedRegion closure(const StaticBalancedBinaryTreeElementAddress<StaticBalancedBinaryTreeBlockedRegion>& element) {
+			return closure(node(element));
 		}
 
 		static StaticBalancedBinaryTreeBlockedRegion full() {
@@ -143,9 +142,20 @@ namespace data {
 		// -- Region Specific Interface --
 
 		static StaticBalancedBinaryTreeBlockedRegion root() {
+			return fullRootTree();	// there is no smaller size
+		}
+
+		static StaticBalancedBinaryTreeBlockedRegion fullRootTree() {
 			mask_t res;
 			res.set(num_leaf_trees);
 			return res;
+		}
+
+		static StaticBalancedBinaryTreeBlockedRegion node(const StaticBalancedBinaryTreeElementAddress<StaticBalancedBinaryTreeBlockedRegion>& element) {
+			if (element.addressesRootTree()) {
+				return root();
+			}
+			return subtree(element.getSubtreeIndex());
 		}
 
 		static StaticBalancedBinaryTreeBlockedRegion subtree(int i) {
@@ -289,6 +299,10 @@ namespace data {
 			return res;
 		}
 
+		static StaticBalancedBinaryTreeRegion closure(const StaticBalancedBinaryTreeElementAddress<StaticBalancedBinaryTreeRegion>& element) {
+			return closure(node(element));
+		}
+
 		static StaticBalancedBinaryTreeRegion full() {
 			StaticBalancedBinaryTreeRegion res;
 			res.mask.flip();
@@ -300,6 +314,14 @@ namespace data {
 		static StaticBalancedBinaryTreeRegion root() {
 			mask_t res;
 			res.set(0);
+			return res;
+		}
+
+		static StaticBalancedBinaryTreeRegion fullRootTree() {
+			mask_t res;
+			for(std::size_t i=0; i<num_root_tree_entries; i++) {
+				res.set(i);
+			}
 			return res;
 		}
 
@@ -804,14 +826,14 @@ namespace data {
 		 * Provide constant element access.
 		 */
 		const T& operator[](const address_t& addr) const {
-			return data_item_element_access(*this,region_t::subtree(addr.getSubtreeIndex()),base[addr]);
+			return data_item_element_access(*this,region_t::node(addr),base[addr]);
 		}
 
 		/**
 		 * Provide immutable element access.
 		 */
 		T& operator[](const address_t& addr) {
-			return data_item_element_access(*this,region_t::subtree(addr.getSubtreeIndex()),base[addr]);
+			return data_item_element_access(*this,region_t::node(addr),base[addr]);
 		}
 	};
 
