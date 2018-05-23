@@ -125,7 +125,7 @@ namespace utils {
 		struct filler<T,Dims,0> {
 			template<typename ... Args>
 			static std::array<T,Dims> fill(const T&, const Args& ... a) {
-				return {a...};
+				return {{a...}};
 			}
 		};
 
@@ -164,6 +164,14 @@ namespace utils {
 	Vector<T,Dims>& operator/=(Vector<T,Dims>& a, const S& fac) {
 		for(size_t i =0; i<Dims; i++) {
 			a[i] /= fac;
+		}
+		return a;
+	}
+
+	template<typename T, std::size_t Dims, typename S>
+	Vector<T,Dims>& operator%=(Vector<T,Dims>& a, const S& fac) {
+		for(size_t i =0; i<Dims; i++) {
+			a[i] %= fac;
 		}
 		return a;
 	}
@@ -212,9 +220,9 @@ namespace utils {
 		return res %= b;
 	}
 
-	template<typename T, std::size_t Dims, typename Lambda>
-	Vector<T,Dims> elementwise(const Vector<T,Dims>& a, const Vector<T,Dims>& b, const Lambda& op) {
-		Vector<T,Dims> res;
+	template<std::size_t Dims, typename Lambda, typename A, typename B, typename R = decltype(std::declval<Lambda>()(std::declval<A>(), std::declval<B>()))>
+	Vector<R,Dims> elementwise(const Vector<A,Dims>& a, const Vector<B,Dims>& b, const Lambda& op) {
+		Vector<R,Dims> res;
 		for(unsigned i=0; i<Dims; i++) {
 			res[i] = op(a[i],b[i]);
 		}
@@ -231,23 +239,23 @@ namespace utils {
 		return elementwise(a,b,[](const T& a, const T& b) { return std::max<T>(a,b); });
 	}
 
-	template<typename T, std::size_t Dims>
-	Vector<T,Dims> elementwiseProduct(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
-		return elementwise(a,b,[](const T& a, const T& b) { return a*b; });
+	template<std::size_t Dims, typename A, typename B, typename R = decltype(std::declval<A>() * std::declval<B>())>
+	Vector<R,Dims> elementwiseProduct(const Vector<A,Dims>& a, const Vector<B,Dims>& b) {
+		return elementwise(a,b,[](const A& a, const B& b) { return a*b; });
 	}
 
-	template<typename T, std::size_t Dims>
-	Vector<T,Dims> elementwiseDivision(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
-		return elementwise(a,b,[](const T& a, const T& b) { return a/b; });
+	template<std::size_t Dims, typename A, typename B, typename R = decltype(std::declval<A>() / std::declval<B>())>
+	Vector<R,Dims> elementwiseDivision(const Vector<A,Dims>& a, const Vector<B,Dims>& b) {
+		return elementwise(a,b,[](const A& a, const B& b) { return a/b; });
 	}
 
-	template<typename T, std::size_t Dims>
-	Vector<T,Dims> elementwiseRemainder(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
-		return elementwise(a,b,[](const T& a, const T& b) { return a % b; });
+	template<std::size_t Dims, typename A, typename B, typename R = decltype(std::declval<A>() % std::declval<B>())>
+	Vector<R,Dims> elementwiseRemainder(const Vector<A,Dims>& a, const Vector<B,Dims>& b) {
+		return elementwise(a,b,[](const A& a, const B& b) { return a % b; });
 	}
 
-	template<typename T, std::size_t Dims>
-	Vector<T,Dims> elementwiseModulo(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
+	template<std::size_t Dims, typename A, typename B, typename R = decltype(std::declval<A>() % std::declval<B>())>
+	Vector<R,Dims> elementwiseModulo(const Vector<A,Dims>& a, const Vector<B,Dims>& b) {
 		return elementwiseRemainder(a,b);
 	}
 
