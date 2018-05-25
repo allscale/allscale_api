@@ -1628,6 +1628,10 @@ namespace reference {
 			return value;
 		}
 
+		T&& extractValue() && {
+			return std::move(value);
+		}
+
 		void setPromise(const PromisePtr<T>& newPromise) const {
 
 			// this task must not be started yet
@@ -1788,8 +1792,8 @@ namespace reference {
 	template<typename R, typename A, typename B, typename C>
 	class SplitTask : public Task<R> {
 
-		const Task<A>& left;
-		const Task<B>& right;
+		Task<A>& left;
+		Task<B>& right;
 
 		C merge;
 
@@ -1809,7 +1813,7 @@ namespace reference {
 		}
 
 		R computeAggregate() override {
-			return merge(left.getValue(),right.getValue());
+			return merge(std::move(left).extractValue(),std::move(right).extractValue());
 		}
 
 		virtual RuntimePredictor& getRuntimePredictor() const override {
