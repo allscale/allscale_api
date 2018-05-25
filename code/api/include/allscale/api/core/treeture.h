@@ -48,20 +48,20 @@ namespace core {
 
 			T value;
 
-			operator impl::sequential::unreleased_treeture<T>() {
-				return impl::sequential::done(value);
+			operator impl::sequential::unreleased_treeture<T>() && {
+				return impl::sequential::done(std::move(value));
 			}
 
-			operator impl::reference::unreleased_treeture<T>() {
-				return impl::reference::done(value);
+			operator impl::reference::unreleased_treeture<T>() && {
+				return impl::reference::done(std::move(value));
 			}
 
-			operator impl::sequential::treeture<T>() {
-				return impl::sequential::done(value);
+			operator impl::sequential::treeture<T>() && {
+				return impl::sequential::done(std::move(value));
 			}
 
-			operator impl::reference::treeture<T>() {
-				return impl::reference::done(value);
+			operator impl::reference::treeture<T>() && {
+				return impl::reference::done(std::move(value));
 			}
 
 			T get() {
@@ -188,6 +188,11 @@ namespace core {
 	template<typename T>
 	detail::completed_task<T> done(const T& value) {
 		return detail::completed_task<T>{value};
+	}
+
+	template<typename T>
+	detail::completed_task<T> done(T&& value) {
+		return detail::completed_task<T>{std::move(value)};
 	}
 
 

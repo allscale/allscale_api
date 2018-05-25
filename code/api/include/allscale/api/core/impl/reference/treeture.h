@@ -756,8 +756,8 @@ namespace reference {
 
 		Promise() : ready(false) {}
 
-		Promise(const T& value)
-			: ready(true), value(value) {}
+		Promise(T&& value)
+			: ready(true), value(std::move(value)) {}
 
 		bool isReady() const {
 			return ready;
@@ -767,9 +767,13 @@ namespace reference {
 			return value;
 		}
 
-		void setValue(const T& newValue) {
-			value = newValue;
+		void setValue(T&& newValue) {
+			value = std::move(newValue);
 			ready = true;
+		}
+
+		T&& extractValue() {
+			return std::move(value);
 		}
 	};
 
@@ -1458,7 +1462,7 @@ namespace reference {
 		}
 
 		template<typename Process, typename Split, typename R>
-		friend class SplitableTask;
+		friend class SplitableTaskBase;
 
 		// --- debugging ---
 
@@ -1614,8 +1618,8 @@ namespace reference {
 
 		Task() : TaskBase(), promise(nullptr) {}
 
-		Task(const T& value)
-			: TaskBase(true), value(value), promise(nullptr) {}
+		Task(T&& value)
+			: TaskBase(true), value(std::move(value)), promise(nullptr) {}
 
 		Task(TaskBase* left, TaskBase* right, bool parallel)
 			: TaskBase(left, right, parallel), promise(nullptr) {}
@@ -1653,22 +1657,22 @@ namespace reference {
 		void aggregate() override {
 			value = computeAggregate();
 			if(promise) {
-				promise->setValue(value);
+				promise->setValue(std::move(value));
 			}
 		}
 
 		virtual T computeValue() {
 			// the default does nothing
-			return value;
+			return std::move(value);
 		};
 
 		virtual T computeAggregate() {
 			// nothing to do by default
-			return value;
+			return std::move(value);
 		};
 
 		virtual RuntimePredictor& getRuntimePredictor() const override {
-			assert_fail() << "Should not be reachable, predictions only intresting for splitable tasks!";
+			assert_fail() << "Should not be reachable, predictions only interesting for splitable tasks!";
 			return reference::getRuntimePredictor<void>();
 		}
 	};
@@ -1749,13 +1753,14 @@ namespace reference {
 
 	};
 
-
 	template<
 		typename Process,
 		typename Split,
 		typename R = std::result_of_t<Process()>
 	>
-	class SplitableTask : public Task<R> {
+	class SplitableTaskBase : public Task<R> {
+
+	protected:
 
 		Process task;
 		Split decompose;
@@ -1764,21 +1769,10 @@ namespace reference {
 
 	public:
 
-		SplitableTask(const Process& c, const Split& d)
+		SplitableTaskBase(const Process& c, const Split& d)
 			: Task<R>(), task(c), decompose(d), subTask(nullptr) {
 			// mark this task as one that can be split
 			TaskBase::setSplitable();
-		}
-
-		R computeValue() override {
-			// this should not be called if split
-			assert_false(subTask);
-			return task();
-		}
-
-		R computeAggregate() override {
-			// the aggregated value depends on whether it was split or not
-			return (subTask) ? subTask->getValue() : Task<R>::computeAggregate();
 		}
 
 		bool split() override;
@@ -1788,6 +1782,62 @@ namespace reference {
 		}
 
 	};
+
+
+	template<
+		typename Process,
+		typename Split,
+		typename R = std::result_of_t<Process()>
+	>
+	class SplitableTask : public SplitableTaskBase<Process,Split,R> {
+
+	public:
+
+		SplitableTask(const Process& c, const Split& d)
+			: SplitableTaskBase<Process,Split,R>(c,d) {}
+
+		R computeValue() override {
+			// this should not be called if split
+			assert_false(this->subTask);
+			return this->task();
+		}
+
+		R computeAggregate() override {
+			// the aggregated value depends on whether it was split or not
+			return (this->subTask) ? std::move(*this->subTask).extractValue() : std::move(Task<R>::computeAggregate());
+		}
+
+	};
+
+
+	template<
+		typename Process,
+		typename Split
+	>
+	class SplitableTask<Process,Split,void> : public SplitableTaskBase<Process,Split,void> {
+
+	public:
+
+		SplitableTask(const Process& c, const Split& d)
+			: SplitableTaskBase<Process,Split,void>(c,d) {}
+
+		void computeValue() override {
+			// this should not be called if split
+			assert_false(this->subTask);
+			this->task();
+		}
+
+		void computeAggregate() override {
+			// the aggregated value depends on whether it was split or not
+			if (this->subTask) {
+				this->subTask->getValue();
+			} else {
+				Task<void>::computeAggregate();
+			}
+		}
+
+	};
+
 
 	template<typename R, typename A, typename B, typename C>
 	class SplitTask : public Task<R> {
@@ -1970,8 +2020,8 @@ namespace reference {
 
 		treeture() {}
 
-		treeture(const T& value)
-			: super(std::make_shared<Promise<T>>(value)) {}
+		treeture(T&& value)
+			: super(std::make_shared<Promise<T>>(std::move(value))) {}
 
 		treeture(const treeture&) = delete;
 		treeture(treeture&& other) = default;
@@ -1979,13 +2029,18 @@ namespace reference {
 		treeture& operator=(const treeture&) = delete;
 		treeture& operator=(treeture&& other) = default;
 
-		const T& get() {
+		const T& get() const & {
 			static const T defaultValue = T();
 			if (!this->promise) return defaultValue;
 			super::wait();
 			return this->promise->getValue();
 		}
 
+		T&& get() && {
+			assert_true(this->promise);
+			super::wait();
+			return this->promise->extractValue();
+		}
 	};
 
 	/**
@@ -2022,7 +2077,7 @@ namespace reference {
 
 
 	template<typename Process, typename Split, typename R>
-	bool SplitableTask<Process,Split,R>::split() {
+	bool SplitableTaskBase<Process,Split,R>::split() {
 		// do not split a second time
 		if (!TaskBase::isSplitable()) return false;
 
@@ -2057,14 +2112,14 @@ namespace reference {
 
 		template<typename T>
 		struct done_task_to_treeture {
-			treeture<T> operator()(const Task<T>& task) {
-				return treeture<T>(task.getValue());
+			treeture<T> operator()(Task<T>&& task) {
+				return treeture<T>(std::move(task).extractValue());
 			}
 		};
 
 		template<>
 		struct done_task_to_treeture<void> {
-			treeture<void> operator()(const Task<void>&) {
+			treeture<void> operator()(Task<void>&&) {
 				return treeture<void>();
 			}
 		};
@@ -2115,7 +2170,7 @@ namespace reference {
 
 			// special case for completed tasks
 			if (task->isDone()) {
-				auto res = detail::done_task_to_treeture<T>()(*task);
+				auto res = detail::done_task_to_treeture<T>()(std::move(*task));
 				task->dependencyDone();	// remove one dependency for the lose of the owner
 				task = nullptr;
 				return res;
@@ -2187,15 +2242,15 @@ namespace reference {
 	}
 
 	template<typename DepsKind, typename T>
-	unreleased_treeture<T> done(dependencies<DepsKind>&& deps, const T& value) {
-		auto res = new Task<T>(value);
+	unreleased_treeture<T> done(dependencies<DepsKind>&& deps, T value) {
+		auto res = new Task<T>(std::move(value));
 		res->addDependencies(deps.begin(),deps.end());
 		return res;
 	}
 
 	template<typename T>
-	unreleased_treeture<T> done(const T& value) {
-		return done(after(),value);
+	unreleased_treeture<T> done(T value) {
+		return done(after(),std::move(value));
 	}
 
 	namespace runtime {

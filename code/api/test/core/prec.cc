@@ -669,6 +669,49 @@ namespace core {
 	}
 
 
+	// test support for move-only result values
+
+	struct MoveOnly {
+
+		int x;
+
+		MoveOnly() {}
+		MoveOnly(int x) : x(x) {}
+
+		MoveOnly(const MoveOnly&) = delete;
+		MoveOnly(MoveOnly&&) = default;
+
+		MoveOnly& operator=(const MoveOnly&) = delete;
+		MoveOnly& operator=(MoveOnly&&) = default;
+
+	};
+
+	TEST(Prec,MoveOnlySupport) {
+
+		// test properties of result type
+
+		EXPECT_FALSE(std::is_copy_constructible<MoveOnly>::value);
+		EXPECT_FALSE(std::is_copy_assignable<MoveOnly>::value);
+
+		EXPECT_TRUE(std::is_move_constructible<MoveOnly>::value);
+		EXPECT_TRUE(std::is_move_assignable<MoveOnly>::value);
+
+		auto op = prec(
+			[](int p) { return p == 0; },
+			[&](int) {
+				return MoveOnly(0);
+			},
+			[](int p, auto& rec) {
+				return MoveOnly(rec(p-1).get().x+1);
+			}
+		);
+
+		// test that the no-movable result type is supported
+		EXPECT_EQ(2, op(2).get().x);
+		EXPECT_EQ(4, op(4).get().x);
+
+	}
+
 
 	int fib(int x) {
 		return prec(

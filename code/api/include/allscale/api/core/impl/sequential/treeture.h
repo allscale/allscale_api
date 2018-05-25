@@ -93,11 +93,6 @@ namespace sequential {
 
 		treeture() {}
 
-		template<typename Fun>
-		explicit treeture(Fun&& fun) {
-			fun();
-		}
-
 		template<typename T>
 		treeture(const treeture<T>& /*other*/) {}
 
@@ -120,26 +115,29 @@ namespace sequential {
 
 		treeture() {}
 
-		treeture(const T& value)
-			: value(value) {}
-
-		treeture(const T&& value)
+		treeture(T&& value)
 			: value(std::move(value)) {}
 
-		template<typename Fun>
-		explicit treeture(Fun&& fun)
-			: value(fun()) {}
-
-		T get() const {
+		T get() const & {
 			return value;
+		}
+
+		T&& get() && {
+			return std::move(value);
 		}
 
 	};
 
 
 	template<typename Op, typename R = std::result_of_t<Op()>>
-	treeture<R> make_treeture(Op&& op) {
-		return treeture<R>(std::move(op));
+	std::enable_if_t<!std::is_void<R>::value,treeture<R>> make_treeture(Op&& op) {
+		return treeture<R>(op());
+	}
+
+	template<typename Op, typename R = std::result_of_t<Op()>>
+	std::enable_if_t<std::is_void<R>::value,treeture<R>> make_treeture(Op&& op) {
+		op();
+		return treeture<R>();
 	}
 
 	// -- unreleased_treeture --
@@ -158,8 +156,11 @@ namespace sequential {
 		unreleased_treeture() {}
 
 		template<typename Fun>
-		explicit unreleased_treeture(Fun&& fun)
-			: res(fun()) {}
+		explicit unreleased_treeture(T&& value)
+			: res(std::move(value)) {}
+
+		explicit unreleased_treeture(treeture<T>&& treeture)
+			: res(std::move(treeture)) {}
 
 		unreleased_treeture(const unreleased_treeture&) =delete;
 		unreleased_treeture(unreleased_treeture&&) =default;
@@ -167,23 +168,65 @@ namespace sequential {
 		unreleased_treeture& operator=(const unreleased_treeture&) =delete;
 		unreleased_treeture& operator=(unreleased_treeture&&) =default;
 
-		treeture<T> release() const && {
-			return res;
+		treeture<T> release() && {
+			return std::move(res);
 		}
 
-		operator treeture<T>() const && {
+		operator treeture<T>() && {
 			return std::move(*this).release();
 		}
 
-		T get() const && {
+		T get() && {
 			return std::move(*this).release().get();
 		}
 
 	};
 
+	template<>
+	class unreleased_treeture<void> : public task_reference {
+
+		treeture<void> res;
+
+	public:
+
+		using value_type = void;
+
+		using treeture_type = treeture<void>;
+
+		unreleased_treeture() {}
+
+		explicit unreleased_treeture(treeture<void>&& treeture)
+			: res(std::move(treeture)) {}
+
+		unreleased_treeture(const unreleased_treeture&) =delete;
+		unreleased_treeture(unreleased_treeture&&) =default;
+
+		unreleased_treeture& operator=(const unreleased_treeture&) =delete;
+		unreleased_treeture& operator=(unreleased_treeture&&) =default;
+
+		treeture<void> release() const && {
+			return res;
+		}
+
+		operator treeture<void>() const && {
+			return std::move(*this).release();
+		}
+
+		void get() const && {
+			// nothing to do
+		}
+
+	};
+
 	template<typename Gen, typename T = typename std::result_of_t<Gen()>::value_type>
-	unreleased_treeture<T> make_unreleased_treeture(Gen&& gen) {
-		return unreleased_treeture<T>(std::move(gen));
+	std::enable_if_t<!std::is_void<T>::value,unreleased_treeture<T>> make_unreleased_treeture(Gen&& gen) {
+		return unreleased_treeture<T>(gen());
+	}
+
+	template<typename Gen, typename T = typename std::result_of_t<Gen()>::value_type>
+	std::enable_if_t<std::is_void<T>::value,unreleased_treeture<T>> make_unreleased_treeture(Gen&& gen) {
+		gen();
+		return unreleased_treeture<T>();
 	}
 
 	template<typename T,typename Gen>
@@ -257,9 +300,9 @@ namespace sequential {
 	}
 
 	template<typename T>
-	auto done(const T& value) {
-		return make_lazy_unreleased_treeture([=](){
-			return make_unreleased_treeture([=](){ return treeture<T>(value); });
+	auto done(T value) {
+		return make_lazy_unreleased_treeture([value = std::move(value)]() mutable {
+			return make_unreleased_treeture([value = std::move(value)]() mutable { return treeture<T>(std::move(value)); });
 		});
 	}
 
