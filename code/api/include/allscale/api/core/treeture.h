@@ -186,12 +186,17 @@ namespace core {
 	}
 
 	template<typename T>
-	detail::completed_task<T> done(const T& value) {
-		return detail::completed_task<T>{value};
+	std::enable_if_t<std::is_rvalue_reference<T>::value, detail::completed_task<std::remove_reference_t<T>>> done(T value) {
+		return detail::completed_task<std::remove_reference_t<T>>{std::move(value)};
 	}
 
 	template<typename T>
-	detail::completed_task<T> done(T&& value) {
+	std::enable_if_t<std::is_reference<T>::value && !std::is_rvalue_reference<T>::value, detail::completed_task<std::remove_reference_t<T>>> done(T value) {
+		return detail::completed_task<std::remove_reference_t<T>>{value};
+	}
+
+	template<typename T>
+	std::enable_if_t<!std::is_reference<T>::value, detail::completed_task<T>> done(T value) {
 		return detail::completed_task<T>{std::move(value)};
 	}
 
