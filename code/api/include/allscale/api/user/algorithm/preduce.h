@@ -98,7 +98,7 @@ namespace algorithm {
 					algorithm::detail::range<Iter>(a,b).forEach([&](const auto& cur){
 						fold(cur,res);
 					});
-					return finish(res);
+					return finish(std::move(res));
 				},
 				reduce
 		);
