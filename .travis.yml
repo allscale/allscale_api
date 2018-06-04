@@ -154,6 +154,6 @@ script:
   - mkdir build
   - cd build
   - cmake ../code -DCMAKE_BUILD_TYPE=$BUILD_TYPE
-  - make -j2 
+  - make
   # limiting number of workers as suggested in https://docs.travis-ci.com/user/languages/cpp/#OpenMP-projects
   - NUM_WORKERS=3 make test ARGS="-j12 --output-on-failure"
