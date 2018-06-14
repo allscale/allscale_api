@@ -971,7 +971,7 @@ namespace data {
 			allscale::api::user::algorithm::detail::forEach(
 					coordinate_type(0),
 					size(),
-					[&](const auto& pos){
+					[&](const auto& pos) -> void {
 						op((*this)[pos]);
 					}
 			);
@@ -986,7 +986,7 @@ namespace data {
 			allscale::api::user::algorithm::detail::forEach(
 					coordinate_type(0),
 					size(),
-					[&](const auto& pos){
+					[&](const auto& pos) -> void {
 						op((*this)[pos]);
 					}
 			);
