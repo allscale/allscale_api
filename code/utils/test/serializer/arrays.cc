@@ -25,7 +25,7 @@ namespace utils {
 		// and with other types
 		EXPECT_TRUE((is_serializable<std::array<std::string,4>>::value));
 
-		// but not with non-serializable typse
+		// but not with non-serializable types
 		EXPECT_FALSE((is_serializable<NotSerializable>::value));
 		EXPECT_FALSE((is_serializable<std::array<NotSerializable,4>>::value));
 
