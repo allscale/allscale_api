@@ -316,7 +316,7 @@ namespace data {
 
 			tree a;
 			for(std::size_t i=1; i<tree::num_elements; i++) {
-				a.get(i) = i;
+				a.get(i) = (int)i;
 			}
 			auto archive = allscale::utils::serialize(a);
 			tree b = allscale::utils::deserialize<tree>(archive);

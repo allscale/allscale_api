@@ -21,15 +21,15 @@ namespace data {
 	// ---------------------------------------------------------------------------------
 
 	// a type trait defining the default root tree depth (where applicable)
-	template<std::size_t depth>
+	template<std::size_t tree_depth>
 	struct default_root_tree_depth;
 
 	// Static Balanced Binary Tree Region handling the root fragment as a block
-	template<std::size_t depth, std::size_t root_tree_depth = default_root_tree_depth<depth>::value>
+	template<std::size_t tree_depth, std::size_t root_depth = default_root_tree_depth<tree_depth>::value>
 	class StaticBalancedBinaryTreeBlockedRegion;
 
 	// Static Balanced Binary Tree Region handling the root fragment in a fine grained fashion
-	template<std::size_t depth, std::size_t root_tree_depth = default_root_tree_depth<depth>::value>
+	template<std::size_t tree_depth, std::size_t root_depth = default_root_tree_depth<tree_depth>::value>
 	class StaticBalancedBinaryTreeRegion;
 
 	// Static Balanced Binary Tree Element Address
@@ -53,11 +53,11 @@ namespace data {
 	/**
 	 * A definition of the relation between a tree's depth and the root tree depth
 	 */
-	template<std::size_t depth>
+	template<std::size_t tree_depth>
 	struct default_root_tree_depth {
 
 		// by default, the root tree is half the height of the overall tree, but at most 10, producing 1K subtrees
-		constexpr static std::size_t value = std::min<std::size_t>(depth/2,10);
+		constexpr static std::size_t value = std::min<std::size_t>(tree_depth/2,10);
 
 	};
 
@@ -65,13 +65,13 @@ namespace data {
 	/**
 	 * A region description for a sub-set of binary tree elements.
 	 */
-	template<std::size_t _depth, std::size_t root_depth>
+	template<std::size_t tree_depth, std::size_t root_depth>
 	class StaticBalancedBinaryTreeBlockedRegion : public utils::trivially_serializable {
 
 	public:
 
-		// the depth of the three describing a region of
-		constexpr static std::size_t depth = _depth;
+		// the depth of the tree describing a region
+		constexpr static std::size_t depth = tree_depth;
 
 		// the depth of the root tree
 		constexpr static std::size_t root_tree_depth = root_depth;
@@ -202,13 +202,13 @@ namespace data {
 	/**
 	 * A region description for a sub-set of binary tree elements.
 	 */
-	template<std::size_t _depth, std::size_t root_depth>
+	template<std::size_t tree_depth, std::size_t root_depth>
 	class StaticBalancedBinaryTreeRegion : public utils::trivially_serializable {
 
 	public:
 
 		// the depth of the three describing a region of
-		constexpr static std::size_t depth = _depth;
+		constexpr static std::size_t depth = tree_depth;
 
 		// the depth of the root tree
 		constexpr static std::size_t root_tree_depth = root_depth;
