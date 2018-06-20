@@ -34,12 +34,6 @@ namespace internal {
 			: handle(std::move(handle)) {}
 
 		/**
-		 * A simple constructor taking 'ownership' on the given completed task.
-		 */
-		operation_reference(core::detail::completed_task<void>&&)
-			: handle() {}
-
-		/**
 		 * A default constructor, not owning or syncing on anything.
 		 */
 		operation_reference() {};

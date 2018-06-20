@@ -37,15 +37,6 @@ namespace internal {
 
 	}
 
-	TEST(OperatorReference,DoneTask) {
-
-		operation_reference done = core::done();
-
-		EXPECT_TRUE(done.isDone());
-		EXPECT_FALSE(done.isValid());
-
-	}
-
 
 	TEST(OperatorReference,SimpleTask) {
 
