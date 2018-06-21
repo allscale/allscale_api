@@ -87,8 +87,10 @@ namespace algorithm {
 
 	public:
 
-		// inherit all constructors
-		using operation_reference::operation_reference;
+		// forwarding constructors to parent class.
+		// we can not really inherit them, as the arguments won't be moved correctly by allscalecc then.
+		stencil_reference() : internal::operation_reference() {}
+		stencil_reference(core::treeture<void>&& handle) : internal::operation_reference(std::move(handle)) {}
 
 	};
 
