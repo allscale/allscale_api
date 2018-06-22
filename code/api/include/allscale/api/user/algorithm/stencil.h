@@ -230,6 +230,9 @@ namespace algorithm {
 				// return handle to asynchronous execution
 				return async([&a,steps,inner,boundary,observers...]{
 
+					// mark this task as having no dependencies (to speed up analysis)
+					core::sema::no_more_dependencies();
+
 					// iterative implementation
 					Container b(a.size());
 
@@ -240,13 +243,16 @@ namespace algorithm {
 
 					for(std::size_t t=0; t<steps; t++) {
 
+						Container& a = *x;
+						Container& b = *y;
+
 						// loop based parallel implementation with blocking synchronization
 						pforWithBoundary(iter_type(0),a.size(),
-							[x,y,t,inner](const iter_type& i){
-								(*y)[i] = inner(t,i,*x);
+							[&,t,inner](const iter_type& i){
+								b[i] = inner(t,i,a);
 							},
-							[x,y,t,boundary](const iter_type& i){
-								(*y)[i] = boundary(t,i,*x);
+							[&,t,boundary](const iter_type& i){
+								b[i] = boundary(t,i,a);
 							}
 						);
 
@@ -257,9 +263,9 @@ namespace algorithm {
 								if(!observer.isInterestedInTime(t)) return;
 								// walk through space
 								algorithm::pfor(iter_type(0),a.size(),
-									[&](const iter_type& i) {
+									[&,t,observer](const iter_type& i) {
 										if (observer.isInterestedInLocation(i)) {
-											observer.trigger(t,i,(*y)[i]);
+											observer.trigger(t,i,b[i]);
 										}
 									}
 								);
