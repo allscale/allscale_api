@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef ALLSCALE_WITH_HPX
+#ifndef ALLSCALE_WITH_HPX
 	#include "allscale/utils/serializer.h"
 #endif
 
