@@ -233,7 +233,7 @@ namespace algorithm {
 				return async([&a,steps,inner,boundary,observers...]{
 
 					// mark this task as having no dependencies (to speed up analysis)
-					core::sema::no_more_dependencies();
+					core::sema::no_dependencies();
 
 					// iterative implementation
 					Container b(a.size());

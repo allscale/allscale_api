@@ -39,9 +39,21 @@ namespace core {
 		};
 
 		/**
+		 * A user-defined read requirement on some data element.
+		 */
+		template<typename T>
+		void needs_read_access_on(const T&) { /* interpreted by AllScale compiler */ }
+
+		/**
+		 * A user-defined write requirement on some data element.
+		 */
+		template<typename T>
+		void needs_write_access_on(T&) { /* interpreted by AllScale compiler */ }
+
+		/**
 		 * Instruct compiler to ignore dependencies in the enclosing scope.
 		 */
-		inline void no_more_dependencies() {};
+		inline void no_dependencies() { /* interpreted by AllScale compiler */ };
 
 	}
 
