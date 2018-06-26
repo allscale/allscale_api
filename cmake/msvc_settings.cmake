@@ -5,6 +5,8 @@ if(MSVC)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zi")
 	# increase number of sections in *.obj file
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
+	# increase stack size to 32 megabytes (required for some unit tests)
+	set(CMAKE_CXX_STACK_SIZE "33554432")
 	# disable optimizations(compilation speed)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Od")
 	# disable some warnings
