@@ -364,6 +364,9 @@ namespace algorithm {
 					// initialization of "b" copy (guidance for runtime data management)
 					pfor(iter_type(0),a.size(),
 						[&](const iter_type& i){
+							// workaround for the runtime system
+							core::sema::needs_write_access_on(a[i]);
+							core::sema::needs_write_access_on(b[i]);
 							b[i] = a[i];
 						}
 					);
