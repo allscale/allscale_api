@@ -404,7 +404,7 @@ namespace data {
 		using addr_type = allscale::utils::Vector<int64_t, Dims>;
 
 		AdaptiveGridCell() = default;
-		AdaptiveGridCell(const AdaptiveGridCell& other) = delete;
+		AdaptiveGridCell(const AdaptiveGridCell& other) = default;
 		AdaptiveGridCell(AdaptiveGridCell&& other) = default;
 
 		// determines the active layer of this grid cell
