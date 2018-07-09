@@ -361,6 +361,13 @@ namespace algorithm {
 
 					using iter_type = decltype(a.size());
 
+					// initialization of "b" copy (guidance for runtime data management)
+					pfor(iter_type(0),a.size(),
+						[&](const iter_type& i){
+							b[i] = a[i];
+						}
+					);
+
 					for(std::size_t t=0; t<steps; t++) {
 
 						Container& a = *x;
