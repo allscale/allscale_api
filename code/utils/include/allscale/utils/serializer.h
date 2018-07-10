@@ -51,6 +51,18 @@ namespace utils {
 	struct is_serializable;
 
 	/**
+	 * This type trait can be utilized to test whether a given type is trivially serializable,
+	 * thus can be archived and restored through a simple memcpy.
+	 */
+	template<typename T, typename _ = void>
+	struct is_trivially_serializable;
+
+	/**
+	 * A marker class for trivially serializable types.
+	 */
+	struct trivially_serializable {};
+
+	/**
 	 * A facade function for packing an object into an archive.
 	 */
 	template<typename T>
@@ -221,6 +233,20 @@ namespace utils {
 		}
 
 		/**
+		 * Appends an array of elements to the end of the underlying data buffer.
+		 */
+		template <typename T>
+		void write(const T* value, std::size_t count) {
+			if (is_trivially_serializable<T>::value) {
+				write(reinterpret_cast<const char*>(value),sizeof(T)*count);
+			} else {
+				for(std::size_t i=0; i<count; i++) {
+					write(value[i]);
+				}
+			}
+		}
+
+		/**
 		 * A utility function wrapping the invocation of the serialization mechanism.
 		 */
 		template<typename T>
@@ -240,17 +266,23 @@ namespace utils {
 
 	};
 #else
-    class ArchiveWriter {
-        hpx::serialization::output_archive &ar_;
+	class ArchiveWriter {
+		hpx::serialization::output_archive &ar_;
 
-    public:
-        ArchiveWriter(hpx::serialization::output_archive &ar) : ar_(ar) {}
+	public:
+		ArchiveWriter(hpx::serialization::output_archive &ar) : ar_(ar) {}
 
-        /**
+		/**
 		 * Appends a given number of bytes to the end of the underlying data buffer.
 		 */
 		void write(const char* src, std::size_t count) {
-            ar_ & hpx::serialization::make_array(src, count);
+			ar_ & hpx::serialization::make_array(src, count);
+		}
+
+		template <typename T>
+		void write(const T* value, std::size_t count)
+		{
+			ar_ & hpx::serialization::make_array(value, count);
 		}
 
 		/**
@@ -263,12 +295,12 @@ namespace utils {
 			serializer<T>::store(*this,value);
 		}
 
-        template<typename T>
+		template<typename T>
 		std::enable_if_t<!is_serializable<T>::value,void>
 		write(const T& value) {
-            ar_ & value;
+			ar_ & value;
 		}
-    };
+	};
 #endif
 
 #if !defined(ALLSCALE_WITH_HPX)
@@ -308,6 +340,20 @@ namespace utils {
 		}
 
 		/**
+		 * Reads an array of elements from the underlying buffer.
+		 */
+		template <typename T>
+		void read(T* dst, std::size_t count) {
+			if (is_trivially_serializable<T>::value) {
+				read(reinterpret_cast<char*>(dst),sizeof(T)*count);
+			} else {
+				for(std::size_t i = 0; i<count; i++) {
+					dst[i] = read<T>();
+				}
+			}
+		}
+
+		/**
 		 * A utility function wrapping up the de-serialization of an object
 		 * of type T from the underlying buffer.
 		 */
@@ -321,16 +367,22 @@ namespace utils {
 	};
 #else
 	class ArchiveReader {
-        hpx::serialization::input_archive &ar_;
+		hpx::serialization::input_archive &ar_;
 
-    public:
-        ArchiveReader(hpx::serialization::input_archive &ar) : ar_(ar) {}
+	public:
+		ArchiveReader(hpx::serialization::input_archive &ar) : ar_(ar) {}
 
 		/**
 		 * Reads a number of bytes from the underlying buffer.
 		 */
 		void read(char* dst, std::size_t count) {
-            ar_ & hpx::serialization::make_array(dst, count);
+			ar_ & hpx::serialization::make_array(dst, count);
+		}
+
+		template <typename T>
+		void read(T* dst, std::size_t count) {
+			hpx::serialization::array<T> arr(dst, count);
+			ar_ & arr;
 		}
 
 		/**
@@ -348,24 +400,85 @@ namespace utils {
 		std::enable_if_t<!is_serializable<T>::value,T>
 		read() {
 			// use serializer to restore object of this type
-            T t;
-            ar_ & t;
-            return t;
+			T t;
+			ar_ & t;
+			return t;
 		}
 	};
 #endif
 
 
+	namespace detail {
+
+		struct not_trivially_serializable {};
+
+		template<typename ... Ts>
+		struct all_trivially_serializable;
+
+		template<>
+		struct all_trivially_serializable<> : public std::true_type {};
+
+		template<typename T, typename ... Rest>
+		struct all_trivially_serializable<T,Rest...> : public std::conditional<is_trivially_serializable<T>::value, all_trivially_serializable<Rest...>,std::false_type>::type {};
+
+	}
+
+	/**
+	 * A utility to mark trivially serializable dependent types.
+	 */
+	template<typename ... Ts>
+	using trivially_serializable_if_t = typename std::conditional<
+			detail::all_trivially_serializable<Ts...>::value,
+			trivially_serializable,detail::not_trivially_serializable
+		>::type;
+
+
+
+	template<typename T, typename _>
+	struct is_trivially_serializable : public std::false_type {};
+
+	template<typename T>
+	struct is_trivially_serializable<T, typename std::enable_if<std::is_base_of<trivially_serializable,T>::value,void>::type> : public std::true_type {};
+
+	template <typename T, typename _>
+	struct is_serializable : public std::false_type {};
+
+	template <typename T>
+	struct is_serializable<T, typename std::enable_if<
+			// everything that has a proper serializer instance is serializable
+			std::is_same<decltype((T(*)(Archive&))(&serializer<T>::load)), T(*)(Archive&)>::value &&
+			std::is_same<decltype((void(*)(Archive&, const T&))(&serializer<T>::store)), void(*)(Archive&, const T&)>::value,
+		void>::type> : public std::true_type {};
+
+
+
+	/**
+	 * Adds support for the serialization to every trivially serializable type.
+	 */
+	template<typename T>
+	struct serializer<T, typename std::enable_if<is_trivially_serializable<T>::value,void>::type> {
+		static T load(ArchiveReader& a) {
+			T res;
+			a.read(reinterpret_cast<char*>(&res),sizeof(T));
+			return res;
+		}
+		static void store(ArchiveWriter& a, const T& value) {
+			a.write(reinterpret_cast<const char*>(&value),sizeof(T));
+		}
+	};
+
 	/**
 	 * Adds support for the serialization to every type T supporting
 	 *
 	 * 	- a static member function  T load(ArchiveReader&)
-	 * 	- a member function         void store(ArchiveWriter&)
+	 * 	- a member function		 void store(ArchiveWriter&)
 	 *
 	 * Thus, serialization / deserialization can be integrated through member functions.
 	 */
 	template<typename T>
 	struct serializer<T, typename std::enable_if<
+			// it is not a trivially serializable type
+			!is_trivially_serializable<T>::value &&
 			// targeted types have to offer a static load member ...
 			std::is_same<decltype(T::load(std::declval<ArchiveReader&>())),T>::value &&
 			// ... and a store member function
@@ -381,71 +494,10 @@ namespace utils {
 	};
 
 
-	/**
-	 * Enables the skipping of const qualifiers for types.
-	 * Also const values can be serialized and deserialized if requested.
-	 */
-	template<typename T>
-	struct serializer<const T,typename std::enable_if<
-			is_serializable<T>::value,
-		void>::type> : public serializer<T> {};
-
-
-
 	// -- primitive type serialization --
 
-	namespace detail {
-
-		/**
-		 * A helper functor for serializing primitive types.
-		 */
-		template<typename T>
-		struct primitive_serializer {
-			static T load(ArchiveReader& reader) {
-				T res = 0;
-				reader.read(reinterpret_cast<char*>(&res),sizeof(T));
-				return res;
-			}
-			static void store(ArchiveWriter& writer, const T& value) {
-				writer.write(reinterpret_cast<const char*>(&value),sizeof(T));
-			}
-		};
-
-	} // end namespace detail
-
-	template<> struct serializer<bool>          :  public detail::primitive_serializer<bool> {};
-
-	template<> struct serializer<char>          :  public detail::primitive_serializer<char> {};
-	template<> struct serializer<signed char>   :  public detail::primitive_serializer<signed char> {};
-	template<> struct serializer<unsigned char> :  public detail::primitive_serializer<unsigned char> {};
-	template<> struct serializer<char16_t>      :  public detail::primitive_serializer<char16_t> {};
-	template<> struct serializer<char32_t>      :  public detail::primitive_serializer<char32_t> {};
-	template<> struct serializer<wchar_t>       :  public detail::primitive_serializer<wchar_t> {};
-
-	template<> struct serializer<short int>     :  public detail::primitive_serializer<short int> {};
-	template<> struct serializer<int>           :  public detail::primitive_serializer<int> {};
-	template<> struct serializer<long int>      :  public detail::primitive_serializer<long int> {};
-	template<> struct serializer<long long int> :  public detail::primitive_serializer<long long int> {};
-
-	template<> struct serializer<unsigned short int>     :  public detail::primitive_serializer<unsigned short int> {};
-	template<> struct serializer<unsigned int>           :  public detail::primitive_serializer<unsigned int> {};
-	template<> struct serializer<unsigned long int>      :  public detail::primitive_serializer<unsigned long int> {};
-	template<> struct serializer<unsigned long long int> :  public detail::primitive_serializer<unsigned long long int> {};
-
-	template<> struct serializer<float>       :  public detail::primitive_serializer<float> {};
-	template<> struct serializer<double>      :  public detail::primitive_serializer<double> {};
-	template<> struct serializer<long double> :  public detail::primitive_serializer<long double> {};
-
-
-	template <typename T, typename _>
-	struct is_serializable : public std::false_type {};
-
-	template <typename T>
-	struct is_serializable<T, typename std::enable_if<
-			std::is_same<decltype((T(*)(Archive&))(&serializer<T>::load)), T(*)(Archive&)>::value &&
-			std::is_same<decltype((void(*)(Archive&, const T&))(&serializer<T>::store)), void(*)(Archive&, const T&)>::value,
-		void>::type> : public std::true_type {};
-
+	template<typename T>
+	struct is_trivially_serializable<T,std::enable_if_t<std::is_arithmetic<T>::value,void>> : public std::true_type {};
 
 
 	// -- facade functions --
@@ -471,30 +523,29 @@ namespace utils {
 #if defined(ALLSCALE_WITH_HPX)
 namespace hpx {
 namespace serialization {
-    template <typename T>
-    typename std::enable_if<
-        ::allscale::utils::is_serializable<T>::value &&
-        !(std::is_integral<T>::value || std::is_floating_point<T>::value),
-        output_archive&
-    >::type
-    serialize(output_archive & ar, T const & t, int) {
-        allscale::utils::ArchiveWriter writer(ar);
-        writer.write(t);
-        return ar;
-    }
+	template <typename T>
+	typename std::enable_if<
+		::allscale::utils::is_serializable<T>::value &&
+		!(std::is_integral<T>::value || std::is_floating_point<T>::value),
+		output_archive&
+	>::type
+	serialize(output_archive & ar, T const & t, int) {
+		allscale::utils::ArchiveWriter writer(ar);
+		writer.write(t);
+		return ar;
+	}
 
-    template <typename T>
-    typename std::enable_if<
-        ::allscale::utils::is_serializable<T>::value &&
-        !(std::is_integral<T>::value || std::is_floating_point<T>::value),
-        input_archive&
-    >::type
-    serialize(input_archive & ar, T & t, int) {
-
-        allscale::utils::ArchiveReader reader(ar);
-        t = reader.read<T>();
-        return ar;
-    }
+	template <typename T>
+	typename std::enable_if<
+		::allscale::utils::is_serializable<T>::value &&
+		!(std::is_integral<T>::value || std::is_floating_point<T>::value),
+		input_archive&
+	>::type
+	serialize(input_archive & ar, T & t, int) {
+		allscale::utils::ArchiveReader reader(ar);
+		t = reader.read<T>();
+		return ar;
+	}
 } // end namespace serialization
-} // end namespace allscale
+} // end namespace hpx
 #endif

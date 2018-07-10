@@ -327,7 +327,7 @@ namespace data {
 
 		// check that the coordinates are correct
 		Region full = Region::merge(partA,partB);
-		EXPECT_EQ("{[[0,0] - [500,1000]]}",toString(full));
+		EXPECT_EQ("{[[0,0] - [500,1000])}",toString(full));
 
 		// create fragments
 		Fragment fA(shared,partA);

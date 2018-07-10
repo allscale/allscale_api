@@ -118,46 +118,90 @@ namespace data {
 
 		template<std::size_t I>
 		struct box_fuser {
+
+			void apply(std::vector<GridBox<I>>& boxes) {
+				while(applyIteration(boxes)) {}
+			}
+
 			template<std::size_t Dims>
-			bool apply(std::vector<GridBox<Dims>>& boxes) {
+			bool applyIteration(std::vector<GridBox<Dims>>& boxes) {
 
-				// try fuse I-th dimension
-				for(std::size_t i = 0; i<boxes.size(); i++) {
-					for(std::size_t j = i+1; j<boxes.size(); j++) {
-
-						// check whether a fusion is possible
-						GridBox<Dims>& a = boxes[i];
-						GridBox<Dims>& b = boxes[j];
-						if (GridBox<Dims>::template areFusable<I-1>(a,b)) {
-
-							// fuse the boxes
-							GridBox<Dims> f = GridBox<Dims>::template fuse<I-1>(a,b);
-							boxes.erase(boxes.begin() + j);
-							boxes[i] = f;
-
-							// start over again
-							apply(boxes);
-							return true;
-						}
+				// a comparator comparing all but the current dimension
+				auto less = [](const auto& a, const auto& b) {
+					for(std::size_t i=0; i<Dims; i++) {
+						if (i == (I-1)) continue;
+						if (a.min[i]  < b.min[i]) return true;
+						if (a.min[i] != b.min[i]) return false;
 					}
+					return false;
+				};
+
+				// get number of elements before
+				auto numEntries = boxes.size();
+
+				// sort by all but current dimension
+				std::sort(boxes.begin(),boxes.end(),less);
+
+				// merge along current dimension
+				bool merged = false;
+				for(std::size_t i=0; i<boxes.size(); i++) {
+
+					// see whether it can be merged with something
+					auto& a = boxes[i];
+
+					// see whether this has already been consumed
+					if (a.empty()) continue;
+
+					for(std::size_t j=i+1; j<boxes.size(); j++) {
+
+						auto& b = boxes[j];
+
+						// ignore consumed entries
+						if (b.empty()) continue;
+
+						// if other dimensions are no longer equal => stop
+						if (less(a,b)) break;
+
+						// if not fusable => skip
+						if (!GridBox<Dims>::template areFusable<I-1>(a,b)) continue;
+
+						// fuse b into a
+						a = GridBox<Dims>::template fuse<I-1>(a,b);
+
+						// mark b as consumed
+						b.max = b.min;
+
+						// remember merged
+						merged = true;
+					}
+
 				}
 
-				// fuse smaller dimensions
-				if (box_fuser<I-1>().apply(boxes)) {
-					// start over again
-					apply(boxes);
-					return true;
+				// filter out empty boxes
+				if (merged) {
+					boxes.erase(std::remove_if(boxes.begin(),boxes.end(),[](const auto& cur){
+						return cur.empty();
+					}), boxes.end());
 				}
 
-				// no more changes
-				return false;
+				// merge next level
+				box_fuser<I-1>().applyIteration(boxes);
+
+				// return whether a merge happened
+				return numEntries != boxes.size();
+
 			}
 		};
 
 		template<>
 		struct box_fuser<0> {
+
+			void apply(std::vector<GridBox<0>>&) {
+				// nothing to do
+			}
+
 			template<std::size_t Dims>
-			bool apply(std::vector<GridBox<Dims>>&) { return false; }
+			bool applyIteration(std::vector<GridBox<Dims>>&) { return false; }
 		};
 
 		template<std::size_t I>
@@ -181,11 +225,15 @@ namespace data {
 				body(a,b);
 			}
 		};
+
+		template<unsigned level>
+		struct box_spanner;
+
 	}
 
 
 	template<std::size_t Dims>
-	class GridBox {
+	class GridBox : public utils::trivially_serializable {
 
 		static_assert(Dims >= 1, "0-dimension Grids (=Scalars) not yet supported.");
 
@@ -193,7 +241,13 @@ namespace data {
 		friend struct detail::difference_computer;
 
 		template<std::size_t I>
+		friend struct detail::box_fuser;
+
+		template<std::size_t I>
 		friend struct detail::line_scanner;
+
+		template<unsigned level>
+		friend struct detail::box_spanner;
 
 		template<std::size_t D>
 		friend class GridRegion;
@@ -311,13 +365,6 @@ namespace data {
 			return res;
 		}
 
-		static GridBox span(const GridBox& a, const GridBox& b) {
-			return GridBox(
-				allscale::utils::elementwiseMin(a.min,b.min),
-				allscale::utils::elementwiseMax(a.max,b.max)
-			);
-		}
-
 		template<typename Lambda>
 		void scanByLines(const Lambda& body) const {
 			if (empty()) return;
@@ -329,8 +376,7 @@ namespace data {
 		template<std::size_t D>
 		static bool areFusable(const GridBox& a, const GridBox& b) {
 			static_assert(D < Dims, "Can not fuse on non-existing dimension.");
-			if (a.min > b.min) return areFusable<D>(b,a);
-			if (a.max[D] != b.min[D]) return false;
+			if (a.max[D] != b.min[D] && b.max[D] != a.min[D]) return false;
 			for(std::size_t i = 0; i<Dims; i++) {
 				if (i == D) continue;
 				if (a.min[i] != b.min[i]) return false;
@@ -349,24 +395,23 @@ namespace data {
 		}
 
 		friend std::ostream& operator<<(std::ostream& out, const GridBox& box) {
-			return out << "[" << box.min << " - " << box.max << "]";
-		}
-
-		/**
-		 * An operator to load an instance of this range from the given archive.
-		 */
-		static GridBox load(utils::ArchiveReader& reader) {
-			auto min = reader.read<point_type>();
-			auto max = reader.read<point_type>();
-			return { min, max };
-		}
-
-		/**
-		 * An operator to store an instance of this range into the given archive.
-		 */
-		void store(utils::ArchiveWriter& writer) const {
-			writer.write(min);
-			writer.write(max);
+			auto printPoint = [&](const point_type& point) {
+				out << "[" << allscale::utils::join(",",(const std::array<coordinate_type,Dims>&)point,[](std::ostream& out, const int64_t& cur) {
+					if (cur == std::numeric_limits<coordinate_type>::min()) {
+						out << "-inf";
+					} else if (cur == std::numeric_limits<coordinate_type>::max()) {
+						out << "+inf";
+					} else {
+						out << cur;
+					}
+				}) << "]";
+			};
+			out << "[";
+			printPoint(box.min);
+			out << " - ";
+			printPoint(box.max);
+			out << ")";
+			return out;
 		}
 
 	};
@@ -515,6 +560,7 @@ namespace data {
 			// combine regions
 			for(const auto& curB : b.regions) {
 				std::vector<box_type> next;
+				next.reserve(res.regions.size());
 				for(const auto& curA : res.regions) {
 					for(const auto& n : box_type::difference(curA,curB)) {
 						next.push_back(n);
@@ -530,11 +576,25 @@ namespace data {
 			return res;
 		}
 
+		static GridRegion span(const box_type& a, const box_type& b) {
+
+			GridRegion res;
+			box_type cur(coordinate_type(0));
+			detail::box_spanner<Dims>()(res,cur,a,b);
+			return res;
+
+
+			return box_type(
+				allscale::utils::elementwiseMin(a.min,b.min),
+				allscale::utils::elementwiseMax(a.max,b.max)
+			);
+		}
+
 		static GridRegion span(const GridRegion& a, const GridRegion& b) {
 			GridRegion res;
 			for(const auto& ba : a.regions) {
 				for(const auto& bb : b.regions) {
-					res = merge(res,GridRegion(box_type::span(ba,bb)));
+					res = merge(res,span(ba,bb));
 				}
 			}
 			return res;
@@ -597,33 +657,71 @@ namespace data {
 
 	};
 
+	namespace detail {
+
+		template<unsigned level>
+		struct box_spanner {
+			template<typename Region, typename Box>
+			void operator()(Region& region, Box& cur, const Box& low, const Box& high) {
+				constexpr unsigned pos = level-1;
+
+				constexpr auto neg_inf = std::numeric_limits<coordinate_type>::min();
+				constexpr auto pos_inf = std::numeric_limits<coordinate_type>::max();
+
+				// get boundaries
+				auto l1 = low.min[pos];
+				auto h1 = low.max[pos];
+				auto l2 = high.min[pos];
+				auto h2 = high.max[pos];
+
+				// if the high range is enclosing the low range
+				if (l2 < l1 && h1 < h2) {
+					cur.min[pos] = l2;
+					cur.max[pos] = h2;
+					box_spanner<level-1>()(region,cur,low,high);
+					return;
+				}
+
+				// decide, based on relation
+				if (l1 < h2) {
+					cur.min[pos] = l1;
+					cur.max[pos] = std::max(h1,h2);
+					box_spanner<level-1>()(region,cur,low,high);
+				} else {
+					cur.min[pos] = neg_inf;
+					cur.max[pos] = h2;
+					box_spanner<level-1>()(region,cur,low,high);
+					cur.min[pos] = l1;
+					cur.max[pos] = pos_inf;
+					box_spanner<level-1>()(region,cur,low,high);
+				}
+			}
+		};
+
+		template<>
+		struct box_spanner<0> {
+			template<typename Region, typename Box>
+			void operator()(Region& region, Box& cur, const Box&, const Box&) {
+				if (cur.empty()) return;
+				region = Region::merge(region,Region(cur));
+			}
+		};
+
+	} // end namespace detail
+
+
 
 	template<std::size_t Dims>
-	struct GridSharedData {
+	struct GridSharedData : public utils::trivially_serializable {
 
 		using size_type = GridPoint<Dims>;
 
 		size_type size;
 
-        GridSharedData()
-        {}
+		GridSharedData() {}
 
 		GridSharedData(const size_type& size)
 			: size(size) {}
-
-		/**
-		 * An operator to load an instance of this shared data from the given archive.
-		 */
-		static GridSharedData load(utils::ArchiveReader& reader) {
-			return { reader.read<size_type>() };
-		}
-
-		/**
-		 * An operator to store an instance of this shared data into the given archive.
-		 */
-		void store(utils::ArchiveWriter& writer) const {
-			writer.write(size);
-		}
 
 	};
 
@@ -658,9 +756,9 @@ namespace data {
 		}
 
 		GridFragment(const shared_data_type& sharedData, const region_type& region = region_type())
-				: totalSize(sharedData.size), coveredRegion(region), data(area(totalSize)) {
+				: totalSize(sharedData.size), coveredRegion(region_type::intersect(totalSize,region)), data(area(totalSize)) {
 			// allocate covered data space
-			region.scanByLines([&](const point& a, const point& b) {
+			coveredRegion.scanByLines([&](const point& a, const point& b) {
 				data.allocate(flatten(a),flatten(b));
 			});
 		}
@@ -687,12 +785,15 @@ namespace data {
 
 		void resize(const region_type& newCoveredRegion) {
 
+			// get region to be covered within the requested region
+			region_type newRegion = region_type::intersect(getTotalSize(),newCoveredRegion);
+
 			// get the difference
-			region_type plus  = region_type::difference(newCoveredRegion,coveredRegion);
-			region_type minus = region_type::difference(coveredRegion,newCoveredRegion);
+			region_type plus  = region_type::difference(newRegion,coveredRegion);
+			region_type minus = region_type::difference(coveredRegion,newRegion);
 
 			// update the size
-			coveredRegion = newCoveredRegion;
+			coveredRegion = newRegion;
 
 			// allocated new data
 			plus.scanByLines([&](const point& a, const point& b){
@@ -726,10 +827,11 @@ namespace data {
 			// write the requested region to the archive
 			writer.write(region);
 
-			// add the data
-			region.scan([&](const point& p){
-				writer.write((*this)[p]);
+			// insert the data, line by line
+			region.scanByLines([&](const point& a, const point& b) {
+				writer.write(&(*this)[a], flatten(b)-flatten(a));
 			});
+
 		}
 
 		void insert(utils::ArchiveReader& reader) {
@@ -742,8 +844,8 @@ namespace data {
 				<< "Targeted fragment does not cover data to be inserted!";
 
 			// insert the data
-			region.scan([&](const point& p){
-				(*this)[p] = reader.read<T>();
+			region.scanByLines([&](const point& a, const point& b) {
+				reader.read(&(*this)[a], flatten(b)-flatten(a));
 			});
 		}
 
@@ -869,7 +971,7 @@ namespace data {
 			allscale::api::user::algorithm::detail::forEach(
 					coordinate_type(0),
 					size(),
-					[&](const auto& pos){
+					[&](const auto& pos) -> void {
 						op((*this)[pos]);
 					}
 			);
@@ -884,7 +986,7 @@ namespace data {
 			allscale::api::user::algorithm::detail::forEach(
 					coordinate_type(0),
 					size(),
-					[&](const auto& pos){
+					[&](const auto& pos) -> void {
 						op((*this)[pos]);
 					}
 			);
@@ -914,3 +1016,20 @@ namespace data {
 } // end namespace user
 } // end namespace api
 } // end namespace allscale
+
+#if defined(ALLSCALE_WITH_HPX)
+#include <hpx/traits/is_bitwise_serializable.hpp>
+
+namespace hpx { namespace traits {
+    template <std::size_t Dim>
+    struct is_bitwise_serializable<allscale::api::user::data::GridBox<Dim>>
+      : std::true_type
+    {};
+
+    template <std::size_t Dim>
+    struct is_bitwise_serializable<allscale::api::user::data::GridSharedData<Dim>>
+      : std::true_type
+    {};
+}}
+
+#endif

@@ -5,6 +5,10 @@ if(BUILD_TESTS AND NOT TARGET googletest)
 		# disable checked iterators
 		set(_additional_c_flags /D_ITERATOR_DEBUG_LEVEL=0)
 		set(_additional_cxx_flags /D_ITERATOR_DEBUG_LEVEL=0)
+		# disable warning regarding deprecated tr1 namespace (introduced with MSVC 2017 15.5.1)
+		set(_additional_c_flags "${_additional_c_flags} /D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING=1")
+		set(_additional_cxx_flags "${_additional_cxx_flags} /D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING=1")
+
 		set(_additional_flags -DCMAKE_C_FLAGS=${_additional_c_flags} -DCMAKE_CXX_FLAGS=${_additional_cxx_flags})
 	endif()
 

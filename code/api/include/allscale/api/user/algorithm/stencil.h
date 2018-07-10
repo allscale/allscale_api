@@ -87,8 +87,10 @@ namespace algorithm {
 
 	public:
 
-		// inherit all constructors
-		using operation_reference::operation_reference;
+		// forwarding constructors to parent class.
+		// we can not really inherit them, as the arguments won't be moved correctly by allscalecc then.
+		stencil_reference() : internal::operation_reference() {}
+		stencil_reference(core::treeture<void>&& handle) : internal::operation_reference(std::move(handle)) {}
 
 	};
 
@@ -102,7 +104,7 @@ namespace algorithm {
 		) {
 
 		// forward everything to the implementation
-		return Impl().process(a,steps,innerUpdate,boundaryUpdate,observers...);
+		return Impl().processWithBoundary(a,steps,innerUpdate,boundaryUpdate,observers...);
 
 	}
 
@@ -113,7 +115,7 @@ namespace algorithm {
 	stencil_reference<Impl> stencil(Container& a, std::size_t steps, const Update& update,const Observer<ObserverTimeFilters,ObserverLocationFilters,ObserverActions>& ... observers) {
 
 		// use the same update for inner and boundary updates
-		return stencil<Impl>(a,steps,update,update,observers...);
+		return Impl().process(a,steps,update,observers...);
 
 	}
 
@@ -162,7 +164,7 @@ namespace algorithm {
 		struct sequential_iterative {
 
 			template<typename Container, typename InnerUpdate, typename BoundaryUpdate, typename ... Observers>
-			stencil_reference<sequential_iterative> process(Container& a, std::size_t steps, const InnerUpdate& innerUpdate, const BoundaryUpdate& boundaryUpdate, const Observers& ... observers) {
+			stencil_reference<sequential_iterative> processWithBoundary(Container& a, std::size_t steps, const InnerUpdate& innerUpdate, const BoundaryUpdate& boundaryUpdate, const Observers& ... observers) {
 
 				// return handle to asynchronous execution
 				return async([&a,steps,innerUpdate,boundaryUpdate,observers...]{
@@ -219,16 +221,12 @@ namespace algorithm {
 				});
 
 			}
-		};
 
-
-		struct coarse_grained_iterative {
-
-			template<typename Container, typename InnerUpdate, typename BoundaryUpdate, typename ... Observers>
-			stencil_reference<coarse_grained_iterative> process(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary, const Observers& ... observers) {
+			template<typename Container, typename Update, typename ... Observers>
+			stencil_reference<sequential_iterative> process(Container& a, std::size_t steps, const Update& update, const Observers& ... observers) {
 
 				// return handle to asynchronous execution
-				return async([&a,steps,inner,boundary,observers...]{
+				return async([&a,steps,update,observers...]{
 
 					// iterative implementation
 					Container b(a.size());
@@ -240,13 +238,11 @@ namespace algorithm {
 
 					for(std::size_t t=0; t<steps; t++) {
 
-						// loop based parallel implementation with blocking synchronization
-						pforWithBoundary(iter_type(0),a.size(),
-							[x,y,t,inner](const iter_type& i){
-								(*y)[i] = inner(t,i,*x);
-							},
-							[x,y,t,boundary](const iter_type& i){
-								(*y)[i] = boundary(t,i,*x);
+						// loop based sequential implementation
+						user::algorithm::detail::forEach(iter_type(0),a.size(),
+							// inner update operation
+							[x,y,t,update](const iter_type& i){
+								(*y)[i] = update(t,i,*x);
 							}
 						);
 
@@ -256,7 +252,7 @@ namespace algorithm {
 								// check whether this time step is of interest
 								if(!observer.isInterestedInTime(t)) return;
 								// walk through space
-								algorithm::pfor(iter_type(0),a.size(),
+								user::algorithm::detail::forEach(iter_type(0),a.size(),
 									[&](const iter_type& i) {
 										if (observer.isInterestedInLocation(i)) {
 											observer.trigger(t,i,(*y)[i]);
@@ -283,13 +279,153 @@ namespace algorithm {
 		};
 
 
-		struct fine_grained_iterative {
+		struct coarse_grained_iterative {
 
 			template<typename Container, typename InnerUpdate, typename BoundaryUpdate, typename ... Observers>
-			stencil_reference<fine_grained_iterative> process(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary, const Observers& ... observers) {
+			stencil_reference<coarse_grained_iterative> processWithBoundary(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary, const Observers& ... observers) {
 
 				// return handle to asynchronous execution
 				return async([&a,steps,inner,boundary,observers...]{
+
+					// mark this task as having no dependencies (to speed up analysis)
+					core::sema::no_dependencies();
+
+					// iterative implementation
+					Container b(a.size());
+
+					Container* x = &a;
+					Container* y = &b;
+
+					using iter_type = decltype(a.size());
+
+					for(std::size_t t=0; t<steps; t++) {
+
+						Container& a = *x;
+						Container& b = *y;
+
+						// loop based parallel implementation with blocking synchronization
+						pforWithBoundary(iter_type(0),a.size(),
+							[&,t,inner](const iter_type& i){
+								b[i] = inner(t,i,a);
+							},
+							[&,t,boundary](const iter_type& i){
+								b[i] = boundary(t,i,a);
+							}
+						);
+
+						// check observers
+						detail::staticForEach(
+							[&](const auto& observer){
+								// check whether this time step is of interest
+								if(!observer.isInterestedInTime(t)) return;
+								// walk through space
+								algorithm::pfor(iter_type(0),a.size(),
+									[&,t,observer](const iter_type& i) {
+										if (observer.isInterestedInLocation(i)) {
+											observer.trigger(t,i,b[i]);
+										}
+									}
+								);
+							},
+							observers...
+						);
+
+						// swap buffers
+						std::swap(x,y);
+					}
+
+					// make sure result is in a
+					if (x != &a) {
+						// move final data to the original container
+						std::swap(a,b);
+					}
+
+				});
+
+			}
+
+			template<typename Container, typename Update, typename ... Observers>
+			stencil_reference<coarse_grained_iterative> process(Container& a, std::size_t steps, const Update& update, const Observers& ... observers) {
+
+				// return handle to asynchronous execution
+				return async([&a,steps,update,observers...]{
+
+					// mark this task as having no dependencies (to speed up analysis)
+					core::sema::no_dependencies();
+
+					// iterative implementation
+					Container b(a.size());
+
+					Container* x = &a;
+					Container* y = &b;
+
+					using iter_type = decltype(a.size());
+
+					// initialization of "b" copy (guidance for runtime data management)
+					pfor(iter_type(0),a.size(),
+						[&](const iter_type& i){
+							// workaround for the runtime system
+							core::sema::needs_write_access_on(a[i]);
+							core::sema::needs_write_access_on(b[i]);
+							b[i] = a[i];
+						}
+					);
+
+					for(std::size_t t=0; t<steps; t++) {
+
+						Container& a = *x;
+						Container& b = *y;
+
+						// loop based parallel implementation with blocking synchronization
+						pfor(iter_type(0),a.size(),
+							[&,t,update](const iter_type& i){
+								b[i] = update(t,i,a);
+							}
+						);
+
+						// check observers
+						detail::staticForEach(
+							[&](const auto& observer){
+								// check whether this time step is of interest
+								if(!observer.isInterestedInTime(t)) return;
+								// walk through space
+								algorithm::pfor(iter_type(0),a.size(),
+									[&,t,observer](const iter_type& i) {
+										if (observer.isInterestedInLocation(i)) {
+											observer.trigger(t,i,b[i]);
+										}
+									}
+								);
+							},
+							observers...
+						);
+
+						// swap buffers
+						std::swap(x,y);
+					}
+
+					// make sure result is in a
+					if (x != &a) {
+						// move final data to the original container
+						std::swap(a,b);
+					}
+
+				});
+
+			}
+		};
+
+
+		struct fine_grained_iterative {
+
+			template<typename Container, typename InnerUpdate, typename BoundaryUpdate, typename ... Observers>
+			stencil_reference<fine_grained_iterative> processWithBoundary(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary, const Observers& ... observers) {
+
+				// return handle to asynchronous execution
+				return async([&a,steps,inner,boundary,observers...]{
+
+					// mark this task as having no dependencies (to speed up analysis)
+					core::sema::no_dependencies();
 
 					// iterative implementation
 					Container b(a.size());
@@ -303,27 +439,97 @@ namespace algorithm {
 
 					for(std::size_t t=0; t<steps; t++) {
 
+						Container& a = *x;
+						Container& b = *y;
+
 						// loop based parallel implementation with fine grained dependencies
 						ref = algorithm::pforWithBoundary(iter_type(0),a.size(),
-							[x,y,t,inner](const iter_type& i){
-								(*y)[i] = inner(t,i,*x);
+							[&,t,inner](const iter_type& i){
+								b[i] = inner(t,i,a);
 							},
-							[x,y,t,boundary](const iter_type& i){
-								(*y)[i] = boundary(t,i,*x);
+							[&,t,boundary](const iter_type& i){
+								b[i] = boundary(t,i,a);
 							},
 							full_neighborhood_sync(ref)
 						);
 
 						// check observers
 						detail::staticForEach(
-							[t,y,&ref,&a](const auto& observer){
+							[&](const auto& observer){
 								// check whether this time step is of interest
 								if(!observer.isInterestedInTime(t)) return;
 								// walk through space
 								ref = algorithm::pfor(iter_type(0),a.size(),
-									[t,y,observer](const iter_type& i) {
+									[&,t,observer](const iter_type& i) {
 										if (observer.isInterestedInLocation(i)) {
-											observer.trigger(t,i,(*y)[i]);
+											observer.trigger(t,i,b[i]);
+										}
+									},
+									one_on_one(ref)
+								);
+							},
+							observers...
+						);
+
+						// swap buffers
+						std::swap(x,y);
+					}
+
+					// wait for the task completion
+					ref.wait();
+
+					// make sure result is in a
+					if (x != &a) {
+						// move final data to the original container
+						std::swap(a,b);
+					}
+
+				});
+
+			}
+
+			template<typename Container, typename Update, typename ... Observers>
+			stencil_reference<fine_grained_iterative> process(Container& a, std::size_t steps, const Update& update, const Observers& ... observers) {
+
+				// return handle to asynchronous execution
+				return async([&a,steps,update,observers...]{
+
+					// mark this task as having no dependencies (to speed up analysis)
+					core::sema::no_dependencies();
+
+					// iterative implementation
+					Container b(a.size());
+
+					Container* x = &a;
+					Container* y = &b;
+
+					using iter_type = decltype(a.size());
+
+					user::algorithm::detail::loop_reference<iter_type> ref;
+
+					for(std::size_t t=0; t<steps; t++) {
+
+						Container& a = *x;
+						Container& b = *y;
+
+						// loop based parallel implementation with fine grained dependencies
+						ref = algorithm::pfor(iter_type(0),a.size(),
+							[&,t,update](const iter_type& i){
+								b[i] = update(t,i,a);
+							},
+							full_neighborhood_sync(ref)
+						);
+
+						// check observers
+						detail::staticForEach(
+							[&](const auto& observer){
+								// check whether this time step is of interest
+								if(!observer.isInterestedInTime(t)) return;
+								// walk through space
+								ref = algorithm::pfor(iter_type(0),a.size(),
+									[&,t,observer](const iter_type& i) {
+										if (observer.isInterestedInLocation(i)) {
+											observer.trigger(t,i,b[i]);
 										}
 									},
 									one_on_one(ref)
@@ -1259,7 +1465,7 @@ namespace algorithm {
 		struct sequential_recursive {
 
 			template<typename Container, typename InnerUpdate, typename BoundaryUpdate, typename ... Observers>
-			stencil_reference<sequential_recursive> process(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary, const Observers& ... observers) {
+			stencil_reference<sequential_recursive> processWithBoundary(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary, const Observers& ... observers) {
 
 				using namespace detail;
 
@@ -1358,13 +1564,19 @@ namespace algorithm {
 				// done
 				return {};
 			}
+
+			template<typename Container, typename Update, typename ... Observers>
+			stencil_reference<sequential_recursive> process(Container& a, std::size_t steps, const Update& update, const Observers& ... observers) {
+
+				return processWithBoundary(a, steps, update, update, observers...);
+			}
 		};
 
 
 		struct parallel_recursive {
 
 			template<typename Container, typename InnerUpdate, typename BoundaryUpdate, typename ... Observers>
-			stencil_reference<parallel_recursive> process(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary, const Observers& ... observers) {
+			stencil_reference<parallel_recursive> processWithBoundary(Container& a, std::size_t steps, const InnerUpdate& inner, const BoundaryUpdate& boundary, const Observers& ... observers) {
 
 				using namespace detail;
 
@@ -1462,6 +1674,12 @@ namespace algorithm {
 
 				// done
 				return {};
+			}
+
+			template<typename Container, typename Update, typename ... Observers>
+			stencil_reference<parallel_recursive> process(Container& a, std::size_t steps, const Update& update, const Observers& ... observers) {
+
+				return processWithBoundary(a, steps, update, update, observers...);
 			}
 		};
 

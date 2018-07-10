@@ -24,7 +24,7 @@ int main() {
 
 	// initialize temperature
 	Grid& temp = bufferA;
-	pfor(Point{1,1},Point{N-1,N-1},[&](const Point& p){
+	pfor(Point{0,0},Point{N,N},[&](const Point& p){
 		temp[p] = 0;
 
 		// one hot spot in the center

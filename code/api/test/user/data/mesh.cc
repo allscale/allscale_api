@@ -1524,6 +1524,37 @@ namespace data {
 		EXPECT_EQ(31,mask);
 	}
 
+	TEST(Mesh, Wait) {
+
+		auto bar = createBarMesh<2, 2>(5);
+
+		// check the first level
+		std::atomic<int> counter(0);
+		std::atomic<uint32_t> mask(0);
+		auto handle = bar.pforAll<Vertex>([&](auto& cur) {
+			counter++;
+			mask.fetch_or(1 << cur.id);
+		});
+
+		handle.wait();
+
+		EXPECT_EQ(10, counter);
+		EXPECT_EQ(1023, mask);
+
+		// check the second level
+		counter.store(0);
+		mask.store(0);
+		auto ref = bar.pforAll<Vertex, 1>([&](auto& cur) {
+			counter++;
+			mask.fetch_or(1 << cur.id);
+		});
+
+		ref.wait();
+
+		EXPECT_EQ(5, counter);
+		EXPECT_EQ(31, mask);
+	}
+
 	TEST(Mesh,Preduce) {
 
 		auto bar = createBarMesh<2,2>(5);

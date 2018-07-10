@@ -616,11 +616,11 @@ namespace algorithm {
 		struct scanner {
 			scanner<idx-1> nested;
 			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Op, typename ... Coordinates>
-			void operator()(const Compound<Iter,dims>& begin, const Compound<Iter,dims>& end, const Op& op, Coordinates ... coordinates) {
+			void run(const Compound<Iter,dims>& begin, const Compound<Iter,dims>& end, const Op& op, Coordinates ... coordinates) {
 				auto a = begin[dims-idx];
 				auto b = end[dims-idx];
 				for(Iter i = a; i != b ; ++i) {
-					nested(begin,end,op,coordinates...,i);
+					nested.run(begin,end,op,coordinates...,i);
 				}
 			}
 		};
@@ -628,7 +628,7 @@ namespace algorithm {
 		template<>
 		struct scanner<0> {
 			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Op, typename ... Coordinates>
-			void operator()(const Compound<Iter,dims>&, const Compound<Iter,dims>&, const Op& op, Coordinates ... coordinates) {
+			void run(const Compound<Iter,dims>&, const Compound<Iter,dims>&, const Op& op, Coordinates ... coordinates) {
 				point_factory<Compound<Iter,dims>> factory;
 				op(factory(coordinates...));
 			}
@@ -637,16 +637,17 @@ namespace algorithm {
 		template<size_t idx>
 		struct scanner_with_boundary {
 			scanner_with_boundary<idx-1> nested;
-			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Op>
-			void operator()(const Compound<Iter,dims>& begin, const Compound<Iter,dims>& end, Compound<Iter,dims>& cur, const Op& op) {
-				auto& i = cur[dims-idx];
-				for(i = begin[dims-idx]; i != end[dims-idx]; ++i ) {
-					nested(begin, end, cur, op);
+			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Op, typename ... Coordinates>
+			void run_same(const Compound<Iter,dims>& begin, const Compound<Iter,dims>& end, const Op& op, Coordinates ... coordinates) {
+				auto a = begin[dims-idx];
+				auto b = end[dims-idx];
+				for(Iter i = a; i != b ; ++i) {
+					nested.run_same(begin, end, op,coordinates...,i);
 				}
 			}
-			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Inner, typename Boundary>
-			void operator()(const Compound<Iter,dims>& begin, const Compound<Iter,dims>& end, Compound<Iter,dims>& cur, const Inner& inner, const Boundary& boundary) {
-				auto& i = cur[dims-idx];
+			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Inner, typename Boundary, typename ... Coordinates>
+			void run_mixed(const Compound<Iter,dims>& begin, const Compound<Iter,dims>& end, const Inner& inner, const Boundary& boundary, Coordinates ... coordinates) {
+				Iter i;
 
 				// extract range
 				const auto& a = begin[dims-idx];
@@ -656,24 +657,24 @@ namespace algorithm {
 				if (a==b) return;
 
 				// handle left boundary
-				i = a; nested(begin,end,cur,boundary);
+				i = a; nested.run_same(begin,end,boundary,coordinates...,i);
 
 				// check whether this has been all
 				if (a + 1 == b) return;
 
 				// process inner part
 				for(i = a+1; i!=b-1; ++i) {
-					nested(begin,end,cur,inner,boundary);
+					nested.run_mixed(begin,end,inner,boundary,coordinates...,i);
 				}
 
 				// handle right boundary
 				i = b-1;
-				nested(begin,end,cur,boundary);
+				nested.run_same(begin,end,boundary,coordinates...,i);
 			}
 
-			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Inner, typename Boundary>
-			void operator()(const Compound<Iter,dims>& fullBegin, const Compound<Iter,dims>& fullEnd, const Compound<Iter,dims>& begin, const Compound<Iter,dims>& end, Compound<Iter,dims>& cur, const Inner& inner, const Boundary& boundary) {
-				auto& i = cur[dims-idx];
+			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Inner, typename Boundary, typename ... Coordinates>
+			void run_section(const Compound<Iter,dims>& fullBegin, const Compound<Iter,dims>& fullEnd, const Compound<Iter,dims>& begin, const Compound<Iter,dims>& end, const Inner& inner, const Boundary& boundary, Coordinates ... coordinates) {
+				Iter i;
 
 				// extract range
 				const auto& fa = fullBegin[dims-idx];
@@ -692,7 +693,7 @@ namespace algorithm {
 				// handle left boundary
 				if (fa == ia) {
 					i = ia;
-					nested(begin,end,cur,boundary);
+					nested.run_same(begin,end,boundary,coordinates...,i);
 					ia++;
 				}
 
@@ -702,84 +703,68 @@ namespace algorithm {
 
 				// process inner part
 				for(i = ia; i!=ib; ++i) {
-					nested(fullBegin,fullEnd,begin,end,cur,inner,boundary);
+					nested.run_section(fullBegin,fullEnd,begin,end,inner,boundary,coordinates...,i);
 				}
 
 				// handle right boundary
 				if (fb == b) {
 					i = b-1;
-					nested(begin,end,cur,boundary);
+					nested.run_same(begin,end,boundary,coordinates...,i);
 				}
 			}
 		};
 
 		template<>
 		struct scanner_with_boundary<0> {
-			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Op>
-			void operator()(const Compound<Iter,dims>&, const Compound<Iter,dims>&, Compound<Iter,dims>& cur, const Op& op) {
-				op(cur);
+			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Op, typename ... Coordinates>
+			void run_same(const Compound<Iter,dims>&, const Compound<Iter,dims>&, const Op& op, Coordinates ... coordinates) {
+				op(Compound<Iter,dims>(coordinates...));
 			}
-			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Inner, typename Boundary>
-			void operator()(const Compound<Iter,dims>&, const Compound<Iter,dims>&, Compound<Iter,dims>& cur, const Inner& inner, const Boundary&) {
-				inner(cur);
+			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Inner, typename Boundary, typename ... Coordinates>
+			void run_mixed(const Compound<Iter,dims>&, const Compound<Iter,dims>&, const Inner& inner, const Boundary&, Coordinates ... coordinates) {
+				inner(Compound<Iter,dims>(coordinates...));
 			}
-			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Inner, typename Boundary>
-			void operator()(const Compound<Iter,dims>&, const Compound<Iter,dims>&, const Compound<Iter,dims>&, const Compound<Iter,dims>&, Compound<Iter,dims>& cur, const Inner& inner, const Boundary&) {
-				inner(cur);
+			template<template<typename T, size_t d> class Compound, typename Iter, size_t dims, typename Inner, typename Boundary, typename ... Coordinates>
+			void run_section(const Compound<Iter,dims>&, const Compound<Iter,dims>&, const Compound<Iter,dims>&, const Compound<Iter,dims>&, const Inner& inner, const Boundary&, Coordinates ... coordinates) {
+				inner(Compound<Iter,dims>(coordinates...));
 			}
 		};
 
 		template<typename Iter, size_t dims, typename InnerOp, typename BoundaryOp>
 		void forEach(const std::array<Iter,dims>& fullBegin, const std::array<Iter,dims>& fullEnd, const std::array<Iter,dims>& begin, const std::array<Iter,dims>& end, const InnerOp& inner, const BoundaryOp& boundary) {
-
-			// the current position
-			std::array<Iter,dims> cur;
-
 			// scan range
-			detail::scanner_with_boundary<dims>()(fullBegin, fullEnd, begin, end, cur, inner, boundary);
+			detail::scanner_with_boundary<dims>().run_section(fullBegin, fullEnd, begin, end, inner, boundary);
 		}
 
 		template<typename Iter, size_t dims, typename InnerOp, typename BoundaryOp>
 		void forEach(const std::array<Iter,dims>& begin, const std::array<Iter,dims>& end, const InnerOp& inner, const BoundaryOp& boundary) {
-
-			// the current position
-			std::array<Iter,dims> cur;
-
 			// scan range
-			detail::scanner_with_boundary<dims>()(begin, end, cur, inner, boundary);
+			detail::scanner_with_boundary<dims>().run_mixed(begin, end, inner, boundary);
 		}
 
 		template<typename Iter, size_t dims, typename Op>
 		void forEach(const std::array<Iter,dims>& begin, const std::array<Iter,dims>& end, const Op& op) {
 			// scan range
-			detail::scanner<dims>()(begin, end, op);
+			detail::scanner<dims>().run(begin, end, op);
 		}
 
 		template<typename Elem, size_t dims, typename InnerOp, typename BoundaryOp>
 		void forEach(const utils::Vector<Elem,dims>& fullBegin, const utils::Vector<Elem,dims>& fullEnd, const utils::Vector<Elem,dims>& begin, const utils::Vector<Elem,dims>& end, const InnerOp& inner, const BoundaryOp& boundary) {
-
-			// the current position
-			utils::Vector<Elem,dims> cur;
-
 			// scan range
-			detail::scanner_with_boundary<dims>()(fullBegin, fullEnd, begin, end, cur, inner, boundary);
+			detail::scanner_with_boundary<dims>().run_section(fullBegin, fullEnd, begin, end, inner, boundary);
 		}
 
 		template<typename Elem, size_t dims, typename InnerOp, typename BoundaryOp>
 		void forEach(const utils::Vector<Elem,dims>& begin, const utils::Vector<Elem,dims>& end, const InnerOp& inner, const BoundaryOp& boundary) {
-
-			// the current position
-			utils::Vector<Elem,dims> cur;
-
 			// scan range
-			detail::scanner_with_boundary<dims>()(begin, end, cur, inner, boundary);
+			detail::scanner_with_boundary<dims>().run_mixed(begin, end, inner, boundary);
 		}
 
 
 		template<typename Elem, size_t dims, typename Op>
 		void forEach(const utils::Vector<Elem,dims>& begin, const utils::Vector<Elem,dims>& end, const Op& op) {
 			// scan range
-			detail::scanner<dims>()(begin, end, op);
+			detail::scanner<dims>().run(begin, end, op);
 		}
 
 

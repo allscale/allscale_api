@@ -48,20 +48,20 @@ namespace core {
 
 			T value;
 
-			operator impl::sequential::unreleased_treeture<T>() {
-				return impl::sequential::done(value);
+			operator impl::sequential::unreleased_treeture<T>() && {
+				return impl::sequential::done(std::move(value));
 			}
 
-			operator impl::reference::unreleased_treeture<T>() {
-				return impl::reference::done(value);
+			operator impl::reference::unreleased_treeture<T>() && {
+				return impl::reference::done(std::move(value));
 			}
 
-			operator impl::sequential::treeture<T>() {
-				return impl::sequential::done(value);
+			operator impl::sequential::treeture<T>() && {
+				return impl::sequential::done(std::move(value));
 			}
 
-			operator impl::reference::treeture<T>() {
-				return impl::reference::done(value);
+			operator impl::reference::treeture<T>() && {
+				return impl::reference::done(std::move(value));
 			}
 
 			T get() {
@@ -186,8 +186,18 @@ namespace core {
 	}
 
 	template<typename T>
-	detail::completed_task<T> done(const T& value) {
-		return detail::completed_task<T>{value};
+	std::enable_if_t<std::is_rvalue_reference<T>::value, detail::completed_task<std::remove_reference_t<T>>> done(T value) {
+		return detail::completed_task<std::remove_reference_t<T>>{std::move(value)};
+	}
+
+	template<typename T>
+	std::enable_if_t<std::is_reference<T>::value && !std::is_rvalue_reference<T>::value, detail::completed_task<std::remove_reference_t<T>>> done(T value) {
+		return detail::completed_task<std::remove_reference_t<T>>{value};
+	}
+
+	template<typename T>
+	std::enable_if_t<!std::is_reference<T>::value, detail::completed_task<T>> done(T value) {
+		return detail::completed_task<T>{std::move(value)};
 	}
 
 
@@ -371,8 +381,8 @@ namespace core {
 
 	// -- sequential --
 
-	template<typename D, typename A, typename B>
-	auto sequential(D&& deps, A&& a, B&& b, typename std::enable_if<is_dependency<D>::value,int>::type = 1) {
+	template<typename D, typename A, typename B, typename std::enable_if<is_dependency<D>::value,int>::type = 1>
+	auto sequential(D&& deps, A&& a, B&& b) {
 		detail::implementation<A,B> impl;
 		return impl.sequential(std::move(deps),impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)));
 	}
@@ -391,8 +401,8 @@ namespace core {
 
 	// -- parallel --
 
-	template<typename D, typename A, typename B>
-	auto parallel(D&& deps, A&& a, B&& b, typename std::enable_if<is_dependency<D>::value,int>::type = 1) {
+	template<typename D, typename A, typename B, typename std::enable_if<is_dependency<D>::value,int>::type = 1>
+	auto parallel(D&& deps, A&& a, B&& b) {
 		detail::implementation<A,B> impl;
 		return impl.parallel(std::move(deps),impl.convertParameter(std::move(a)),impl.convertParameter(std::move(b)));
 	}

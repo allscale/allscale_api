@@ -16,6 +16,10 @@ namespace utils {
 
 	};
 
+	struct TriviallySerializable : public trivially_serializable {
+		int x;
+	};
+
 	struct LoadOnly {
 		static Serializable load(ArchiveReader&) {
 			return Serializable();
@@ -25,6 +29,62 @@ namespace utils {
 	struct StoreOnly {
 		void store(ArchiveWriter&) const {}
 	};
+
+	// Example for a container which's serializability depends on a template type
+
+	template<typename T>
+	struct Container : public trivially_serializable_if_t<T> {
+
+		T x;
+
+		static Container myload(ArchiveReader&) {
+			return Container();
+		}
+		void mystore(ArchiveWriter&) const {}
+	};
+
+	template<typename T>
+	struct serializer<Container<T>,typename std::enable_if<!is_trivially_serializable<T>::value && is_serializable<T>::value,void>::type> {
+		static Container<T> load(ArchiveReader& a) {
+			return Container<T>::myload(a);
+		}
+		static void store(ArchiveWriter& a, const Container<T>& value) {
+			value.mystore(a);
+		}
+	};
+
+
+	TEST(Data, TriviallySerializable) {
+
+		// check primitive types
+		EXPECT_TRUE(is_trivially_serializable<int>::value);
+		EXPECT_TRUE(is_trivially_serializable<char>::value);
+		EXPECT_TRUE(is_trivially_serializable<unsigned>::value);
+		EXPECT_TRUE(is_trivially_serializable<float>::value);
+		EXPECT_TRUE(is_trivially_serializable<double>::value);
+
+		EXPECT_TRUE(is_trivially_serializable<const int>::value);
+		EXPECT_TRUE(is_trivially_serializable<const float>::value);
+		EXPECT_TRUE(is_trivially_serializable<const double>::value);
+
+
+		// make sure pointers can not be serialized
+		EXPECT_FALSE(is_trivially_serializable<int*>::value);
+
+		// check
+		EXPECT_FALSE(is_trivially_serializable<Serializable>::value);
+		EXPECT_TRUE(is_trivially_serializable<TriviallySerializable>::value);
+		EXPECT_FALSE(is_trivially_serializable<NonSerializable>::value);
+		EXPECT_FALSE(is_trivially_serializable<LoadOnly>::value);
+		EXPECT_FALSE(is_trivially_serializable<StoreOnly>::value);
+
+		// check dependent types
+		EXPECT_TRUE(is_trivially_serializable<Container<int>>::value);
+		EXPECT_TRUE(is_trivially_serializable<Container<TriviallySerializable>>::value);
+		EXPECT_FALSE(is_trivially_serializable<Container<Serializable>>::value);
+		EXPECT_FALSE(is_trivially_serializable<Container<NonSerializable>>::value);
+
+	}
 
 	TEST(Data, Serializable) {
 
@@ -45,9 +105,16 @@ namespace utils {
 
 		// check
 		EXPECT_TRUE(is_serializable<Serializable>::value);
+		EXPECT_TRUE(is_serializable<TriviallySerializable>::value);
 		EXPECT_FALSE(is_serializable<NonSerializable>::value);
 		EXPECT_FALSE(is_serializable<LoadOnly>::value);
 		EXPECT_FALSE(is_serializable<StoreOnly>::value);
+
+		// check dependent types
+		EXPECT_TRUE(is_serializable<Container<int>>::value);
+		EXPECT_TRUE(is_serializable<Container<TriviallySerializable>>::value);
+		EXPECT_TRUE(is_serializable<Container<Serializable>>::value);
+		EXPECT_FALSE(is_serializable<Container<NonSerializable>>::value);
 
 	}
 

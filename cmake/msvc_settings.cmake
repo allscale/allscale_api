@@ -5,6 +5,8 @@ if(MSVC)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zi")
 	# increase number of sections in *.obj file
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
+	# increase stack size to 32 megabytes (required for some unit tests)
+	set(CMAKE_CXX_STACK_SIZE "33554432")
 	# disable optimizations(compilation speed)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Od")
 	# disable some warnings
@@ -23,6 +25,8 @@ if(MSVC)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd\"4800\"")
 	# disable warning "symbol will be dynamically initialized(implementation limitation)" because MSVC 2015.1 is still buggy on that
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd\"4592\"")
+	# disable warning regarding deprecated tr1 namespace (introduced with MSVC 2017 15.5.1)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING")
 
 	# remove NDEBUG from release flags
 	string(REPLACE "/DNDEBUG" "" CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")

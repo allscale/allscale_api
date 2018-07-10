@@ -22,6 +22,39 @@ namespace core {
 			return ref;
 		}
 
+		/**
+		 * A user-defined read requirement on a region of a data item.
+		 */
+		template<typename DataItem>
+		void needs_read_access(const DataItem& item, const typename DataItem::region_type& region) {
+			int a = 0; a = _data_item_element_access(item,region,a);
+		};
+
+		/**
+		 * A user-defined write requirement on a region of a data item.
+		 */
+		template<typename DataItem>
+		void needs_write_access(const DataItem& item, const typename DataItem::region_type& region) {
+			int a = 0; _data_item_element_access(item,region,a) = 0;
+		};
+
+		/**
+		 * A user-defined read requirement on some data element.
+		 */
+		template<typename T>
+		void needs_read_access_on(const T&) { /* interpreted by AllScale compiler */ }
+
+		/**
+		 * A user-defined write requirement on some data element.
+		 */
+		template<typename T>
+		void needs_write_access_on(T&) { /* interpreted by AllScale compiler */ }
+
+		/**
+		 * Instruct compiler to ignore dependencies in the enclosing scope.
+		 */
+		inline void no_dependencies() { /* interpreted by AllScale compiler */ };
+
 	}
 
 	// a macro to wrap up data_item_element_access calls,

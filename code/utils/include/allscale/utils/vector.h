@@ -12,6 +12,13 @@
 namespace allscale {
 namespace utils {
 
+	namespace detail {
+
+		template<typename T, std::size_t Dims>
+		std::array<T,Dims> fill(const T&);
+
+	}
+
 	// generic vector implementation
 	template<typename T, std::size_t Dims>
 	class Vector {
@@ -24,9 +31,7 @@ namespace utils {
 
 		Vector() = default;
 
-		Vector(const T& e) {
-			data.fill(e);
-		}
+		Vector(const T& e) : data(detail::fill<T,Dims>(e)) {}
 
 		Vector(const Vector&) = default;
 		Vector(Vector&&) = default;
@@ -39,16 +44,10 @@ namespace utils {
 		Vector(const std::array<R,Dims>& other)
 			: data(other) {}
 
-		Vector(const std::initializer_list<T>& values) {
-			assert_eq(Dims,values.size());
-			init(values);
-		}
-
 		template<typename ... Rest>
-		Vector(T a, T b, Rest ... rest) : data{ {a,b,rest...} } {
-			static_assert(Dims == sizeof...(rest)+2, "Invalid number of components!");
+		Vector(T a, Rest ... rest) : data{ {a,T(rest)...} } {
+			static_assert(Dims == sizeof...(rest)+1, "Invalid number of components!");
 		}
-
 
 		Vector& operator=(const Vector& other) = default;
 		Vector& operator=(Vector&& other) = default;
@@ -110,19 +109,32 @@ namespace utils {
 			return out << vec.data;
 		}
 
-	private:
-
-		template<typename R, std::size_t ... Index>
-		void init_internal(const std::initializer_list<R>& list, const std::integer_sequence<std::size_t,Index...>&) {
-			__allscale_unused auto bla = { data[Index] = *(list.begin() + Index) ... };
-		}
-
-		template<typename R>
-		void init(const std::initializer_list<R>& list) {
-			init_internal(list,std::make_index_sequence<Dims>());
-		}
-
 	};
+
+	namespace detail {
+
+		template<typename T, std::size_t Dims, std::size_t Index>
+		struct filler {
+			template<typename ... Args>
+			static std::array<T,Dims> fill(const T& e, const Args& ... a) {
+				return filler<T,Dims,Index-1>::fill(e,e,a...);
+			}
+		};
+
+		template<typename T, std::size_t Dims>
+		struct filler<T,Dims,0> {
+			template<typename ... Args>
+			static std::array<T,Dims> fill(const T&, const Args& ... a) {
+				return {{a...}};
+			}
+		};
+
+		template<typename T, std::size_t Dims>
+		std::array<T,Dims> fill(const T& e) {
+			return filler<T,Dims,Dims>::fill(e);
+		}
+
+	}
 
 	template<typename T, std::size_t Dims, typename S>
 	Vector<T,Dims>& operator+=(Vector<T,Dims>& a, const Vector<S,Dims>& b) {
@@ -152,6 +164,22 @@ namespace utils {
 	Vector<T,Dims>& operator/=(Vector<T,Dims>& a, const S& fac) {
 		for(size_t i =0; i<Dims; i++) {
 			a[i] /= fac;
+		}
+		return a;
+	}
+
+	template<typename T, std::size_t Dims, typename S>
+	Vector<T,Dims>& operator%=(Vector<T,Dims>& a, const S& fac) {
+		for(size_t i =0; i<Dims; i++) {
+			a[i] %= fac;
+		}
+		return a;
+	}
+
+	template<typename T, std::size_t Dims>
+	Vector<T,Dims>& operator%=(Vector<T,Dims>& a, const Vector<T,Dims>& b) {
+		for(size_t i =0; i<Dims; i++) {
+			a[i] %= b[i];
 		}
 		return a;
 	}
@@ -186,9 +214,15 @@ namespace utils {
 		return res /= fac;
 	}
 
-	template<typename T, std::size_t Dims, typename Lambda>
-	Vector<T,Dims> elementwise(const Vector<T,Dims>& a, const Vector<T,Dims>& b, const Lambda& op) {
-		Vector<T,Dims> res;
+	template<typename T, std::size_t Dims>
+	Vector<T,Dims> operator%(const Vector<T, Dims>& a, const Vector<T,Dims>& b) {
+		Vector<T,Dims> res(a);
+		return res %= b;
+	}
+
+	template<std::size_t Dims, typename Lambda, typename A, typename B, typename R = decltype(std::declval<Lambda>()(std::declval<A>(), std::declval<B>()))>
+	Vector<R,Dims> elementwise(const Vector<A,Dims>& a, const Vector<B,Dims>& b, const Lambda& op) {
+		Vector<R,Dims> res;
 		for(unsigned i=0; i<Dims; i++) {
 			res[i] = op(a[i],b[i]);
 		}
@@ -205,23 +239,23 @@ namespace utils {
 		return elementwise(a,b,[](const T& a, const T& b) { return std::max<T>(a,b); });
 	}
 
-	template<typename T, std::size_t Dims>
-	Vector<T,Dims> elementwiseProduct(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
-		return elementwise(a,b,[](const T& a, const T& b) { return a*b; });
+	template<std::size_t Dims, typename A, typename B, typename R = decltype(std::declval<A>() * std::declval<B>())>
+	Vector<R,Dims> elementwiseProduct(const Vector<A,Dims>& a, const Vector<B,Dims>& b) {
+		return elementwise(a,b,[](const A& a, const B& b) { return a*b; });
 	}
 
-	template<typename T, std::size_t Dims>
-	Vector<T,Dims> elementwiseDivision(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
-		return elementwise(a,b,[](const T& a, const T& b) { return a/b; });
+	template<std::size_t Dims, typename A, typename B, typename R = decltype(std::declval<A>() / std::declval<B>())>
+	Vector<R,Dims> elementwiseDivision(const Vector<A,Dims>& a, const Vector<B,Dims>& b) {
+		return elementwise(a,b,[](const A& a, const B& b) { return a/b; });
 	}
 
-	template<typename T, std::size_t Dims>
-	Vector<T,Dims> elementwiseRemainder(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
-		return elementwise(a,b,[](const T& a, const T& b) { return a % b; });
+	template<std::size_t Dims, typename A, typename B, typename R = decltype(std::declval<A>() % std::declval<B>())>
+	Vector<R,Dims> elementwiseRemainder(const Vector<A,Dims>& a, const Vector<B,Dims>& b) {
+		return elementwise(a,b,[](const A& a, const B& b) { return a % b; });
 	}
 
-	template<typename T, std::size_t Dims>
-	Vector<T,Dims> elementwiseModulo(const Vector<T,Dims>& a, const Vector<T,Dims>& b) {
+	template<std::size_t Dims, typename A, typename B, typename R = decltype(std::declval<A>() % std::declval<B>())>
+	Vector<R,Dims> elementwiseModulo(const Vector<A,Dims>& a, const Vector<B,Dims>& b) {
 		return elementwiseRemainder(a,b);
 	}
 
@@ -405,11 +439,29 @@ namespace utils {
 	};
 
 	/**
+	 * Add support for trivially serializing / de-serializing Vector instances.
+	 */
+	template<typename T, std::size_t Dims>
+	struct is_trivially_serializable<Vector<T,Dims>, typename std::enable_if<is_trivially_serializable<T>::value>::type> : public std::true_type {};
+
+	/**
 	 * Add support for serializing / de-serializing Vector instances.
 	 * The implementation is simply re-using the serializing capabilities of arrays.
 	 */
 	template<typename T, std::size_t Dims>
-	struct serializer<Vector<T,Dims>,typename std::enable_if<is_serializable<T>::value,void>::type> : public serializer<std::array<T,Dims>> {};
+	struct serializer<Vector<T,Dims>,typename std::enable_if<!is_trivially_serializable<T>::value && is_serializable<T>::value,void>::type> : public serializer<std::array<T,Dims>> {};
 
 } // end namespace utils
 } // end namespace allscale
+
+#if defined(ALLSCALE_WITH_HPX)
+#include <hpx/traits/is_bitwise_serializable.hpp>
+
+namespace hpx { namespace traits {
+    template <typename T, std::size_t Dims>
+    struct is_bitwise_serializable<allscale::utils::Vector<T, Dims>>
+      : is_bitwise_serializable<T>
+    {};
+}}
+
+#endif
