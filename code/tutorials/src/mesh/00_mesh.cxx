@@ -547,9 +547,9 @@ namespace detail {
 			rbFaceCenters[rb] = Point{ cellCenter[cells.back()].x + (cell_width/2), 0, 0 };
 
 			// node positions
-			int numNodes = nodes.size();
+			size_t numNodes = nodes.size();
 			auto& nodePositions = properties.template get<NodePosition,level>();
-			for(int i=0; i<numNodes; i+=4) {
+			for(size_t i=0; i<numNodes; i+=4) {
 				value_t x = (i / 4) * cell_width;
 				nodePositions[nodes[i+0]] = Point{ x , +0.5, +0.5 };
 				nodePositions[nodes[i+1]] = Point{ x , -0.5, +0.5 };
@@ -579,8 +579,8 @@ namespace detail {
 			subLayerBuilder.assembleMesh(builder, length);
 
 			// link parent and child cells
-			int numCells = subLayerBuilder.cells.size();
-			for(int i=0; i<numCells; i++) {
+			size_t numCells = subLayerBuilder.cells.size();
+			for(size_t i=0; i<numCells; i++) {
 				builder.template link<Cell_2_Child>(this->cells[i/2], subLayerBuilder.cells[i]);
 			}
 
