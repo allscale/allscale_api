@@ -441,14 +441,14 @@ namespace detail {
 
 			// create cells
 			for(int i=0; i<length; i++) {
-				cells.template push_back(builder.template create<Cell,level>());
+				cells.push_back(builder.template create<Cell,level>());
 			}
 
 			// -- faces --
 
 			// create faces
 			for(int i=0; i<length-1; i++) {
-				faces.template push_back(builder.template create<Face,level>());
+				faces.push_back(builder.template create<Face,level>());
 			}
 
 			// link faces with cells downward
