@@ -22,7 +22,7 @@ void store() {
 
     // -- initialize the grid --
     algorithm::pfor(Grid::coordinate_type{}, grid.size(), [&](const auto& p){
-        grid[p] = p[0] * size + p[1];
+        grid[p] = (int)(p[0] * size + p[1]);
 	});
 
     // -- store the grid --
