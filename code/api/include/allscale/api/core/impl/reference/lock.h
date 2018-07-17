@@ -25,6 +25,8 @@ inline namespace simple {
 #define __HMT_low() __asm__ volatile("or 1,1,1     # low priority")
 #define __HMT_medium() __asm__ volatile("or 2,2,2     # medium priority")
 #define cpu_relax() do { __HMT_low(); __HMT_medium(); __barrier(); } while (0)
+#elif defined (__aarch64__)
+#define cpu_relax() __asm__ volatile("yield" ::: "memory");
 #else
 #define cpu_relax() __builtin_ia32_pause()
 #endif

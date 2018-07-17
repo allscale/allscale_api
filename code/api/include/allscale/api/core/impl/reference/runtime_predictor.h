@@ -16,6 +16,13 @@ static __inline__ unsigned long long __rdtsc(void)
   asm("mfspr %0, 268" : "=r"(tb));
   return tb;
 }
+#elif defined(__aarch64__)
+static __inline__ unsigned long long __rdtsc(void)
+{
+	struct timeval tv;
+	gettimeofday(&tv, nullptr);
+	return static_cast<int64_t>(tv.tv_sec) * 1000000 + tv.tv_usec;
+}
 #else
 #include <x86intrin.h>
 #endif

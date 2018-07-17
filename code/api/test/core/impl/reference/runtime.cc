@@ -10,6 +10,12 @@ namespace core {
 namespace impl {
 namespace reference {
 
+	TEST(Runtime, Clock) {
+		auto a = RuntimePredictor::clock::now();
+		auto b = RuntimePredictor::clock::now();
+		EXPECT_LT(a, b);
+	}
+
 	TEST(Runtime, SimpleTask) {
 		treeture<int> future = spawn<false>([]{ return 12; });
 		EXPECT_EQ(12,future.get());
