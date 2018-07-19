@@ -1069,79 +1069,85 @@ namespace algorithm {
 	//									Definitions
 	// ---------------------------------------------------------------------------------------------
 
+	namespace detail {
 
-	template<typename Iter, typename Body, typename Dependency>
-	detail::loop_reference<Iter> pfor(const detail::range<Iter>& r, const Body& body, const Dependency& dependency) {
+		template<typename Iter>
+		struct RecArgsNoDependencies {
+			std::size_t depth;
+			detail::range<Iter> range;
+		};
 
-		struct RecArgs {
+		template<typename Iter, typename Dependency>
+		struct RecArgsWithDependencies {
 			std::size_t depth;
 			detail::range<Iter> range;
 			Dependency dependencies;
 		};
 
+	} // end detail namespace
+
+
+	template<typename Iter, typename Body, typename Dependency>
+	detail::loop_reference<Iter> pfor(const detail::range<Iter>& r, const Body& body, const Dependency& dependency) {
+		
 		// trigger parallel processing
 		return { r, core::prec(
-			[](const RecArgs& rg) {
+			[](const detail::RecArgsWithDependencies<Iter, Dependency>& rg) {
 				// if there is only one element left, we reached the base case
 				return rg.range.size() <= 1;
 			},
-			[body](const RecArgs& rg) {
+			[body](const detail::RecArgsWithDependencies<Iter, Dependency>& rg) {
 				// apply the body operation to every element in the remaining range
 				rg.range.forEach(body);
 			},
 			core::pick(
-				[](const RecArgs& rg, const auto& nested) {
+				[](const detail::RecArgsWithDependencies<Iter, Dependency>& rg, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
 					auto fragments = rg.range.split(rg.depth);
 					auto& left = fragments.left;
 					auto& right = fragments.right;
 					auto dep = rg.dependencies.split(left,right);
 					return core::parallel(
-						nested(dep.left.toCoreDependencies(), RecArgs{rg.depth+1, left, dep.left} ),
-						nested(dep.right.toCoreDependencies(), RecArgs{rg.depth+1, right,dep.right})
+						nested(dep.left.toCoreDependencies(), detail::RecArgsWithDependencies<Iter, Dependency>{rg.depth+1, left, dep.left} ),
+						nested(dep.right.toCoreDependencies(), detail::RecArgsWithDependencies<Iter, Dependency>{rg.depth+1, right,dep.right})
 					);
 				},
-				[body](const RecArgs& rg, const auto&) {
+				[body](const detail::RecArgsWithDependencies<Iter, Dependency>& rg, const auto&) {
 					// the alternative is processing the step sequentially
 					rg.range.forEach(body);
 				}
 			)
-		)(dependency.toCoreDependencies(),RecArgs{0,r,dependency}) };
+		)(dependency.toCoreDependencies(),detail::RecArgsWithDependencies<Iter, Dependency>{0,r,dependency}) };
 	}
 
 	template<typename Iter, typename Body>
 	detail::loop_reference<Iter> pfor(const detail::range<Iter>& r, const Body& body, const no_dependencies&) {
 
-		struct RecArgs {
-			std::size_t depth;
-			detail::range<Iter> range;
-		};
-
 		// trigger parallel processing
 		return { r, core::prec(
-			[](const RecArgs& r) {
+			[](const detail::RecArgsNoDependencies<Iter>& r) {
 				// if there is only one element left, we reached the base case
 				return r.range.size() <= 1;
 			},
-			[body](const RecArgs& r) {
+			[body](const detail::RecArgsNoDependencies<Iter>& r) {
 				// apply the body operation to every element in the remaining range
 				r.range.forEach(body);
 			},
 			core::pick(
-				[](const RecArgs& r, const auto& nested) {
+				[](const detail::RecArgsNoDependencies<Iter>& r, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
 					auto fragments = r.range.split(r.depth);
 					return core::parallel(
-						nested(RecArgs{r.depth+1,fragments.left}),
-						nested(RecArgs{r.depth+1,fragments.right})
+						nested(detail::RecArgsNoDependencies<Iter>{r.depth+1,fragments.left}),
+						nested(detail::RecArgsNoDependencies<Iter>{r.depth+1,fragments.right})
 					);
 				},
-				[body](const RecArgs& r, const auto&) {
+				[body](const detail::RecArgsNoDependencies<Iter>& r, const auto&) {
 					// the alternative is processing the step sequentially
 					r.range.forEach(body);
 				}
 			)
-		)(RecArgs{0,r}) };
+		)(detail::RecArgsNoDependencies<Iter>{0,r}) };
 	}
 
 	class no_dependency : public detail::loop_dependency {
@@ -1609,87 +1615,85 @@ namespace algorithm {
 	template<typename Iter, typename InnerBody, typename BoundaryBody, typename Dependency>
 	detail::loop_reference<Iter> pforWithBoundary(const detail::range<Iter>& r, const InnerBody& innerBody, const BoundaryBody& boundaryBody, const Dependency& dependency) {
 
-		struct RecArgs {
-			std::size_t depth;
-			detail::range<Iter> range;
-			Dependency dependencies;
-		};
-
 		// keep a copy of the full range
 		auto full = r;
 
 		// trigger parallel processing
 		return { r, core::prec(
-			[](const RecArgs& rg) {
+			[](const detail::RecArgsWithDependencies<Iter, Dependency>& rg) {
 				// if there is only one element left, we reached the base case
 				return rg.range.size() <= 1;
 			},
-			[innerBody,boundaryBody,full](const RecArgs& rg) {
+			[innerBody,boundaryBody,full](const detail::RecArgsWithDependencies<Iter, Dependency>& rg) {
 				// apply the body operation to every element in the remaining range
 				rg.range.forEachWithBoundary(full,innerBody,boundaryBody);
 			},
 			core::pick(
-				[](const RecArgs& rg, const auto& nested) {
+				[](const detail::RecArgsWithDependencies<Iter, Dependency>& rg, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
 					auto fragments = rg.range.split(rg.depth);
 					auto& left = fragments.left;
 					auto& right = fragments.right;
 					auto dep = rg.dependencies.split(left,right);
 					return core::parallel(
-						nested(dep.left.toCoreDependencies(), RecArgs{rg.depth+1,left, dep.left} ),
-						nested(dep.right.toCoreDependencies(), RecArgs{rg.depth+1,right,dep.right})
+						nested(dep.left.toCoreDependencies(), detail::RecArgsWithDependencies<Iter, Dependency>{rg.depth+1,left, dep.left} ),
+						nested(dep.right.toCoreDependencies(), detail::RecArgsWithDependencies<Iter, Dependency>{rg.depth+1,right,dep.right})
 					);
 				},
-				[innerBody,boundaryBody,full](const RecArgs& rg, const auto&) {
+				[innerBody,boundaryBody,full](const detail::RecArgsWithDependencies<Iter, Dependency>& rg, const auto&) {
 					// the alternative is processing the step sequentially
 					rg.range.forEachWithBoundary(full,innerBody,boundaryBody);
 				}
 			)
-		)(dependency.toCoreDependencies(),RecArgs{0,r,dependency}) };
+		)(dependency.toCoreDependencies(),detail::RecArgsWithDependencies<Iter, Dependency>{0,r,dependency}) };
 	}
 
 	template<typename Iter, typename InnerBody, typename BoundaryBody>
 	detail::loop_reference<Iter> pforWithBoundary(const detail::range<Iter>& r, const InnerBody& innerBody, const BoundaryBody& boundaryBody, const no_dependencies&) {
-
-		struct RecArgs {
-			std::size_t depth;
-			detail::range<Iter> range;
-		};
 
 		// keep a copy of the full range
 		auto full = r;
 
 		// trigger parallel processing
 		return { r, core::prec(
-			[](const RecArgs& r) {
+			[](const detail::RecArgsNoDependencies<Iter>& r) {
 				// if there is only one element left, we reached the base case
 				return r.range.size() <= 1;
 			},
-			[innerBody,boundaryBody,full](const RecArgs& r) {
+			[innerBody,boundaryBody,full](const detail::RecArgsNoDependencies<Iter>& r) {
 				// apply the body operation to every element in the remaining range
 				r.range.forEachWithBoundary(full,innerBody,boundaryBody);
 			},
 			core::pick(
-				[](const RecArgs& r, const auto& nested) {
+				[](const detail::RecArgsNoDependencies<Iter>& r, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
 					auto fragments = r.range.split(r.depth);
 					auto& left = fragments.left;
 					auto& right = fragments.right;
 					return core::parallel(
-						nested(RecArgs{ r.depth+1, left }),
-						nested(RecArgs{ r.depth+1, right })
+						nested(detail::RecArgsNoDependencies<Iter>{ r.depth+1, left }),
+						nested(detail::RecArgsNoDependencies<Iter>{ r.depth+1, right })
 					);
 				},
-				[innerBody,boundaryBody,full](const RecArgs& r, const auto&) {
+				[innerBody,boundaryBody,full](const detail::RecArgsNoDependencies<Iter>& r, const auto&) {
 					// the alternative is processing the step sequentially
 					r.range.forEachWithBoundary(full,innerBody,boundaryBody);
 				}
 			)
-		)(RecArgs{ 0 , r }) };
+		)(detail::RecArgsNoDependencies<Iter>{ 0 , r }) };
 	}
 
 
+	namespace detail {
 
+		template<typename Iter>
+		struct AfterRecArgs {
+			std::size_t depth;
+			detail::range<Iter> range;
+			one_on_one_dependency<Iter> dependencies;
+		};
+
+	} // end detail namespace
 
 	template<typename Iter, typename Point, typename Action>
 	detail::loop_reference<Iter> after(const detail::loop_reference<Iter>& loop, const Point& point, const Action& action) {
@@ -1697,44 +1701,38 @@ namespace algorithm {
 		// get the full range
 		auto r = loop.getRange();
 
-		struct RecArgs {
-			std::size_t depth;
-			detail::range<Iter> range;
-			one_on_one_dependency<Iter> dependencies;
-		};
-
 		// get the initial dependency
 		auto dependency = one_on_one(loop);
 
 		// trigger parallel processing
 		return { r, core::prec(
-			[point](const RecArgs& rg) {
+			[point](const detail::AfterRecArgs<Iter>& rg) {
 				// check whether the point of action is covered by the current range
 				return !rg.range.covers(point);
 			},
-			[action,point](const RecArgs& rg) {
+			[action,point](const detail::AfterRecArgs<Iter>& rg) {
 				// trigger the action if the current range covers the point
 				if (rg.range.covers(point)) action();
 
 			},
 			core::pick(
-				[](const RecArgs& rg, const auto& nested) {
+				[](const detail::AfterRecArgs<Iter>& rg, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
 					auto fragments = rg.range.split(rg.depth);
 					auto& left = fragments.left;
 					auto& right = fragments.right;
 					auto dep = rg.dependencies.split(left,right);
 					return core::parallel(
-						nested(dep.left.toCoreDependencies(), RecArgs{rg.depth+1, left, dep.left} ),
-						nested(dep.right.toCoreDependencies(), RecArgs{rg.depth+1, right,dep.right})
+						nested(dep.left.toCoreDependencies(), detail::AfterRecArgs<Iter>{rg.depth+1, left, dep.left} ),
+						nested(dep.right.toCoreDependencies(), detail::AfterRecArgs<Iter>{rg.depth+1, right,dep.right})
 					);
 				},
-				[action,point](const RecArgs& rg, const auto&) {
+				[action,point](const detail::AfterRecArgs<Iter>& rg, const auto&) {
 					// trigger the action if the current range covers the point
 					if (rg.range.covers(point)) action();
 				}
 			)
-		)(dependency.toCoreDependencies(),RecArgs{0,r,dependency}) };
+		)(dependency.toCoreDependencies(),detail::AfterRecArgs<Iter>{0,r,dependency}) };
 	}
 
 } // end namespace algorithm
