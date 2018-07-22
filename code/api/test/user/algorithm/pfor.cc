@@ -1333,7 +1333,7 @@ namespace algorithm {
 		Point max {N-1,N-1};
 
 		for(int t=0; t<T; ++t) {
-			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+			ref = pfor(min,max,[A,B,t,min,max](const Point& p) {
 
 				// check small neighborhood
 				for(int i : { -1, 0, 1 }) {
@@ -1387,7 +1387,7 @@ namespace algorithm {
 		Point max {N-1,2*N-1};
 
 		for(int t=0; t<T; ++t) {
-			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+			ref = pfor(min,max,[A,B,t,min,max](const Point& p) {
 
 				// check small neighborhood
 				for(int i : { -1, 0, 1 }) {
@@ -1442,7 +1442,7 @@ namespace algorithm {
 		Point max {N-1,N-1,N-1};
 
 		for(int t=0; t<T; ++t) {
-			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+			ref = pfor(min,max,[A,B,t,min,max](const Point& p) {
 
 				// check small neighborhood
 				for(int i : { -1, 0, 1 }) {
@@ -1498,7 +1498,7 @@ namespace algorithm {
 		Point max {N-1,2*N-1,3*N-1};
 
 		for(int t=0; t<T; ++t) {
-			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+			ref = pfor(min,max,[A,B,t,min,max](const Point& p) {
 
 				// check small neighborhood
 				for(int i : { -1, 0, 1 }) {
@@ -2049,7 +2049,7 @@ namespace algorithm {
 		Point max {N-1,N-1};
 
 		for(int t=0; t<T; ++t) {
-			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+			ref = pfor(min,max,[A,B,t,min,max](const Point& p) {
 
 				// check full neighborhood
 				for(int i : { -1, 0, 1 }) {
@@ -2101,7 +2101,7 @@ namespace algorithm {
 		Point max {N-1,2*N-1};
 
 		for(int t=0; t<T; ++t) {
-			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+			ref = pfor(min,max,[A,B,t,min,max](const Point& p) {
 
 				// check full neighborhood
 				for(int i : { -1, 0, 1 }) {
@@ -2154,7 +2154,7 @@ namespace algorithm {
 		Point max {N-1,N-1,N-1};
 
 		for(int t=0; t<T; ++t) {
-			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+			ref = pfor(min,max,[A,B,t,min,max](const Point& p) {
 
 				// check full neighborhood
 				for(int i : { -1, 0, 1 }) {
@@ -2208,7 +2208,7 @@ namespace algorithm {
 		Point max {N-1,2*N-1,3*N-1};
 
 		for(int t=0; t<T; ++t) {
-			ref = pfor(min,max,[A,B,t,N,min,max](const Point& p) {
+			ref = pfor(min,max,[A,B,t,min,max](const Point& p) {
 
 				// check full neighborhood
 				for(int i : { -1, 0, 1 }) {
@@ -2265,7 +2265,7 @@ namespace algorithm {
 		detail::range<Point> r(min,max);
 
 		for(int t=0; t<T; ++t) {
-			ref = pfor(min,max,[A,B,t,N,&r](const Point& p) {
+			ref = pfor(min,max,[A,B,t,&r](const Point& p) {
 
 				// check full neighborhood
 				r.forEach([&](const Point& s) {
@@ -2746,7 +2746,8 @@ namespace algorithm {
 
 	TEST(Pfor,After) {
 
-		const int N = 10;
+		// only declared static to silence MSVC errors...
+		static const int N = 10;
 
 		int* A = new int[N];
 		int* B = new int[N];
@@ -2761,7 +2762,7 @@ namespace algorithm {
 
 		// run the time loop
 		for(int t=0; t<T; ++t) {
-			ref = pfor(1,N-1,[A,B,t,N](int i) {
+			ref = pfor(1,N-1,[A,B,t](int i) {
 
 				if(i != 1) { EXPECT_EQ(t, A[i - 1]); }
 				EXPECT_EQ(t,A[i]);
@@ -2775,7 +2776,7 @@ namespace algorithm {
 
 			// plug in after
 			if (t % 2 == 0) {
-				ref = after(ref,N/2,[B,t,&counter,N]{
+				ref = after(ref,N/2,[B,t,&counter]{
 					EXPECT_EQ(t+1,B[N/2]);
 					counter++;
 				});
@@ -2799,7 +2800,8 @@ namespace algorithm {
 
 	TEST(Pfor,After2D) {
 
-		const int N = 10;
+		// only declared static to silence MSVC errors...
+		static const int N = 10;
 
 		using Point = utils::Vector<int,2>;
 
@@ -2822,7 +2824,7 @@ namespace algorithm {
 
 		// run the time loop
 		for(int t=0; t<T; ++t) {
-			ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,t,N](const Point& p) {
+			ref = pfor(Point{1,1},Point{N-1,N-1},[A,B,t](const Point& p) {
 
 				if (			  p.y != 1  )  { EXPECT_EQ(t,(*A)[p.x  ][p.y-1]); }
 				if (p.x != N-2			  )  { EXPECT_EQ(t,(*A)[p.x+1][p.y  ]); }

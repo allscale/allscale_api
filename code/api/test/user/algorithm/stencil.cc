@@ -448,7 +448,8 @@ namespace algorithm {
 
 		using Impl = TypeParam;
 
-		const int N = 100;
+		// only declared static to silence MSVC errors...
+		static const int N = 100;
 
 		// run one layer of iterations
 		for(int T : { N/2 }) {
@@ -471,8 +472,8 @@ namespace algorithm {
 				},
 				observer(
 					[](time_t t) { return t % 10 == 0; },
-					[N](const data::GridPoint<2>& loc) { return loc.x == N/2 && loc.y == N/3; },
-					[&observationCounterA,N](time_t t, const data::GridPoint<2>& loc, int& value) {
+					[](const data::GridPoint<2>& loc) { return loc.x == N/2 && loc.y == N/3; },
+					[&observationCounterA](time_t t, const data::GridPoint<2>& loc, int& value) {
 						EXPECT_EQ(0,t%10);
 						EXPECT_EQ(N/2,loc.x);
 						EXPECT_EQ(N/3,loc.y);
@@ -484,8 +485,8 @@ namespace algorithm {
 				),
 				observer(
 					[](time_t t) { return t % 8 == 0; },
-					[N](const data::GridPoint<2>& loc) { return loc.x == N/4 && loc.y == N/2; },
-					[&observationCounterB,N](time_t t, const data::GridPoint<2>& loc, int& value) {
+					[](const data::GridPoint<2>& loc) { return loc.x == N/4 && loc.y == N/2; },
+					[&observationCounterB](time_t t, const data::GridPoint<2>& loc, int& value) {
 						EXPECT_EQ(0,t%8);
 						EXPECT_EQ(N/4,loc.x);
 						EXPECT_EQ(N/2,loc.y);
@@ -578,7 +579,7 @@ namespace algorithm {
 
 		using namespace implementation::detail;
 
-		auto cur = [debug](std::size_t idx, const auto& ... deps) {
+		auto cur = [=](std::size_t idx, const auto& ... deps) {
 			// for debugging
 			if (debug) std::cout << idx << " depends on " << std::array<std::size_t,sizeof...(deps)>({{deps...}}) << "\n";
 

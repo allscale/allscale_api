@@ -183,8 +183,9 @@ namespace algorithm {
 
 	TEST(Ops, MapReduce3D) {
 		const int X = 10;
-		const int Y = 5;
-		const int Z = 7;
+		// only declared static to silence MSVC errors...
+		static const int Y = 5;
+		static const int Z = 7;
 
 		std::array<int,3> start{{0,0,1}};
 		std::array<int,3> end{{X,Y,Z}};
@@ -203,7 +204,7 @@ namespace algorithm {
 
 
 
-		auto fold = [data,Y,Z](std::array<int,3> i, int& s) { s += data[i[0]*Y*Z + i[1]*Z + i[2]]; };
+		auto fold = [data](std::array<int,3> i, int& s) { s += data[i[0]*Y*Z + i[1]*Z + i[2]]; };
 		auto reduce = [](double a, double b) { return a + b; };
 		auto init = []() { return 0; };
 		auto exit = [](int i) { return 0.1*i; };
