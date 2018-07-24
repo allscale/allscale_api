@@ -478,7 +478,7 @@ namespace data {
 		}
 
 		bool operator==(const GridRegion& other) const {
-			return difference(*this,other).empty() && other.difference(other,*this).empty();
+			return difference(*this,other, false).empty() && other.difference(other,*this, false).empty();
 		}
 
 		bool operator!=(const GridRegion& other) const {
@@ -504,6 +504,7 @@ namespace data {
 
 			// build result
 			GridRegion res = a;
+            res.regions.reserve(a.regions.size() + b.regions.size());
 
 			// combine regions
 			for(const auto& cur : difference(b,a).regions) {
@@ -531,6 +532,8 @@ namespace data {
 			// build result
 			GridRegion res;
 
+            res.regions.reserve(a.regions.size() + b.regions.size());
+
 			// combine regions
 			for(const auto& curA : a.regions) {
 				for(const auto& curB : b.regions) {
@@ -548,7 +551,7 @@ namespace data {
 			return res;
 		}
 
-		static GridRegion difference(const GridRegion& a, const GridRegion& b) {
+		static GridRegion difference(const GridRegion& a, const GridRegion& b, bool do_compress = true) {
 
 			// handle empty sets
 			if(a.empty() || b.empty()) return a;
@@ -569,8 +572,11 @@ namespace data {
 				res.regions.swap(next);
 			}
 
-			// compress result
-			res.compress();
+            if (do_compress)
+            {
+                // compress result
+                res.compress();
+            }
 
 			// done
 			return res;

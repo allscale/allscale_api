@@ -109,6 +109,26 @@ namespace utils {
 			return out << vec.data;
 		}
 
+#ifdef ALLSCALE_WITH_HPX
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            ar & data;
+        }
+#endif
+
+	private:
+
+		template<typename R, std::size_t ... Index>
+		void init_internal(const std::initializer_list<R>& list, const std::integer_sequence<std::size_t,Index...>&) {
+			__allscale_unused auto bla = { data[Index] = *(list.begin() + Index) ... };
+		}
+
+		template<typename R>
+		void init(const std::initializer_list<R>& list) {
+			init_internal(list,std::make_index_sequence<Dims>());
+		}
+
 	};
 
 	namespace detail {
@@ -347,6 +367,16 @@ namespace utils {
 			return out << "[" << vec.x << "," << vec.y << "," << vec.z << "]";
 		}
 
+#ifdef ALLSCALE_WITH_HPX
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            ar & x;
+            ar & y;
+            ar & z;
+        }
+#endif
+
 	};
 
 	template<typename T>
@@ -436,8 +466,18 @@ namespace utils {
 			return out << "[" << vec.x << "," << vec.y << "]";
 		}
 
+#ifdef ALLSCALE_WITH_HPX
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            ar & x;
+            ar & y;
+        }
+#endif
+
 	};
 
+#ifndef ALLSCALE_WITH_HPX
 	/**
 	 * Add support for trivially serializing / de-serializing Vector instances.
 	 */
@@ -450,6 +490,7 @@ namespace utils {
 	 */
 	template<typename T, std::size_t Dims>
 	struct serializer<Vector<T,Dims>,typename std::enable_if<!is_trivially_serializable<T>::value && is_serializable<T>::value,void>::type> : public serializer<std::array<T,Dims>> {};
+#endif
 
 } // end namespace utils
 } // end namespace allscale
