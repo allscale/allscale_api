@@ -6,9 +6,14 @@ macro(msvc_source_group label files)
 		foreach(file ${files})
 			get_filename_component(file_dir ${file} DIRECTORY)
 
-			# strip
-			string(LENGTH ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_STRIP} strip_dir_length)
-			string(SUBSTRING ${file_dir} ${strip_dir_length} -1 file_dir)
+			# Note: CMake 3.6 REGEX REPLACE misbehaves in that it continuously
+			#       applies the replacement. Therefore REGEX MATCH and REPLACE
+			#       is used.
+
+			string(REPLACE ${CMAKE_CURRENT_SOURCE_DIR}/ "" file_dir "${file_dir}")
+
+			string(REGEX MATCH "^${ARG_STRIP}/?" file_dir_prefix "${file_dir}")
+			string(REPLACE "${file_dir_prefix}" "" file_dir "${file_dir}")
 
 			string(REPLACE "/" "\\" file_dir "${file_dir}")
 
