@@ -74,6 +74,14 @@ namespace reference {
 			return length < other.length && (path == other.path >> (other.length - length));
 		}
 
+		TaskPath getParentPath() const {
+			assert_lt(0,length);
+			auto res = *this;
+			res.path = res.path >> 1;
+			--res.length;
+			return res;
+		}
+
 		TaskPath getLeftChildPath() const {
 			assert_lt((std::size_t)length,sizeof(path)*8);
 			auto res = *this;
@@ -232,6 +240,10 @@ namespace reference {
 
 		bool isParentOf(const TaskID& child) const {
 			return id == child.id && path.isPrefixOf(child.path);
+		}
+
+		TaskID getParent() const {
+			return TaskID{ id, path.getParentPath() };
 		}
 
 		TaskID getLeftChild() const {
