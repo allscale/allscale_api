@@ -41,7 +41,6 @@ Following options can be supplied to CMake
 The files `cmake/build_settings.cmake` and `code/CMakeLists.txt` state their
 default value.
 
-
 ### Building / Testing
 
     $ mkdir build
@@ -69,7 +68,7 @@ header to each source file upon commit. See `scripts/license`.
 
 ### Visual Studio Solution
 
-    $ cmake -G "Visual Studio 14 Win64" -DBUILD_SHARED_LIBS=OFF Z:\path\to\project
+    $ cmake -G "Visual Studio 15 2017 Win64" -DBUILD_SHARED_LIBS=OFF Z:\path\to\project
 
 Add path for third-party libraries when needed.
 
@@ -85,7 +84,7 @@ to `ON` and run:
 
 ## Troubleshooting
 
-### Getting GCC 5 / CMake 3.2 / Valgrind (for Testing)
+### Getting GCC 5 / CMake 3.5 / Valgrind (for Testing)
 
 The dependency installer can setup these required tools for you. Its README
 (`scripts/dependencies/README.md`) holds the details.
