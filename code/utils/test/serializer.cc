@@ -67,9 +67,12 @@ namespace utils {
 		EXPECT_TRUE(is_trivially_serializable<const float>::value);
 		EXPECT_TRUE(is_trivially_serializable<const double>::value);
 
-
 		// make sure pointers can not be serialized
 		EXPECT_FALSE(is_trivially_serializable<int*>::value);
+
+		// check enums
+		enum DummyEnum { };
+		EXPECT_TRUE(is_trivially_serializable<DummyEnum>::value);
 
 		// check
 		EXPECT_FALSE(is_trivially_serializable<Serializable>::value);
