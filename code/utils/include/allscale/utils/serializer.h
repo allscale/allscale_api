@@ -500,6 +500,12 @@ namespace utils {
 	struct is_trivially_serializable<T,std::enable_if_t<std::is_arithmetic<T>::value,void>> : public std::true_type {};
 
 
+	// -- enumeration type serialization --
+
+	template<typename T>
+	struct is_trivially_serializable<T,std::enable_if_t<std::is_enum<T>::value,void>> : public std::true_type {};
+
+
 	// -- facade functions --
 #if !defined(ALLSCALE_WITH_HPX)
 	template<typename T>
