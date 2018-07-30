@@ -131,7 +131,7 @@ struct TemperatureStage {
 	// capture mesh
 	const Mesh& mesh;
 	// capture mesh properties
-	MeshProperties<Mesh>* properties;
+	MeshProperties<Mesh>& properties;
 	bool print_temperature = false;
 
 	// Cell data
@@ -150,27 +150,20 @@ struct TemperatureStage {
 	attribute<LeftBoundaryFace,value_t> left_boundary_temperature;
 	attribute<RightBoundaryFace,value_t> right_boundary_temperature;
 
-	void setProperties(MeshProperties<Mesh>* properties) {
-		this->properties = properties;
-	}
-
-	void setPrintTemperature(bool print_temperature) {
-		this->print_temperature = print_temperature;
-	}
-
-	TemperatureStage(const Mesh& mesh) : mesh(mesh), properties(nullptr),
-		temperature(mesh.template createNodeData<Cell, value_t, Level>()),
-		residual(mesh.template createNodeData<Cell, value_t, Level>()),
-		timeStep(mesh.template createNodeData<Cell, value_t, Level>()),
-		conductivity(mesh.template createNodeData<Cell, value_t, Level>()),
-		static_temperature(mesh.template createNodeData<Cell, value_t, Level>()),
-		oldSol(mesh.template createNodeData<Cell, value_t, Level>()),
-		temperature_buffer(mesh.template createNodeData<Cell, value_t, Level>()),
-		fluxes(mesh.template createNodeData<Face, value_t, Level>()),
-		lbFaceConductivity(mesh.template createNodeData<LeftBoundaryFace, value_t, Level>()),
-		rbFaceConductivity(mesh.template createNodeData<RightBoundaryFace, value_t, Level>()),
-		left_boundary_temperature(mesh.template createNodeData<LeftBoundaryFace, value_t, Level>()),
-		right_boundary_temperature(mesh.template createNodeData<RightBoundaryFace, value_t, Level>()) {
+	TemperatureStage(const Mesh& mesh, MeshProperties<Mesh>& properties, bool printTemp = false)
+		: mesh(mesh), properties(properties), print_temperature(printTemp)
+		, temperature(mesh.template createNodeData<Cell, value_t, Level>())
+		, residual(mesh.template createNodeData<Cell, value_t, Level>())
+		, timeStep(mesh.template createNodeData<Cell, value_t, Level>())
+		, conductivity(mesh.template createNodeData<Cell, value_t, Level>())
+		, static_temperature(mesh.template createNodeData<Cell, value_t, Level>())
+		, oldSol(mesh.template createNodeData<Cell, value_t, Level>())
+		, temperature_buffer(mesh.template createNodeData<Cell, value_t, Level>())
+		, fluxes(mesh.template createNodeData<Face, value_t, Level>())
+		, lbFaceConductivity(mesh.template createNodeData<LeftBoundaryFace, value_t, Level>())
+		, rbFaceConductivity(mesh.template createNodeData<RightBoundaryFace, value_t, Level>())
+		, left_boundary_temperature(mesh.template createNodeData<LeftBoundaryFace, value_t, Level>())
+		, right_boundary_temperature(mesh.template createNodeData<RightBoundaryFace, value_t, Level>()) {
 
 		// -- initialize attributes --
 
@@ -184,7 +177,7 @@ struct TemperatureStage {
 			temperature[c] = T0;
 			oldSol[c] = T0;
 		});
-		
+
 
 		mesh.template pforAll<Cell, Level>([&](auto c) { conductivity[c] = 0.2; });		// a simple constant for now
 		mesh.template pforAll<LeftBoundaryFace, Level>([&](auto f) { lbFaceConductivity[f] = 0.2; });
@@ -199,13 +192,13 @@ struct TemperatureStage {
 		//actual computation
 		const value_t CFL = 1;
 
-		auto& cellVol = properties->template get<CellVolume, Level>();
-		auto& cellCenter = properties->template get<CellCenter, Level>();
-		auto& faceSurf = properties->template get<FaceSurface, Level>();
-		auto& lbfaceSurf = properties->template get<LeftBoundaryFaceSurface, Level>();
-		auto& lbfaceCenter = properties->template get<LeftBoundaryFaceCenter, Level>();
-		auto& rbfaceSurf = properties->template get<RightBoundaryFaceSurface, Level>();
-		auto& rbfaceCenter = properties->template get<RightBoundaryFaceCenter, Level>();
+		auto& cellVol = properties.template get<CellVolume, Level>();
+		auto& cellCenter = properties.template get<CellCenter, Level>();
+		auto& faceSurf = properties.template get<FaceSurface, Level>();
+		auto& lbfaceSurf = properties.template get<LeftBoundaryFaceSurface, Level>();
+		auto& lbfaceCenter = properties.template get<LeftBoundaryFaceCenter, Level>();
+		auto& rbfaceSurf = properties.template get<RightBoundaryFaceSurface, Level>();
+		auto& rbfaceCenter = properties.template get<RightBoundaryFaceCenter, Level>();
 
 		bool firstStage = true;
 
@@ -245,7 +238,7 @@ struct TemperatureStage {
 					timeStep[c] = CFL / timeStep[c];
 				});
 
-				// save the reference solution	
+				// save the reference solution
 				mesh.template pforAll<Cell, Level>([&](auto c) { oldSol[c] = temperature[c]; });
 
 				firstStage = false;
@@ -340,7 +333,7 @@ struct TemperatureStage {
 			temperature[c] = 0;
 
 			auto children = mesh.template getChildren<Cell_2_Child>(c);
-			
+
 			int count = 0;
 
 			for(auto& child: children) {
@@ -363,7 +356,7 @@ struct TemperatureStage {
 	void prolongateTo(TemperatureStage<Mesh,Level-1>& childStage) {
 		mesh.template forAll<Cell, Level>([&](auto c) {
 			auto children = mesh.template getChildren<Cell_2_Child>(c);
-			
+
 			value_t diff = temperature[c] - temperature_buffer[c];
 
 			for(auto& child: children) {
@@ -396,12 +389,7 @@ int main() {
 		std::remove_reference<decltype(mesh)>::type
 	>;
 
-	vcycle_type vcycle(mesh);
-
-	vcycle.forEachStage([&](unsigned, auto& body) {
-		body.properties = &properties;
-		body.print_temperature = false;
-	});
+	vcycle_type vcycle(mesh, properties);
 
 	// -- simulation --
 	// run S iterations
@@ -631,6 +619,6 @@ namespace detail {
 
 		tubeBuilder.template addPropertyData<NUM_LEVELS>(mesh, properties);
 
-		return std::make_pair(std::move(mesh), std::move(properties));		
+		return std::make_pair(std::move(mesh), std::move(properties));
 	}
 }

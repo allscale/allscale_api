@@ -73,8 +73,9 @@ namespace algorithm {
 
 		public:
 
-			VCycleStage(const Mesh& mesh)
-				: body(mesh), nested(mesh) {}
+			template<typename ...UserArgs>
+			VCycleStage(const Mesh& mesh, UserArgs&&... userArgs)
+				: body(mesh, userArgs...), nested(mesh, userArgs...) {}
 
 			/**
 			 * A function processing a single V-cycle starting at the current level.
@@ -158,8 +159,9 @@ namespace algorithm {
 
 		public:
 
-			VCycleStage(const Mesh& mesh)
-				: body(mesh) {}
+			template<typename ...UserArgs>
+			VCycleStage(const Mesh& mesh, UserArgs&&... userArgs)
+				: body(mesh, userArgs...) {}
 
 			/**
 			 * A function processing a single V-cycle starting at the current level.
@@ -232,7 +234,8 @@ namespace algorithm {
 
 		const mesh_type& mesh;
 
-		VCycle(const mesh_type& mesh) : topStage(mesh), mesh(mesh) {}
+		template<typename ...UserArgs>
+		VCycle(const mesh_type& mesh, UserArgs&&... userArgs) : topStage(mesh, userArgs...), mesh(mesh) {}
 
 		vcycle_reference run(std::size_t numCycles = 1) {
 			return async([&, numCycles]() {
