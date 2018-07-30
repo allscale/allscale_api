@@ -141,7 +141,7 @@ struct TemperatureStage {
 	attribute<Cell, value_t> conductivity;
 	attribute<Cell, value_t> static_temperature;
 	attribute<Cell, value_t> oldSol;
-	attribute<Cell, value_t> temperature_buffer;
+	attribute<Cell, value_t> temperatureBuffer;
 
 	attribute<Face,value_t> fluxes;
 	attribute<LeftBoundaryFace, value_t> lbFaceConductivity;
@@ -158,7 +158,7 @@ struct TemperatureStage {
 		, conductivity(mesh.template createNodeData<Cell, value_t, Level>())
 		, static_temperature(mesh.template createNodeData<Cell, value_t, Level>())
 		, oldSol(mesh.template createNodeData<Cell, value_t, Level>())
-		, temperature_buffer(mesh.template createNodeData<Cell, value_t, Level>())
+		, temperatureBuffer(mesh.template createNodeData<Cell, value_t, Level>())
 		, fluxes(mesh.template createNodeData<Face, value_t, Level>())
 		, lbFaceConductivity(mesh.template createNodeData<LeftBoundaryFace, value_t, Level>())
 		, rbFaceConductivity(mesh.template createNodeData<RightBoundaryFace, value_t, Level>())
@@ -341,7 +341,7 @@ struct TemperatureStage {
 				count++;
 			}
 			temperature[c] /= count;
-			temperature_buffer[c] = temperature[c];
+			temperatureBuffer[c] = temperature[c];
 		});
 
 		if (print_temperature) {
@@ -357,7 +357,7 @@ struct TemperatureStage {
 		mesh.template forAll<Cell, Level>([&](auto c) {
 			auto children = mesh.template getChildren<Cell_2_Child>(c);
 
-			value_t diff = temperature[c] - temperature_buffer[c];
+			value_t diff = temperature[c] - temperatureBuffer[c];
 
 			for(auto& child: children) {
 				childStage.temperature[child] += diff;
