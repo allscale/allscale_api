@@ -30,6 +30,8 @@ namespace utils {
 		Iter _begin;
 		Iter _end;
 
+		using value_type = typename std::iterator_traits<Iter>::value_type;
+
 		Iter begin() const {
 			return _begin;
 		}
@@ -46,11 +48,11 @@ namespace utils {
 			return detail::get_size<Iter>()(_begin,_end);
 		}
 
-		const typename std::iterator_traits<Iter>::value_type& front() const {
+		const value_type& front() const {
 			return *_begin;
 		}
 
-		const typename std::iterator_traits<Iter>::value_type& back() const {
+		const value_type& back() const {
 			return *(_end - 1);
 		}
 	};
