@@ -12,7 +12,19 @@ lookup = {        # depth   init temp   conductivity
 
 MAX_DEPTH = 16
 
-REL_IDS = [ [0,0,0], [0,0,1], [0,1,0], [0,1,1], [1,0,0], [1,0,1], [1,1,0], [1,1,1] ]
+def gen_ids()
+    max = 8
+    ret_arr = []
+    ret_hash = {}
+    max.times { |i| 
+        cur = [i[2], i[1], i[0]]
+        ret_arr << cur
+        ret_hash[cur] = i
+    }
+    return ret_arr, ret_hash
+end
+
+REL_IDS, REL_HASH = gen_ids()
 
 class Cell
     attr :exists
@@ -117,11 +129,12 @@ class Vertex
     end
 
     def enable(pos)
-        return if exists?
+        return true if exists?
         @exists = true
         @id = @@idc
         @@idc += 1
         @position = pos
+        return false
     end
 
     def to_s
@@ -139,13 +152,14 @@ def build_face(area, cell_in, cell_out)
 end
 
 
-## Build cells from image
+## Build cells from image and add vertices
 
 cell_structure = Array.new(logo.width) { Array.new(logo.height) { Array.new(MAX_DEPTH) { Cell.new } } } 
 cell_array = []
 cell_count = 0
 
 vertex_structure = Array.new(logo.width+1) { Array.new(logo.height+1) { Array.new(MAX_DEPTH+1) { Vertex.new } } }
+vertex_array = []
 
 logo.width.times do |x|
     logo.height.times do |y|
@@ -166,7 +180,9 @@ logo.width.times do |x|
                     vx = x+rid[0]
                     vy = y+rid[1]
                     vz = z+rid[2]
-                    vertex_structure[vx][vy][vz].enable([vx,vy,vz])
+                    already_existed = vertex_structure[vx][vy][vz].enable([vx,vy,vz])
+                    cell_structure[x][y][z].vertices << vertex_structure[vx][vy][vz]
+                    vertex_array << vertex_structure[vx][vy][vz] unless already_existed
                 end
             }
         end
@@ -270,9 +286,33 @@ puts "occuring cell counts per combined cell: #{dbg_pcell_sizes.uniq}"
 
 puts "cell_count: #{cell_count} / num cell ids: #{Cell.num_ids}"
 puts "num face ids: #{Face.num_ids}"
-puts "num vtx ids: #{Vertex.num_ids}"
+puts "num vtx ids: #{Vertex.num_ids} / vertex_array.length: #{vertex_array.length}"
 puts cell_array[0].to_s
 puts cell_array[cell_count/4].to_s
 puts cell_array[cell_count-1].to_s
+
+vertex_array.sort_by! { |v| v.id }
+
+File.open("level0.obj", "w+") do |out|
+    out.puts "mtllib ramp.mtl"
+    # dump vertices
+    vertex_array.each_with_index { |v,i|
+        raise "index error #{i} != #{v.id}" if i != v.id
+        out.puts "v #{v.position[0]} #{v.position[1]} #{v.position[2]}"
+    }
+    # dump cells
+    cell_array.each do |c|
+        out.puts "usemtl r#{c.temperature.to_i}"
+        faces = [ [[0,0,0], [0,0,1], [0,1,1], [0,1,0]] ,
+                  [[0,0,0], [1,0,0], [1,0,1], [0,0,1]] ,
+                  [[0,0,0], [1,0,0], [1,1,0], [0,1,0]] ,
+                  [[1,0,0], [1,0,1], [1,1,1], [1,1,0]] ,
+                  [[0,0,1], [1,0,1], [1,1,1], [0,1,1]] ,
+                  [[0,1,0], [1,1,0], [1,1,1], [0,1,1]] ]
+        faces.each do |f|
+            out.puts "f #{f.map { |vid| c.vertices[REL_HASH[vid]].id+1 }.join(" ")}"
+        end
+    end
+end
 
 #puts logo.pixels.uniq.map { |c| "#{c} : " + ChunkyPNG::Color.to_truecolor_bytes(c).join(", ") }.join("\n")
