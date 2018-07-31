@@ -12,9 +12,12 @@ lookup = {        # depth   init temp   conductivity
 
 MAX_DEPTH = 16
 
+REL_IDS = [ [0,0,0], [0,0,1], [0,1,0], [0,1,1], [1,0,0], [1,0,1], [1,1,0], [1,1,1] ]
 
 class Cell
     attr :exists
+    alias :exists? :exists
+
     attr :id
     attr :level
     attr :temperature
@@ -22,18 +25,19 @@ class Cell
     attr :in_faces
     attr :out_faces
 
+    attr_accessor :child_cells
+    attr_accessor :vertices
+
     # store connection area for easier hierarchy building 
-    attr :right_area
-    attr :up_area
-    attr :fwd_area
+    attr_accessor :right_area
+    attr_accessor :up_area
+    attr_accessor :fwd_area
 
     @@idc = 0
 
     def initialize()
         @exists = false
     end
-
-    alias :exists? :exists
 
     def set(level, init, cond)
         @id = @@idc
@@ -42,8 +46,15 @@ class Cell
         @level = level
         @temperature = init
         @conductivity = cond
+
         @out_faces ||= []
         @in_faces ||= []
+        @child_cells ||= []
+        @vertices ||= []
+
+        @right_area = 0.0
+        @up_area = 0.0
+        @fwd_area = 0.0
     end
 
     def Cell.num_ids
@@ -88,6 +99,36 @@ class Face
     end
 end
 
+class Vertex
+    attr :exists
+    alias :exists? :exists
+
+    attr :id
+    attr :position
+
+    @@idc = 0
+
+    def initialize()
+        @exists = false
+    end
+
+    def Vertex.num_ids
+        @@idc
+    end
+
+    def enable(pos)
+        return if exists?
+        @exists = true
+        @id = @@idc
+        @@idc += 1
+        @position = pos
+    end
+
+    def to_s
+        "v#{id}"
+    end
+end
+
 $face_array = []
 
 def build_face(area, cell_in, cell_out)
@@ -104,6 +145,8 @@ cell_structure = Array.new(logo.width) { Array.new(logo.height) { Array.new(MAX_
 cell_array = []
 cell_count = 0
 
+vertex_structure = Array.new(logo.width+1) { Array.new(logo.height+1) { Array.new(MAX_DEPTH+1) { Vertex.new } } }
+
 logo.width.times do |x|
     logo.height.times do |y|
         col = logo[x,y]
@@ -114,9 +157,17 @@ logo.width.times do |x|
             num = (MAX_DEPTH*depth).ceil
             start_z = (MAX_DEPTH-num)/2
             num.times { |i|
-                cell_structure[x][y][start_z+i].set(0, init, cond)
-                cell_array << cell_structure[x][y][start_z+i]
+                z = start_z+i
+                cell_structure[x][y][z].set(0, init, cond)
+                cell_array << cell_structure[x][y][z]
                 cell_count += 1
+
+                REL_IDS.each do |rid|
+                    vx = x+rid[0]
+                    vy = y+rid[1]
+                    vz = z+rid[2]
+                    vertex_structure[vx][vy][vz].enable([vx,vy,vz])
+                end
             }
         end
     end
@@ -134,9 +185,18 @@ end
             right = cell_structure[x+1][y][z]
             up = cell_structure[x][y+1][z]
             forward = cell_structure[x][y][z+1]
-            build_face(1, this, right, :right) if right.exists?
-            build_face(1, this, up, :up) if up.exists?
-            build_face(1, this, forward, :fwd) if forward.exists?
+            if right.exists?
+                build_face(1, this, right)
+                this.right_area = 1
+            end
+            if up.exists?
+                build_face(1, this, up) if up.exists?
+                this.up_area = 1
+            end
+            if forward.exists?
+                build_face(1, this, forward)
+                this.fwd_area = 1
+            end
         end
     end
 end
@@ -162,18 +222,27 @@ level_cell_structure[0] = cell_structure
     lw.times do |x|
         lh.times do |y|
             ld.times do |z|
-                relative_ids = [ [0,0,0], [0,0,1], [0,1,0], [0,1,1], [1,0,0], [1,0,1], [1,1,0], [1,1,1] ]
-                parent_cells = []
-                relative_ids.each do |rid|
+                child_cells = []
+                REL_IDS.each do |rid|
                     target = finer[x*2+rid[0]][y*2+rid[1]][z*2+rid[2]]
-                    parent_cells << target if target.exists?
+                    child_cells << target if target.exists?
                 end
-                pcount = parent_cells.size
+                pcount = child_cells.size
                 dbg_pcell_sizes << pcount
                 next if pcount == 0
-                avg_init = parent_cells.reduce { |memo, c| memo + c.temperature } / pcount.to_f
-                avg_cond = parent_cells.reduce { |memo, c| memo + c.conductivity } / pcount.to_f
+
+                # build cell with avg temp and conductivity
+                avg_init = child_cells.reduce(0.0) { |memo, c| memo + c.temperature } / pcount.to_f
+                avg_cond = child_cells.reduce(0.0) { |memo, c| memo + c.conductivity } / pcount.to_f
                 coarser[x][y][z].set(level, avg_init, avg_cond)
+
+                # aggreagte areas
+                coarser[x][y][z].right_area = child_cells.reduce(0.0) { |memo, c| memo + c.right_area }
+                coarser[x][y][z].up_area = child_cells.reduce(0.0) { |memo, c| memo + c.up_area }
+                coarser[x][y][z].fwd_area = child_cells.reduce(0.0) { |memo, c| memo + c.fwd_area }
+
+                # connect hierarchy
+                coarser[x][y][z].child_cells = child_cells
             end
         end
     end
@@ -189,19 +258,19 @@ level_cell_structure[0] = cell_structure
                 right = coarser[x+1][y][z]
                 up = coarser[x][y+1][z]
                 forward = coarser[x][y][z+1]
-                build_face(this.right_area, this, right, :right) if right.exists?
-                build_face(this.up_area, this, up, :up) if up.exists?
-                build_face(this.fwd_area, this, forward, :fwd) if forward.exists?
+                build_face(this.right_area, this, right) if right.exists?
+                build_face(this.up_area, this, up) if up.exists?
+                build_face(this.fwd_area, this, forward) if forward.exists?
             end
         end
     end
-
-end 
+end
 
 puts "occuring cell counts per combined cell: #{dbg_pcell_sizes.uniq}"
 
 puts "cell_count: #{cell_count} / num cell ids: #{Cell.num_ids}"
 puts "num face ids: #{Face.num_ids}"
+puts "num vtx ids: #{Vertex.num_ids}"
 puts cell_array[0].to_s
 puts cell_array[cell_count/4].to_s
 puts cell_array[cell_count-1].to_s
