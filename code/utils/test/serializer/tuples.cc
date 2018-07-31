@@ -2,6 +2,7 @@
 
 #include "allscale/utils/serializer/tuple.h"
 #include "allscale/utils/serializer/strings.h"
+#include "allscale/utils/serializer/vectors.h"
 
 namespace allscale {
 namespace utils {
@@ -145,6 +146,14 @@ namespace utils {
 		std::tuple<std::string, std::string, std::string> in {"Hello", "World", "Test"};
 		auto archive = serialize(in);
 		auto out = deserialize<std::tuple<std::string,std::string,std::string>>(archive);
+		EXPECT_EQ(in,out);
+	}
+
+	TEST(Serializer,StdTupleMixed) {
+		// serialize and de-serialize a map
+		std::tuple<std::string, int, std::vector<int>> in {"Hello", 12, std::vector<int>() };
+		auto archive = serialize(in);
+		auto out = deserialize<std::tuple<std::string, int, std::vector<int>>>(archive);
 		EXPECT_EQ(in,out);
 	}
 

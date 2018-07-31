@@ -27,7 +27,7 @@ namespace utils {
 
 			template<typename ... Cur>
 			std::tuple<Args...> operator()(ArchiveReader& in, Cur&& ... cur) const {
-				using cur_t = std::remove_reference_t<decltype(std::get<pos-1>(std::declval<std::tuple<Args...>>()))>;
+				using cur_t = std::remove_reference_t<decltype(std::get<sizeof...(Cur)>(std::declval<std::tuple<Args...>>()))>;
 				return inner{}(in,std::move(cur)...,in.read<cur_t>());
 			}
 
