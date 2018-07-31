@@ -477,7 +477,7 @@ namespace detail {
 
 			// link nodes to cell centers
 			for(int i=0; i<numNodes; i+=4) {
-				auto cellId = i % 4;
+				auto cellId = i / 4;
 				if (cellId > 0) {
 					auto leftCell = cells[cellId - 1];
 					builder.template link<Node_2_Cell>(nodes[i],   leftCell);

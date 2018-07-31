@@ -1,5 +1,7 @@
 #include <iostream>
 #include <algorithm>
+#include <regex>
+#include <fstream>
 
 #include "allscale/utils/vector.h"
 #include "allscale/api/user/data/mesh.h"
@@ -121,7 +123,7 @@ struct TemperatureStage {
 		// -- initialize attributes --
 
 		// simulation parameters
-		int TF = 120;		// < first temperature
+		int TF = 511;		// < first temperature
 		int T0 = 20;		// < initial temperature
 
 		bool first = true;
@@ -166,10 +168,53 @@ struct TemperatureStage {
 
 	void computeFineToCoarse() {
 		if(Level == 0) {
-			mesh.template forAll<Cell, Level>([&](auto c){
-				printf("%6.2lf, ", temperature[c]);
+			//mesh.template forAll<Cell, Level>([&](auto c){
+			//	printf("%6.2lf, ", temperature[c]);
+			//});
+
+			static int fileId = 0;
+			constexpr char* filePrefix = "step";
+			constexpr char* fileSuffix = ".obj";
+			constexpr char* mtlFile = "ramp.mtl";
+			char fn[64];
+			snprintf(fn, sizeof(fn), "%s%03d%s", filePrefix, fileId++, fileSuffix);
+			std::ofstream out(fn);
+
+			// header
+			out << "mtllib " << mtlFile << "\n";
+
+			auto& vertexPosition = properties.template get<VertexPosition, Level>();
+
+			int vertexId = 1; // FORTRAN programmers made .obj
+			mesh.template forAll<Cell, Level>([&](auto c) {
+				out << "\n# cell ---\n";
+				// set color according to temperature
+				out << "usemtl r" << (int)temperature[c] << "\n";
+				auto vertices = mesh.template getNeighbors<Cell_to_Vertex>(c);
+				for(auto v : vertices) {
+					const auto& vp = vertexPosition[v];
+					out << "v " << vp.x << " " << vp.y << " " << vp.z << "\n";
+				}
+				std::stringstream ss;
+				ss << "f ~0 ~3 ~4 ~7\n"
+				   << "f ~0 ~3 ~2 ~1\n"
+				   << "f ~0 ~1 ~6 ~7\n"
+				   << "f ~3 ~2 ~5 ~4\n"
+				   << "f ~4 ~5 ~6 ~7\n"
+				   << "f ~1 ~2 ~5 ~6\n";
+				std::string faces = ss.str();
+				for(int i = 0; i < 8; ++i) {
+					char toReplace[8], replacement[8];
+					snprintf(toReplace, sizeof(toReplace), "~%d", i);
+					snprintf(replacement, sizeof(replacement), "%d", vertexId+i);
+					faces = std::regex_replace(faces, std::regex(toReplace), replacement);
+				}
+				out << faces;
+
+				vertexId += 8;
 			});
-			std::cout << "\n";
+
+			out << "\n";
 		}
 
 		jacobiSolver();
@@ -296,7 +341,7 @@ namespace detail {
 
 			// link cells to vertices
 			for(int i=0; i<numNodes; i+=4) {
-				auto cellId = i % 4;
+				auto cellId = i / 4;
 				if(cellId > 0) {
 					auto leftCell = cells[cellId - 1];
 					builder.template link<Cell_to_Vertex>(leftCell, vertices[i+0]);
