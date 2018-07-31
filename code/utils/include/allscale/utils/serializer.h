@@ -412,23 +412,35 @@ namespace utils {
 
 		struct not_trivially_serializable {};
 
-		template<typename ... Ts>
-		struct all_trivially_serializable;
-
-		template<>
-		struct all_trivially_serializable<> : public std::true_type {};
-
-		template<typename T, typename ... Rest>
-		struct all_trivially_serializable<T,Rest...> : public std::conditional<is_trivially_serializable<T>::value, all_trivially_serializable<Rest...>,std::false_type>::type {};
-
 	}
+
+	template<typename ... Ts>
+	struct all_serializable;
+
+	template<>
+	struct all_serializable<> : public std::true_type {};
+
+	template<typename T, typename ... Rest>
+	struct all_serializable<T,Rest...> : public std::conditional<is_serializable<T>::value, all_serializable<Rest...>,std::false_type>::type {};
+
+
+
+	template<typename ... Ts>
+	struct all_trivially_serializable;
+
+	template<>
+	struct all_trivially_serializable<> : public std::true_type {};
+
+	template<typename T, typename ... Rest>
+	struct all_trivially_serializable<T,Rest...> : public std::conditional<is_trivially_serializable<T>::value, all_trivially_serializable<Rest...>,std::false_type>::type {};
+
 
 	/**
 	 * A utility to mark trivially serializable dependent types.
 	 */
 	template<typename ... Ts>
 	using trivially_serializable_if_t = typename std::conditional<
-			detail::all_trivially_serializable<Ts...>::value,
+			all_trivially_serializable<Ts...>::value,
 			trivially_serializable,detail::not_trivially_serializable
 		>::type;
 
