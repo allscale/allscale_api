@@ -176,8 +176,6 @@ namespace utils {
 
 	public:
 
-
-
 		Archive(const Archive&) = default;
 		Archive(Archive&&) = default;
 
@@ -207,6 +205,13 @@ namespace utils {
 		const std::vector<char>& getBuffer() const {
 			return data;
 		}
+
+		// --- serializer support ---
+
+		void store(ArchiveWriter& out) const;
+
+		static Archive load(ArchiveReader& in);
+
 	};
 
 #if !defined(ALLSCALE_WITH_HPX)
@@ -407,7 +412,6 @@ namespace utils {
 	};
 #endif
 
-
 	namespace detail {
 
 		struct not_trivially_serializable {};
@@ -534,6 +538,18 @@ namespace utils {
 		return ArchiveReader(a).read<T>();
 	}
 #endif
+
+	inline void Archive::store(ArchiveWriter& out) const {
+		out.write(data.size());
+		out.write(data.begin(),data.size());
+	}
+
+	inline Archive Archive::load(ArchiveReader& in) {
+		auto size = in.read<std::size_t>();
+		std::vector<char> data(size);
+		in.read(&data[0],size);
+		return std::move(data);
+	}
 
 } // end namespace utils
 } // end namespace allscale

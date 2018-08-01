@@ -139,6 +139,8 @@ namespace utils {
 		EXPECT_TRUE(std::is_move_assignable<Archive>::value);
 		EXPECT_TRUE(std::is_destructible<Archive>::value);
 
+		EXPECT_TRUE(is_serializable<Archive>::value);
+
 	}
 
 	TEST(ArchiveWriter, TypeTraits) {
@@ -190,6 +192,24 @@ namespace utils {
 		int x = 10;
 
 		Archive a = serialize(x);
+		EXPECT_EQ(x,deserialize<int>(a));
+
+	}
+
+	TEST(SerializeDeserialize, IntSquare) {
+
+		int x = 10;
+
+		// put the x in the archive ...
+		Archive a = serialize(x);
+
+		// ... and the archive in the archive ...
+		Archive a1 = serialize(a);
+
+		// ... to extract the archive from the archive ..
+		Archive b = deserialize<Archive>(a1);
+
+		// ... to retrieve the initial x  :)
 		EXPECT_EQ(x,deserialize<int>(a));
 
 	}
