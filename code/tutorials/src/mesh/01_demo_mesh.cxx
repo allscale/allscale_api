@@ -290,18 +290,18 @@ namespace {
 	};
 	#pragma pack(pop)
 
-	class AMFFile {
+	struct AMFFile {
 		FHeader header;
 		std::vector<FVertex> vertices;
 		std::vector<FCell> cells[NUM_LEVELS];
 		std::vector<FFace> faces[NUM_LEVELS];
 
-	  public:
 		static AMFFile load(const std::string& fname) {
 			AMFFile ret;
 			auto file = fopen(fname.c_str(), "rb");
 			fread(&ret.header, sizeof(ret.header), 1, file);
 			assert_eq(ret.header.magic_number, 0xA115ca1e) << fname << " - magic number in header doesn't match";
+			assert_eq(ret.header.num_levels, NUM_LEVELS) << fname << " - mismatch between file number of levels and C++ NUM_LEVELS";
 			std::cout << "File info - " << ret.header.num_levels << " Levels // " << ret.header.num_vertices << " Vertices\n";
 
 			auto loadList = [&](int count, int elem_size, auto&& target, const char* name) {
@@ -328,61 +328,99 @@ namespace {
 		}
 	};
 
-	//template<typename Builder, unsigned Level>
-	//class MeshFromFileBuilder {
+	template<typename Builder, unsigned Level>
+	class MeshLevelFromFileBuilder {
 
-	//	using CellRef = typename data::NodeRef<Cell,level>;
-	//	using FaceRef = typename data::NodeRef<Face,level>;
-	//	using VertexRef = typename data::NodeRef<Vertex,level>;
+		using CellRef = typename data::NodeRef<Cell,Level>;
+		using FaceRef = typename data::NodeRef<Face,Level>;
+		using VertexRef = typename data::NodeRef<Vertex,Level>;
 
-	//	std::vector<CellRef> cells;
-	//	std::vector<FaceRef> faces;
-	//	std::vector<VertexRef> vertices;
+		std::vector<VertexRef> vertices;
+		std::vector<CellRef> cells;
+		std::vector<FaceRef> faces;
 
-	//	void assembleMesh(Builder& builder, const AMFFile& amfFile) {
+		template<unsigned Level>
+		struct VertexAssembler {
+			void assembleVertices(Builder& builder, const AMFFile& amfFile, MeshLevelFromFileBuilder<Builder, Level>& levelBuilder) { }
+		};
 
-	//		// -- cells --
+		template<>
+		struct VertexAssembler<0> {
+			void assembleVertices(Builder& builder, const AMFFile& amfFile, MeshLevelFromFileBuilder<Builder, Level>& levelBuilder) {
 
-	//		// create cells
-	//		cells.reserve(amfFile.cells.size());
-	//		for(const auto& cell : amfFile.cells) {
-	//			cells.push_back(builder.template create<Cell,level>());
-	//		}
+				// create vertices
+				for(size_t i = 0; i < amfFile.vertices.size(); ++i) {
+					levelBuilder.vertices.push_back(builder.template create<Vertex,0>());
+				}
 
-	//		// -- faces --
+				// link cells to vertices
+				for(size_t id = 0; id < amfFile.cells[Level].size(); ++id) {
+					const auto& cell = amfFile.cells[Level][id];
 
-	//		// create faces
-	//		faces.reserve(amfFile.faces.size());
-	//		for(const auto& faces : amfFile.faces) {
-	//			faces.push_back(builder.template create<Face,level>());
-	//		}
+					for(int i = 0; i < 8; ++i) {
+						const auto& vtxId = cell.vertex_ids[i];
+						if(vtxId != -1) {
+							builder.template link<Cell_to_Vertex>(levelBuilder.cells[id], levelBuilder.vertices[vtxId]);
+						}
+					}
+				}
+			}
+		};
 
-	//		// link faces with cells inward and outward
-	//		for(const auto& cell : amfFile.cells) {
-	//			for(int i = 0; i < 3; ++i) {
-	//				const auto& inFaceID = cell.in_face_ids[i];
-	//				if(inFaceID != -1) {
-	//					builder.template link<Face_to_Cell_In>(faces[inFaceID], cell);
-	//					builder.template link<Face_to_Cell_In>(cell, faces[inFaceID]);
-	//				}
-	//				const auto& outFaceID = cell.out_face_ids[i];
-	//				if(outFaceID != -1) {
-	//					builder.template link<Face_to_Cell_Out>(faces[outFaceID], cell);
-	//					builder.template link<Face_to_Cell_Out>(cell, faces[outFaceID]);
-	//				}
-	//			}
-	//		}
+	  public:
 
-	//	}
+		void assembleMesh(Builder& builder, const AMFFile& amfFile) {
 
-	//};
+			// create cells
+			for(const auto& cell : amfFile.cells[Level]) {
+				cells.push_back(builder.template create<Cell,Level>());
+				assert_eq(cell.level, Level) << "Cell level mismatch";
+			}
 
+			// create faces
+			for(const auto& face : amfFile.faces[Level]) {
+				faces.push_back(builder.template create<Face,Level>());
+				assert_eq(face.level, Level) << "Face level mismatch";
+			}
+
+			// link cells to faces inward and outward
+			for(size_t id = 0; id < amfFile.cells[Level].size(); ++id) {
+				const auto& cell = amfFile.cells[Level][id];
+				for(int i = 0; i < 3; ++i) {
+					const auto& inFaceID = cell.in_face_ids[i];
+					if(inFaceID != -1) {
+						builder.template link<Cell_to_Face_In>(cells[id], faces[inFaceID]);
+					}
+					const auto& outFaceID = cell.out_face_ids[i];
+					if(outFaceID != -1) {
+						builder.template link<Cell_to_Face_Out>(cells[id], faces[outFaceID]);
+					}
+				}
+			}
+
+			VertexAssembler<Level>{}.assembleVertices(builder, amfFile, *this);
+			std::cout << "Finish pre-assembly of level " << Level << "\n";
+			MeshLevelFromFileBuilder<Builder, Level + 1>{}.assembleMesh(builder, amfFile);
+
+			std::cout << "Finish assembly of level " << Level << "\n";
+		}
+
+	};
+
+	template<typename Builder>
+	class MeshLevelFromFileBuilder<Builder, NUM_LEVELS> {
+	  public:
+		void assembleMesh(Builder& builder, const AMFFile& amfFile) {}
+	};
 
 }
 
 
 int main() {
-	AMFFile::load(R"(Z:\allscale\git\allscale-compiler\api\scripts\demo\mesh.amf)");
+	auto file = AMFFile::load(R"(Z:\allscale\git\allscale-compiler\api\scripts\demo\mesh.amf)");
+	MeshBuilder<NUM_LEVELS> builder;
+	MeshLevelFromFileBuilder<MeshBuilder<NUM_LEVELS>, 0> levelBuilder;
+	levelBuilder.assembleMesh(builder, file);
 	return 0;
 
 	// the length of the simulated tube
