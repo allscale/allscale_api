@@ -272,33 +272,37 @@ namespace {
 		int32_t child_cell_ids[8];
 	};
 	struct FFace {
+		int32_t level;
 		double area;
 		int32_t in_cell_id;
 		int32_t out_cell_id;
 	};
 	struct FHeader {
 		uint32_t magic_number;
+		int32_t num_levels;
 		int32_t num_vertices;
+	};
+	struct FLevelHeader {
+		uint32_t magic_number;
+		int32_t level;
 		int32_t num_cells;
 		int32_t num_faces;
-		uint32_t magic_number2;
 	};
 	#pragma pack(pop)
 
 	class AMFFile {
 		FHeader header;
 		std::vector<FVertex> vertices;
-		std::vector<FCell> cells;
-		std::vector<FFace> faces;
+		std::vector<FCell> cells[NUM_LEVELS];
+		std::vector<FFace> faces[NUM_LEVELS];
 
 	  public:
 		static AMFFile load(const std::string& fname) {
 			AMFFile ret;
 			auto file = fopen(fname.c_str(), "rb");
 			fread(&ret.header, sizeof(ret.header), 1, file);
-			assert_eq(ret.header.magic_number, 0xA115ca1e) << fname << " - magic number doesn't match";
-			assert_eq(ret.header.magic_number2, 0xA115ca1e) << fname << " - magic number after header doesn't match";
-			std::cout << "File info - " << ret.header.num_vertices << " // " << ret.header.num_cells << " // " << ret.header.num_faces << "\n";
+			assert_eq(ret.header.magic_number, 0xA115ca1e) << fname << " - magic number in header doesn't match";
+			std::cout << "File info - " << ret.header.num_levels << " Levels // " << ret.header.num_vertices << " Vertices\n";
 
 			auto loadList = [&](int count, int elem_size, auto&& target, const char* name) {
 				target.reserve(count);
@@ -307,14 +311,75 @@ namespace {
 				std::size_t ret = fread(&magic, sizeof(uint32_t), 1, file);
 				assert_eq(magic, 0xA115ca1e) << fname << " - magic number after " << name << " list invalid";
 			};
+
 			loadList(ret.header.num_vertices, sizeof(FVertex), ret.vertices, "vertex");
-			loadList(ret.header.num_cells, sizeof(FCell), ret.cells, "cell");
-			loadList(ret.header.num_faces, sizeof(FFace), ret.faces, "face");
+
+			for(int i = 0; i < NUM_LEVELS; ++i) {
+				FLevelHeader levelHeader;
+				fread(&levelHeader, sizeof(levelHeader), 1, file);
+				assert_eq(levelHeader.magic_number, 0xA115ca1e) << fname << " - magic number in per-level header doesn't match";
+				assert_eq(levelHeader.level, i) << " - level id mismatch";
+				std::cout << "File level " << i << " info - " << levelHeader.num_cells << " Cells // " << levelHeader.num_faces << " Faces\n";
+				loadList(levelHeader.num_cells, sizeof(FCell), ret.cells[i], "cell");
+				loadList(levelHeader.num_faces, sizeof(FFace), ret.faces[i], "face");
+			}
 
 			return ret;
 		}
 	};
+
+	//template<typename Builder, unsigned Level>
+	//class MeshFromFileBuilder {
+
+	//	using CellRef = typename data::NodeRef<Cell,level>;
+	//	using FaceRef = typename data::NodeRef<Face,level>;
+	//	using VertexRef = typename data::NodeRef<Vertex,level>;
+
+	//	std::vector<CellRef> cells;
+	//	std::vector<FaceRef> faces;
+	//	std::vector<VertexRef> vertices;
+
+	//	void assembleMesh(Builder& builder, const AMFFile& amfFile) {
+
+	//		// -- cells --
+
+	//		// create cells
+	//		cells.reserve(amfFile.cells.size());
+	//		for(const auto& cell : amfFile.cells) {
+	//			cells.push_back(builder.template create<Cell,level>());
+	//		}
+
+	//		// -- faces --
+
+	//		// create faces
+	//		faces.reserve(amfFile.faces.size());
+	//		for(const auto& faces : amfFile.faces) {
+	//			faces.push_back(builder.template create<Face,level>());
+	//		}
+
+	//		// link faces with cells inward and outward
+	//		for(const auto& cell : amfFile.cells) {
+	//			for(int i = 0; i < 3; ++i) {
+	//				const auto& inFaceID = cell.in_face_ids[i];
+	//				if(inFaceID != -1) {
+	//					builder.template link<Face_to_Cell_In>(faces[inFaceID], cell);
+	//					builder.template link<Face_to_Cell_In>(cell, faces[inFaceID]);
+	//				}
+	//				const auto& outFaceID = cell.out_face_ids[i];
+	//				if(outFaceID != -1) {
+	//					builder.template link<Face_to_Cell_Out>(faces[outFaceID], cell);
+	//					builder.template link<Face_to_Cell_Out>(cell, faces[outFaceID]);
+	//				}
+	//			}
+	//		}
+
+	//	}
+
+	//};
+
+
 }
+
 
 int main() {
 	AMFFile::load(R"(Z:\allscale\git\allscale-compiler\api\scripts\demo\mesh.amf)");

@@ -10,6 +10,9 @@ lookup = {        # depth   init temp   conductivity
     2197781247 => [ 0.25  ,   120     ,     0.2 ], # green (background construct)
 }
 
+
+LEVELS = 3
+
 MAX_DEPTH = 16
 
 def gen_ids()
@@ -42,7 +45,7 @@ class Cell
     attr_accessor :up_area
     attr_accessor :fwd_area
 
-    @@idc = 0
+    @@idc = [0] * LEVELS
 
     def initialize()
         @exists = false
@@ -54,8 +57,8 @@ class Cell
     end 
 
     def set(level, init, cond)
-        @id = @@idc
-        @@idc += 1
+        @id = @@idc[level]
+        @@idc[level] += 1
         @exists = true
         @level = level
         @temperature = init
@@ -72,7 +75,7 @@ class Cell
     end
 
     def Cell.num_ids
-        @@idc
+        @@idc.sum
     end
 
     def add_out_face(f)
@@ -108,22 +111,24 @@ end
 
 class Face
     attr :id
+    attr :level
     attr :area
     attr :in_cell
     attr :out_cell
 
-    @@idc = 0
+    @@idc = [0] * LEVELS
 
-    def initialize(area, in_cell, out_cell)
-        @id = @@idc
-        @@idc += 1
+    def initialize(level, area, in_cell, out_cell)
+        @id = @@idc[level]
+        @@idc[level] += 1
+        @level = level
         @area = area
         @in_cell = in_cell
         @out_cell = out_cell
     end
     
     def Face.num_ids
-        @@idc
+        @@idc.sum
     end
 
     def to_s
@@ -132,9 +137,9 @@ class Face
 
     def to_bin
         # face format
-        # area   | in cell | out cell
-        # double | int     | int
-        [area, in_cell.id, out_cell.id].pack("dll")
+        # level | area   | in cell | out cell
+        # int   | double | int     | int
+        [level, area, in_cell.id, out_cell.id].pack("ldll")
     end
 end
 
@@ -177,20 +182,20 @@ class Vertex
     end
 end
 
-$face_array = []
+$face_array = Array.new(LEVELS) { [] }
 
-def build_face(area, cell_in, cell_out)
-    face = Face.new(area, cell_in, cell_out)
+def build_face(level, area, cell_in, cell_out)
+    face = Face.new(level, area, cell_in, cell_out)
     cell_in.add_out_face(face)
     cell_out.add_in_face(face)
-    $face_array << face
+    $face_array[level] << face
 end
 
 
 ## Build cells from image and add vertices
 
 cell_structure = Array.new(logo.width) { Array.new(logo.height) { Array.new(MAX_DEPTH) { Cell.new } } } 
-cell_array = []
+cell_array = Array.new(LEVELS) { [] }
 cell_count = 0
 
 vertex_structure = Array.new(logo.width+1) { Array.new(logo.height+1) { Array.new(MAX_DEPTH+1) { Vertex.new } } }
@@ -208,7 +213,7 @@ logo.width.times do |x|
             num.times { |i|
                 z = start_z+i
                 cell_structure[x][y][z].set(0, init, cond)
-                cell_array << cell_structure[x][y][z]
+                cell_array[0] << cell_structure[x][y][z]
                 cell_count += 1
 
                 REL_IDS.each do |rid|
@@ -237,15 +242,15 @@ end
             up = cell_structure[x][y+1][z]
             forward = cell_structure[x][y][z+1]
             if right.exists?
-                build_face(1, this, right)
+                build_face(0, 1, this, right)
                 this.right_area = 1
             end
             if up.exists?
-                build_face(1, this, up) if up.exists?
+                build_face(0, 1, this, up) if up.exists?
                 this.up_area = 1
             end
             if forward.exists?
-                build_face(1, this, forward)
+                build_face(0, 1, this, forward)
                 this.fwd_area = 1
             end
         end
@@ -253,8 +258,6 @@ end
 end
 
 ## Build hierarchy
-
-LEVELS = 3
 
 dbg_pcell_sizes = []
 
@@ -295,7 +298,7 @@ level_cell_structure[0] = cell_structure
                 # connect hierarchy
                 coarser[x][y][z].child_cells = child_cells
 
-                cell_array << coarser[x][y][z]
+                cell_array[level] << coarser[x][y][z]
             end
         end
     end
@@ -311,30 +314,27 @@ level_cell_structure[0] = cell_structure
                 right = coarser[x+1][y][z]
                 up = coarser[x][y+1][z]
                 forward = coarser[x][y][z+1]
-                build_face(this.right_area, this, right) if right.exists?
-                build_face(this.up_area, this, up) if up.exists?
-                build_face(this.fwd_area, this, forward) if forward.exists?
+                build_face(level, this.right_area, this, right) if right.exists?
+                build_face(level, this.up_area, this, up) if up.exists?
+                build_face(level, this.fwd_area, this, forward) if forward.exists?
             end
         end
     end
 end
 
-puts "occuring cell counts per combined cell: #{dbg_pcell_sizes.uniq}"
+#puts "occuring cell counts per combined cell: #{dbg_pcell_sizes.uniq}"
 
-puts "cell_count: #{cell_count} / num cell ids: #{Cell.num_ids}"
-puts "num face ids: #{Face.num_ids}"
-puts "num vtx ids: #{Vertex.num_ids} / vertex_array.length: #{vertex_array.length}"
-puts cell_array[0].to_s
-puts cell_array[cell_count/4].to_s
-puts cell_array[cell_count-1].to_s
+puts "levels: #{LEVELS}"
+puts "vertices: #{vertex_array.size}"
+LEVELS.times { |l|
+    puts  "LEVEL %d - %10d Cells %10d Faces" % [l, cell_array[l].size, $face_array[l].size]
+}
+
+puts "\nStarting file dump"
 
 # dump obj for inspection
 
-vertex_array.sort_by! { |v| v.id }
-cell_array.sort_by! { |c| c.id }
-$face_array.sort_by! { |f| f.id }
-
-create_obj_file = false
+create_obj_file = ARGV.include?("-obj")
 if(create_obj_file)
     File.open("level0.obj", "w+") do |out|
         out.puts "mtllib ramp.mtl"
@@ -344,7 +344,7 @@ if(create_obj_file)
             out.puts "v #{v.position[0]} #{v.position[1]} #{v.position[2]}"
         }
         # dump cells
-        cell_array.each do |c|
+        cell_array[0].each do |c|
             out.puts "usemtl r#{c.temperature.to_i}"
             faces = [ [[0,0,0], [0,0,1], [0,1,1], [0,1,0]] ,
                     [[0,0,0], [1,0,0], [1,0,1], [0,0,1]] ,
@@ -359,54 +359,49 @@ if(create_obj_file)
     end
 end
 
-#puts logo.pixels.uniq.map { |c| "#{c} : " + ChunkyPNG::Color.to_truecolor_bytes(c).join(", ") }.join("\n")
-
 # file format
-
 # id -1 = empty
 
-# 4 bytes   | 4 bytes int  | 4 bytes int | 4 bytes int |
-# #A115ca1e | num_vertices | num_cells   | num_faces   | 
-# 4 bytes   | num_vertices * 24 bytes | 4 bytes   | num_cells * 108 bytes | 4 bytes   | num_faces * 16 bytes
-# #A115ca1e | vertices                | #A115ca1e | cells                 | #A115ca1e | faces                
+# header:
+# 4 bytes   | 4 bytes int | 4 bytes int  | num_vertices * 24 bytes | 4 bytes   
+# #A115ca1e | num_levels  | num_vertices | vertices                | #A115ca1e 
 
-# vertex format
-# x pos  | y pos  | z pos 
-# double | double | double
-
-# cell format
-# level | temperature | conductivity | in face ids (3x) | out face ids (3x) | vertex ids (8x) | child cells (8x)                            
-# int   | double      | double       | int | int | int  | int | int | int   | 8x int          | 8x int
-
-# face format
-# area   | in cell | out cell
-# double | int     | int
+# PER LEVEL:
+# 4 bytes   | 4 bytes int | 4 bytes int | 4 bytes int | num_cells * 108 bytes | 4 bytes   | num_faces * 20 bytes | 4 bytes   
+# #A115ca1e | level       | num_cells   | num_faces   | cells                 | #A115ca1e | faces                | #A115ca1e 
 
 def write_magic_number(outf)
     outf.write([0xA115ca1e].pack("l"))
 end
 
+def write_array(outf, arr, name, elemsize)
+    fp = outf.pos
+    arr.each_with_index { |e,i| 
+        written_bytes = outf.write(e.to_bin)
+        raise "Unexpected number of bytes written" if written_bytes != elemsize
+        raise "Index mismatch" if i != e.id
+    }
+    puts "#{name} written: #{(outf.pos - fp) / elemsize} (#{(outf.pos - fp)} bytes)"
+    write_magic_number(outf)
+end
+
 File.open("mesh.amf", "wb+") do |out|
     # header
     write_magic_number(out)
-    out.write([vertex_array.size, cell_array.size, $face_array.size].pack("lll"))
-    write_magic_number(out)
+    out.write([LEVELS, vertex_array.size].pack("ll"))
 
-    fp = out.pos
-    vertex_array.each { |v| out.write(v.to_bin) }
-    puts "Vertices written: #{(out.pos - fp) / 24} (#{(out.pos - fp)} bytes)"
+    # vertices
+    write_array(out, vertex_array, "Vertices", 24)
 
-    write_magic_number(out)
+    LEVELS.times do |l|
+        puts "LEVEL #{l}"
 
-    fp = out.pos
-    cell_array.each { |c| out.write(c.to_bin) }
-    puts "Cells written: #{(out.pos - fp) / 108} (#{(out.pos - fp)} bytes)"
+        # per-level header
+        write_magic_number(out)
+        out.write([l, cell_array[l].size, $face_array[l].size].pack("lll"))
 
-    write_magic_number(out)
-
-    fp = out.pos
-    $face_array.each { |f| out.write(f.to_bin) }
-    puts "Faces written: #{(out.pos - fp) / 16} (#{(out.pos - fp)} bytes)"
+        write_array(out, cell_array[l], "Cells", 108)
+        write_array(out, $face_array[l], "Faces", 20)
+    end
     
-    write_magic_number(out)
 end
