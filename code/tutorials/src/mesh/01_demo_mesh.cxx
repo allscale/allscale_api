@@ -255,7 +255,70 @@ namespace detail {
 	std::pair<Mesh<NUM_LEVELS>, MeshProperties<Mesh<NUM_LEVELS>>> createTube(const int N);
 }
 
+
+namespace {
+	// file format structures
+	#pragma pack(push, 1)
+	struct FVertex {
+		double x, y, z;
+	};
+	struct FCell {
+		int32_t level;
+		double temperature;
+		double conductivity;
+		int32_t in_face_ids[3];
+		int32_t out_face_ids[3];
+		int32_t vertex_ids[8];
+		int32_t child_cell_ids[8];
+	};
+	struct FFace {
+		double area;
+		int32_t in_cell_id;
+		int32_t out_cell_id;
+	};
+	struct FHeader {
+		uint32_t magic_number;
+		int32_t num_vertices;
+		int32_t num_cells;
+		int32_t num_faces;
+		uint32_t magic_number2;
+	};
+	#pragma pack(pop)
+
+	class AMFFile {
+		FHeader header;
+		std::vector<FVertex> vertices;
+		std::vector<FCell> cells;
+		std::vector<FFace> faces;
+
+	  public:
+		static AMFFile load(const std::string& fname) {
+			AMFFile ret;
+			auto file = fopen(fname.c_str(), "rb");
+			fread(&ret.header, sizeof(ret.header), 1, file);
+			assert_eq(ret.header.magic_number, 0xA115ca1e) << fname << " - magic number doesn't match";
+			assert_eq(ret.header.magic_number2, 0xA115ca1e) << fname << " - magic number after header doesn't match";
+			std::cout << "File info - " << ret.header.num_vertices << " // " << ret.header.num_cells << " // " << ret.header.num_faces << "\n";
+
+			auto loadList = [&](int count, int elem_size, auto&& target, const char* name) {
+				target.reserve(count);
+				fread(target.data(), elem_size, count, file);
+				uint32_t magic = 0;
+				std::size_t ret = fread(&magic, sizeof(uint32_t), 1, file);
+				assert_eq(magic, 0xA115ca1e) << fname << " - magic number after " << name << " list invalid";
+			};
+			loadList(ret.header.num_vertices, sizeof(FVertex), ret.vertices, "vertex");
+			loadList(ret.header.num_cells, sizeof(FCell), ret.cells, "cell");
+			loadList(ret.header.num_faces, sizeof(FFace), ret.faces, "face");
+
+			return ret;
+		}
+	};
+}
+
 int main() {
+	AMFFile::load(R"(Z:\allscale\git\allscale-compiler\api\scripts\demo\mesh.amf)");
+	return 0;
 
 	// the length of the simulated tube
 	const int N = 20;

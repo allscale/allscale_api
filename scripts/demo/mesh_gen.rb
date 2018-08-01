@@ -27,9 +27,6 @@ end
 REL_IDS, REL_HASH = gen_ids()
 
 class Cell
-    attr :exists
-    alias :exists? :exists
-
     attr :id
     attr :level
     attr :temperature
@@ -49,7 +46,12 @@ class Cell
 
     def initialize()
         @exists = false
+        @id = -1
     end
+
+    def exists?
+        @id != -1
+    end 
 
     def set(level, init, cond)
         @id = @@idc
@@ -84,6 +86,24 @@ class Cell
     def to_s
         "cell ##{id} : L#{level} T#{temperature}  C#{conductivity} F(o:#{@in_faces.join(",")}, i:#{@out_faces.join(",")})"
     end
+
+    def to_bin
+        # cell format
+        # level | temperature | conductivity | in face ids (3x) | out face ids (3x) | vertex ids (8x) | child cells (8x)                            
+        # int   | double      | double       | int | int | int  | int | int | int   | 8x int          | 8x int
+        def make_output(arr, length)
+            arr.map { |e| e.id }.fill(-1, arr.size, length - arr.size)
+        end
+        in_faces_write = make_output(in_faces, 3)
+        out_faces_write = make_output(out_faces, 3)
+        vertices_write = make_output(vertices, 8)
+        child_cells_write = make_output(child_cells, 8)
+        out_array = ([level, temperature, conductivity] + in_faces_write + out_faces_write + vertices_write + child_cells_write)
+        ret = out_array.pack("ldd#{"l"*(3+3+8+8)}")
+        rs = ret.size
+        raise "Unexpected binary format cell size: #{rs} bytes" unless rs == 108
+        return ret
+    end
 end
 
 class Face
@@ -109,20 +129,28 @@ class Face
     def to_s
         "f#{id}"
     end
+
+    def to_bin
+        # face format
+        # area   | in cell | out cell
+        # double | int     | int
+        [area, in_cell.id, out_cell.id].pack("dll")
+    end
 end
 
 class Vertex
-    attr :exists
-    alias :exists? :exists
-
     attr :id
     attr :position
 
     @@idc = 0
 
     def initialize()
-        @exists = false
+        @id = -1
     end
+    
+    def exists?
+        @id != -1
+    end 
 
     def Vertex.num_ids
         @@idc
@@ -139,6 +167,13 @@ class Vertex
 
     def to_s
         "v#{id}"
+    end
+    
+    def to_bin
+        # vertex format
+        # x pos  | y pos  | z pos 
+        # double | double | double
+        position.pack("ddd")
     end
 end
 
@@ -259,6 +294,8 @@ level_cell_structure[0] = cell_structure
 
                 # connect hierarchy
                 coarser[x][y][z].child_cells = child_cells
+
+                cell_array << coarser[x][y][z]
             end
         end
     end
@@ -291,28 +328,85 @@ puts cell_array[0].to_s
 puts cell_array[cell_count/4].to_s
 puts cell_array[cell_count-1].to_s
 
-vertex_array.sort_by! { |v| v.id }
+# dump obj for inspection
 
-File.open("level0.obj", "w+") do |out|
-    out.puts "mtllib ramp.mtl"
-    # dump vertices
-    vertex_array.each_with_index { |v,i|
-        raise "index error #{i} != #{v.id}" if i != v.id
-        out.puts "v #{v.position[0]} #{v.position[1]} #{v.position[2]}"
-    }
-    # dump cells
-    cell_array.each do |c|
-        out.puts "usemtl r#{c.temperature.to_i}"
-        faces = [ [[0,0,0], [0,0,1], [0,1,1], [0,1,0]] ,
-                  [[0,0,0], [1,0,0], [1,0,1], [0,0,1]] ,
-                  [[0,0,0], [1,0,0], [1,1,0], [0,1,0]] ,
-                  [[1,0,0], [1,0,1], [1,1,1], [1,1,0]] ,
-                  [[0,0,1], [1,0,1], [1,1,1], [0,1,1]] ,
-                  [[0,1,0], [1,1,0], [1,1,1], [0,1,1]] ]
-        faces.each do |f|
-            out.puts "f #{f.map { |vid| c.vertices[REL_HASH[vid]].id+1 }.join(" ")}"
+vertex_array.sort_by! { |v| v.id }
+cell_array.sort_by! { |c| c.id }
+$face_array.sort_by! { |f| f.id }
+
+create_obj_file = false
+if(create_obj_file)
+    File.open("level0.obj", "w+") do |out|
+        out.puts "mtllib ramp.mtl"
+        # dump vertices
+        vertex_array.each_with_index { |v,i|
+            raise "index error #{i} != #{v.id}" if i != v.id
+            out.puts "v #{v.position[0]} #{v.position[1]} #{v.position[2]}"
+        }
+        # dump cells
+        cell_array.each do |c|
+            out.puts "usemtl r#{c.temperature.to_i}"
+            faces = [ [[0,0,0], [0,0,1], [0,1,1], [0,1,0]] ,
+                    [[0,0,0], [1,0,0], [1,0,1], [0,0,1]] ,
+                    [[0,0,0], [1,0,0], [1,1,0], [0,1,0]] ,
+                    [[1,0,0], [1,0,1], [1,1,1], [1,1,0]] ,
+                    [[0,0,1], [1,0,1], [1,1,1], [0,1,1]] ,
+                    [[0,1,0], [1,1,0], [1,1,1], [0,1,1]] ]
+            faces.each do |f|
+                out.puts "f #{f.map { |vid| c.vertices[REL_HASH[vid]].id+1 }.join(" ")}"
+            end
         end
     end
 end
 
 #puts logo.pixels.uniq.map { |c| "#{c} : " + ChunkyPNG::Color.to_truecolor_bytes(c).join(", ") }.join("\n")
+
+# file format
+
+# id -1 = empty
+
+# 4 bytes   | 4 bytes int  | 4 bytes int | 4 bytes int |
+# #A115ca1e | num_vertices | num_cells   | num_faces   | 
+# 4 bytes   | num_vertices * 24 bytes | 4 bytes   | num_cells * 108 bytes | 4 bytes   | num_faces * 16 bytes
+# #A115ca1e | vertices                | #A115ca1e | cells                 | #A115ca1e | faces                
+
+# vertex format
+# x pos  | y pos  | z pos 
+# double | double | double
+
+# cell format
+# level | temperature | conductivity | in face ids (3x) | out face ids (3x) | vertex ids (8x) | child cells (8x)                            
+# int   | double      | double       | int | int | int  | int | int | int   | 8x int          | 8x int
+
+# face format
+# area   | in cell | out cell
+# double | int     | int
+
+def write_magic_number(outf)
+    outf.write([0xA115ca1e].pack("l"))
+end
+
+File.open("mesh.amf", "wb+") do |out|
+    # header
+    write_magic_number(out)
+    out.write([vertex_array.size, cell_array.size, $face_array.size].pack("lll"))
+    write_magic_number(out)
+
+    fp = out.pos
+    vertex_array.each { |v| out.write(v.to_bin) }
+    puts "Vertices written: #{(out.pos - fp) / 24} (#{(out.pos - fp)} bytes)"
+
+    write_magic_number(out)
+
+    fp = out.pos
+    cell_array.each { |c| out.write(c.to_bin) }
+    puts "Cells written: #{(out.pos - fp) / 108} (#{(out.pos - fp)} bytes)"
+
+    write_magic_number(out)
+
+    fp = out.pos
+    $face_array.each { |f| out.write(f.to_bin) }
+    puts "Faces written: #{(out.pos - fp) / 16} (#{(out.pos - fp)} bytes)"
+    
+    write_magic_number(out)
+end
