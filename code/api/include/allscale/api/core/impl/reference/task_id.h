@@ -5,6 +5,7 @@
 #include <iterator>
 
 #include "allscale/utils/assert.h"
+#include "allscale/utils/serializer.h"
 
 namespace allscale {
 namespace api {
@@ -16,7 +17,7 @@ namespace reference {
 	 * The path part of a task ID. The path is the part of and ID addressing
 	 * a certain sub-task of a decomposable task.
 	 */
-	class TaskPath {
+	class TaskPath : public allscale::utils::trivially_serializable {
 
 		using path_t = std::uint64_t;
 		using length_t = std::uint8_t;
@@ -190,7 +191,7 @@ namespace reference {
 	 * 			T-12.0.1.0.1.0 and WI-12.0.1.0.1.1
 	 *
 	 */
-	class TaskID {
+	class TaskID : public allscale::utils::trivially_serializable  {
 
 		std::uint64_t id;
 		TaskPath path;

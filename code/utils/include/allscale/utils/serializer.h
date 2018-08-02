@@ -176,8 +176,6 @@ namespace utils {
 
 	public:
 
-
-
 		Archive(const Archive&) = default;
 		Archive(Archive&&) = default;
 
@@ -207,6 +205,13 @@ namespace utils {
 		const std::vector<char>& getBuffer() const {
 			return data;
 		}
+
+		// --- serializer support ---
+
+		void store(ArchiveWriter& out) const;
+
+		static Archive load(ArchiveReader& in);
+
 	};
 
 #if !defined(ALLSCALE_WITH_HPX)
@@ -407,28 +412,39 @@ namespace utils {
 	};
 #endif
 
-
 	namespace detail {
 
 		struct not_trivially_serializable {};
 
-		template<typename ... Ts>
-		struct all_trivially_serializable;
-
-		template<>
-		struct all_trivially_serializable<> : public std::true_type {};
-
-		template<typename T, typename ... Rest>
-		struct all_trivially_serializable<T,Rest...> : public std::conditional<is_trivially_serializable<T>::value, all_trivially_serializable<Rest...>,std::false_type>::type {};
-
 	}
+
+	template<typename ... Ts>
+	struct all_serializable;
+
+	template<>
+	struct all_serializable<> : public std::true_type {};
+
+	template<typename T, typename ... Rest>
+	struct all_serializable<T,Rest...> : public std::conditional<is_serializable<T>::value, all_serializable<Rest...>,std::false_type>::type {};
+
+
+
+	template<typename ... Ts>
+	struct all_trivially_serializable;
+
+	template<>
+	struct all_trivially_serializable<> : public std::true_type {};
+
+	template<typename T, typename ... Rest>
+	struct all_trivially_serializable<T,Rest...> : public std::conditional<is_trivially_serializable<T>::value, all_trivially_serializable<Rest...>,std::false_type>::type {};
+
 
 	/**
 	 * A utility to mark trivially serializable dependent types.
 	 */
 	template<typename ... Ts>
 	using trivially_serializable_if_t = typename std::conditional<
-			detail::all_trivially_serializable<Ts...>::value,
+			all_trivially_serializable<Ts...>::value,
 			trivially_serializable,detail::not_trivially_serializable
 		>::type;
 
@@ -522,6 +538,18 @@ namespace utils {
 		return ArchiveReader(a).read<T>();
 	}
 #endif
+
+	inline void Archive::store(ArchiveWriter& out) const {
+		out.write(data.size());
+		out.write(data.begin(),data.size());
+	}
+
+	inline Archive Archive::load(ArchiveReader& in) {
+		auto size = in.read<std::size_t>();
+		std::vector<char> data(size);
+		in.read(&data[0],size);
+		return std::move(data);
+	}
 
 } // end namespace utils
 } // end namespace allscale

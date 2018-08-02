@@ -153,9 +153,9 @@ struct TemperatureStage {
 	void computeFineToCoarse() {
 		if(Level == 0) {
 			static int fileId = 0;
-			constexpr char* filePrefix = "step";
-			constexpr char* fileSuffix = ".obj";
-			constexpr char* mtlFile = "ramp.mtl";
+			constexpr const char* filePrefix = "step";
+			constexpr const char* fileSuffix = ".obj";
+			constexpr const char* mtlFile = "ramp.mtl";
 			char fn[64];
 			snprintf(fn, sizeof(fn), "%s%03d%s", filePrefix, fileId++, fileSuffix);
 			std::cout << "Starting file dump to " << fn << "\n";
@@ -293,12 +293,12 @@ namespace {
 				target.resize(count);
 				fread(target.data(), elem_size, count, file);
 				uint32_t magic = 0;
-				std::size_t ret = fread(&magic, sizeof(uint32_t), 1, file);
+				fread(&magic, sizeof(uint32_t), 1, file);
 				assert_eq(magic, 0xA115ca1e) << fname << " - magic number after " << name << " list invalid";
 			};
 
 			loadList(ret.header.num_vertices, sizeof(FVertex), ret.vertices, "vertex");
-			assert_eq(ret.header.num_vertices, ret.vertices.size());
+			assert_eq((size_t)ret.header.num_vertices, ret.vertices.size());
 
 			for(int i = 0; i < NUM_LEVELS; ++i) {
 				FLevelHeader levelHeader;
@@ -306,9 +306,9 @@ namespace {
 				assert_eq(levelHeader.magic_number, 0xA115ca1e) << fname << " - magic number in per-level header doesn't match";
 				assert_eq(levelHeader.level, i) << " - level id mismatch";
 				loadList(levelHeader.num_cells, sizeof(FCell), ret.cells[i], "cell");
-				assert_eq(levelHeader.num_cells, ret.cells[i].size());
+				assert_eq((size_t)levelHeader.num_cells, ret.cells[i].size());
 				loadList(levelHeader.num_faces, sizeof(FFace), ret.faces[i], "face");
-				assert_eq(levelHeader.num_faces, ret.faces[i].size());
+				assert_eq((size_t)levelHeader.num_faces, ret.faces[i].size());
 			}
 
 			return ret;
@@ -329,20 +329,20 @@ namespace {
 		const AMFFile& amfFile;
 		MeshFromFileBuilder<Builder, Level+1> subBuilder;
 
-		template<unsigned Level>
+		template<unsigned VLevel>
 		struct VertexAssembler {
-			void assembleVertices(Builder& builder, MeshFromFileBuilder<Builder, Level>& levelBuilder) { }
+			void assembleVertices(Builder& builder, MeshFromFileBuilder<Builder, VLevel>& levelBuilder) { }
 		};
 		template<>
 		struct VertexAssembler<0> {
-			void assembleVertices(Builder& builder, MeshFromFileBuilder<Builder, Level>& levelBuilder) {
+			void assembleVertices(Builder& builder, MeshFromFileBuilder<Builder, 0>& levelBuilder) {
 				// create vertices
 				for(size_t i = 0; i < levelBuilder.amfFile.vertices.size(); ++i) {
 					levelBuilder.vertices.push_back(builder.template create<Vertex,0>());
 				}
 				// link cells to vertices
-				for(size_t id = 0; id < levelBuilder.amfFile.cells[Level].size(); ++id) {
-					const auto& cell = levelBuilder.amfFile.cells[Level][id];
+				for(size_t id = 0; id < levelBuilder.amfFile.cells[0].size(); ++id) {
+					const auto& cell = levelBuilder.amfFile.cells[0][id];
 
 					for(const auto& vtxId : cell.vertex_ids) {
 						if(vtxId != -1) {
