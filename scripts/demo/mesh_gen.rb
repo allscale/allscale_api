@@ -1,7 +1,7 @@
 
 require 'chunky_png'
 
-logo = ChunkyPNG::Image.from_file('demo_logo_small.png')
+logo = ChunkyPNG::Image.from_file('demo_logo_smaller.png')
 
 lookup = {        # depth   init temp   conductivity
     4294967295 => [ 0.0   ,     0     ,     0.0 ], # white (nothing)
@@ -277,9 +277,17 @@ level_cell_structure[0] = cell_structure
         lh.times do |y|
             ld.times do |z|
                 child_cells = []
+                right_child_cells = []
+                up_child_cells = []
+                fwd_child_cells = []
                 REL_IDS.each do |rid|
                     target = finer[x*2+rid[0]][y*2+rid[1]][z*2+rid[2]]
-                    child_cells << target if target.exists?
+                    if target.exists?
+                        child_cells << target 
+                        right_child_cells << target if rid[0]==1
+                        up_child_cells << target if rid[1]==1
+                        fwd_child_cells << target if rid[2]==1
+                    end
                 end
                 pcount = child_cells.size
                 dbg_pcell_sizes << pcount
@@ -291,9 +299,9 @@ level_cell_structure[0] = cell_structure
                 coarser[x][y][z].set(level, avg_init, avg_cond)
 
                 # aggreagte areas
-                coarser[x][y][z].right_area = child_cells.reduce(0.0) { |memo, c| memo + c.right_area }
-                coarser[x][y][z].up_area = child_cells.reduce(0.0) { |memo, c| memo + c.up_area }
-                coarser[x][y][z].fwd_area = child_cells.reduce(0.0) { |memo, c| memo + c.fwd_area }
+                coarser[x][y][z].right_area = right_child_cells.reduce(0.0) { |memo, c| memo + c.right_area }
+                coarser[x][y][z].up_area = up_child_cells.reduce(0.0) { |memo, c| memo + c.up_area }
+                coarser[x][y][z].fwd_area = fwd_child_cells.reduce(0.0) { |memo, c| memo + c.fwd_area }
 
                 # connect hierarchy
                 coarser[x][y][z].child_cells = child_cells
@@ -314,9 +322,9 @@ level_cell_structure[0] = cell_structure
                 right = coarser[x+1][y][z]
                 up = coarser[x][y+1][z]
                 forward = coarser[x][y][z+1]
-                build_face(level, this.right_area, this, right) if right.exists?
-                build_face(level, this.up_area, this, up) if up.exists?
-                build_face(level, this.fwd_area, this, forward) if forward.exists?
+                build_face(level, this.right_area, this, right) if right.exists? && this.right_area > 0
+                build_face(level, this.up_area, this, up) if up.exists? && this.up_area > 0
+                build_face(level, this.fwd_area, this, forward) if forward.exists? && this.fwd_area > 0
             end
         end
     end
@@ -347,11 +355,11 @@ if(create_obj_file)
         cell_array[0].each do |c|
             out.puts "usemtl r#{c.temperature.to_i}"
             faces = [ [[0,0,0], [0,0,1], [0,1,1], [0,1,0]] ,
-                    [[0,0,0], [1,0,0], [1,0,1], [0,0,1]] ,
-                    [[0,0,0], [1,0,0], [1,1,0], [0,1,0]] ,
-                    [[1,0,0], [1,0,1], [1,1,1], [1,1,0]] ,
-                    [[0,0,1], [1,0,1], [1,1,1], [0,1,1]] ,
-                    [[0,1,0], [1,1,0], [1,1,1], [0,1,1]] ]
+                      [[0,0,0], [1,0,0], [1,0,1], [0,0,1]] ,
+                      [[0,0,0], [1,0,0], [1,1,0], [0,1,0]] ,
+                      [[1,0,0], [1,0,1], [1,1,1], [1,1,0]] ,
+                      [[0,0,1], [1,0,1], [1,1,1], [0,1,1]] ,
+                      [[0,1,0], [1,1,0], [1,1,1], [0,1,1]] ]
             faces.each do |f|
                 out.puts "f #{f.map { |vid| c.vertices[REL_HASH[vid]].id+1 }.join(" ")}"
             end
@@ -405,3 +413,10 @@ File.open("mesh.amf", "wb+") do |out|
     end
     
 end
+
+# blender script:
+"""
+import bpy
+for mat in bpy.data.materials:
+    mat.use_shadeless = True
+"""

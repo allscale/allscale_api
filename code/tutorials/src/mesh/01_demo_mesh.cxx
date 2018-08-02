@@ -10,6 +10,9 @@
 
 using namespace allscale::api::user;
 
+#define assert_between(__low, __v, __high)                                                                                                                    \
+	if(__allscale_unused auto __allscale_temp_object_ = insieme::utils::detail::LazyAssertion((__low) <= (__v) && (__v) <= (__high)))                         \
+	std::cerr << "\nAssertion " #__low " <= " #__v " <= " #__high " of " __FILE__ ":" __allscale_xstr_(__LINE__) " failed!\n\t" #__v " = " << (__v) << "\n"
 
 // -- Number of hierarchical levels in the mesh data structure --
 const int NUM_LEVELS = 3;
@@ -18,26 +21,6 @@ const int NUM_LEVELS = 3;
 using value_t = double;
 
 using Point = allscale::utils::Vector<value_t, 3>;
-
-value_t norm(const Point& a) {
-	return sqrt(a.x*a.x + a.y*a.y + a.z*a.z);
-}
-
-value_t dist(const Point& a, const Point& b) {
-	return norm(a - b);
-}
-
-Point cross(const Point& a, const Point& b) {
-	return Point{
-			a.y*b.z-a.z*b.y,
-			a.z*b.x-a.x*b.z,
-			a.x*b.y-a.y*b.x
-	};
-}
-
-value_t area(const Point& a, const Point& b, const Point& c) {
-	return norm(cross(a-b,a-c))/2;
-}
 
 // - elements -
 struct Cell {};
@@ -122,19 +105,11 @@ struct TemperatureStage {
 
 		// -- initialize attributes --
 
-		// simulation parameters
-		int TF = 511;		// < first temperature
-		int T0 = 20;		// < initial temperature
-
 		bool first = true;
+		auto& cellTemperature = properties.template get<CellTemperature, Level>();
 		mesh.template forAll<Cell, Level>([&](auto c) {
-			if(first) {
-				temperature[c] = TF;
-				first = false;
-			}
-			else {
-				temperature[c] = T0;
-			}
+			temperature[c] = cellTemperature[c];
+			assert_between(0, temperature[c], 511) << "While initializing level " << Level;
 		});
 	}
 
@@ -147,6 +122,9 @@ struct TemperatureStage {
 			auto in = mesh.template getNeighbor<Face_to_Cell_In>(f);
 			auto out = mesh.template getNeighbor<Face_to_Cell_Out>(f);
 
+			assert_between(0, temperature[in], 511) << "On level " << Level;
+			assert_between(0, temperature[out], 511) << "On level " << Level;
+
 			value_t gradTemperature = temperature[out] - temperature[in];
 			value_t flux = faceConductivity[f] * faceArea[f] * gradTemperature;
 
@@ -156,28 +134,31 @@ struct TemperatureStage {
 		// update of solution
 		mesh.template pforAll<Cell, Level>([&](auto c){
 			auto subtractingFaces = mesh.template getNeighbors<Face_to_Cell_In>(c);
+			std::stringstream subtractingFluxes;
 			for(auto sf : subtractingFaces) {
 				temperature[c] += fluxes[sf];
+				subtractingFluxes << fluxes[sf] << ", ";
 			}
 			auto addingFaces = mesh.template getNeighbors<Face_to_Cell_Out>(c);
+			std::stringstream addingFluxes;
 			for(auto af : addingFaces) {
 				temperature[c] -= fluxes[af];
+				addingFluxes << fluxes[af] << ", ";
 			}
+
+			assert_between(0, temperature[c], 511) << "On level " << Level << "\n adding fluxes: " << addingFluxes.str() << "\n subtracting fluxes: " << subtractingFluxes.str();
 		});
 	}
 
 	void computeFineToCoarse() {
 		if(Level == 0) {
-			//mesh.template forAll<Cell, Level>([&](auto c){
-			//	printf("%6.2lf, ", temperature[c]);
-			//});
-
 			static int fileId = 0;
 			constexpr char* filePrefix = "step";
 			constexpr char* fileSuffix = ".obj";
 			constexpr char* mtlFile = "ramp.mtl";
 			char fn[64];
 			snprintf(fn, sizeof(fn), "%s%03d%s", filePrefix, fileId++, fileSuffix);
+			std::cout << "Starting file dump to " << fn << "\n";
 			std::ofstream out(fn);
 
 			// header
@@ -196,12 +177,12 @@ struct TemperatureStage {
 					out << "v " << vp.x << " " << vp.y << " " << vp.z << "\n";
 				}
 				std::stringstream ss;
-				ss << "f ~0 ~3 ~4 ~7\n"
-				   << "f ~0 ~3 ~2 ~1\n"
-				   << "f ~0 ~1 ~6 ~7\n"
-				   << "f ~3 ~2 ~5 ~4\n"
-				   << "f ~4 ~5 ~6 ~7\n"
-				   << "f ~1 ~2 ~5 ~6\n";
+				ss << "f ~0 ~1 ~3 ~2\n"
+				   << "f ~0 ~4 ~5 ~1\n"
+				   << "f ~0 ~4 ~6 ~2\n"
+				   << "f ~4 ~5 ~7 ~6\n"
+				   << "f ~1 ~5 ~7 ~3\n"
+				   << "f ~2 ~6 ~7 ~3\n";
 				std::string faces = ss.str();
 				for(int i = 0; i < 8; ++i) {
 					char toReplace[8], replacement[8];
@@ -233,6 +214,7 @@ struct TemperatureStage {
 				avgTemperature += childStage.temperature[child];
 			}
 			avgTemperature /= children.size();
+			assert_between(0, avgTemperature, 511);
 			temperature[c] = avgTemperature;
 			temperatureBuffer[c] = avgTemperature;
 		});
@@ -245,7 +227,10 @@ struct TemperatureStage {
 			value_t diff = temperature[c] - temperatureBuffer[c];
 
 			for(auto child: children) {
-				childStage.temperature[child] += diff;
+				auto pretemp = childStage.temperature[child];
+				//childStage.temperature[child] += diff;
+				childStage.temperature[child] += (temperature[c] - childStage.temperature[child]);
+				assert_between(0, childStage.temperature[child], 511) << "Pre child temp: " << pretemp << "\n diff: " << diff;
 			}
 		});
 	}
@@ -416,11 +401,13 @@ namespace {
 				for(const auto& inFaceID : cell.in_face_ids) {
 					if(inFaceID != -1) {
 						builder.template link<Cell_to_Face_In>(cells[id], faces[inFaceID]);
+						builder.template link<Face_to_Cell_In>(faces[inFaceID], cells[id]);
 					}
 				}
 				for(const auto& outFaceID : cell.out_face_ids) {
 					if(outFaceID != -1) {
 						builder.template link<Cell_to_Face_Out>(cells[id], faces[outFaceID]);
+						builder.template link<Face_to_Cell_Out>(faces[outFaceID], cells[id]);
 					}
 				}
 			}
@@ -457,8 +444,12 @@ namespace {
 			for(int fid = 0; fid < faces.size(); ++fid) {
 				const auto& mFace = faces[fid];
 				const auto& fFace = amfFile.faces[Level][fid];
-				faceArea[mFace] = fFace.area;
+				//faceArea[mFace] = fFace.area;
+				//assert_between(0.9, faceArea[mFace], pow(4,Level) + 0.1) << "While loading level " << Level;
+				faceArea[mFace] = fFace.area / pow(4,Level);
+				assert_between(0.0, faceArea[mFace], 1.0) << "While loading level " << Level;
 				auto avgCellConductivity = (amfFile.cells[Level][fFace.in_cell_id].conductivity + amfFile.cells[Level][fFace.out_cell_id].conductivity) / 2.0;
+				assert_between(0.19, avgCellConductivity, 0.21) << "While loading level " << Level;
 				faceConductivity[mFace] = avgCellConductivity;
 			}
 
@@ -497,27 +488,25 @@ namespace {
 
 
 int main() {
-	loadAMF(R"(Z:\allscale\git\allscale-compiler\api\scripts\demo\mesh.amf)");
+	// the number of simulated steps
+	const int S = 10;
 
-	//// the number of simulated steps
-	//const int S = 10;
+	auto pair = loadAMF(R"(Z:\allscale\git\allscale-compiler\api\scripts\demo\mesh.amf)");
 
-	//// create the mesh and properties
-	//auto pair = detail::createTube(N);
+	auto& mesh = pair.first;
+	auto& properties = pair.second;
 
-	//auto& mesh = pair.first;
-	//auto& properties = pair.second;
+	using vcycle_type = algorithm::VCycle<
+		TemperatureStage,
+		std::remove_reference<decltype(mesh)>::type
+	>;
 
-	//using vcycle_type = algorithm::VCycle<
-	//	TemperatureStage,
-	//	std::remove_reference<decltype(mesh)>::type
-	//>;
+	std::cout << "Starting simulation...\n";
 
-	//vcycle_type vcycle(mesh, properties);
+	vcycle_type vcycle(mesh, properties);
 
-	//// -- simulation --
-	//// run S iterations
-	//vcycle.run(S);
+	// -- simulation --
+	vcycle.run(S);
 
     return EXIT_SUCCESS;
 }
