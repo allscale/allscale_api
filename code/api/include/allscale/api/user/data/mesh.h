@@ -2982,6 +2982,11 @@ namespace data {
 
 		// -- mesh property handling --
 
+		template<typename PropertiesType>
+		PropertiesType createKnownProperties() const {
+			return PropertiesType(*this);
+		}
+
 		template<typename ... Properties>
 		MeshProperties<Levels,partition_tree_type,Properties...> createProperties() const {
 			return MeshProperties<Levels,partition_tree_type,Properties...>(*this);
@@ -3122,7 +3127,8 @@ namespace data {
 		template<typename HierarchyKind, typename NodeKindA, typename NodeKindB, unsigned LevelA, unsigned LevelB>
 		void link(const NodeRef<NodeKindA,LevelA>& parent, const NodeRef<NodeKindB,LevelB>& child) {
 			// TODO: check that HierarchyKind is a valid hierarchy kind
-			static_assert(LevelA == LevelB+1, "Can not connect nodes of non-adjacent levels in hierarchies");
+			static_assert(LevelA != LevelB, "Can not build hierarchy between nodes on the same level.");
+			static_assert(LevelA == LevelB+1, "Can not connect nodes of non-adjacent levels in hierarchies.");
 			static_assert(LevelA < Levels, "Trying to create a hierarchical edge to an invalid level.");
 			static_assert(std::is_same<NodeKindA,typename HierarchyKind::parent_node_kind>::value, "Invalid source node type");
 			static_assert(std::is_same<NodeKindB,typename HierarchyKind::child_node_kind>::value, "Invalid target node type");
