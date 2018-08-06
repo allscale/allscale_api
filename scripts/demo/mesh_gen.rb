@@ -87,7 +87,9 @@ class Cell
     end
 
     def to_s
-        "cell ##{id} : L#{level} T#{temperature}  C#{conductivity} F(o:#{@in_faces.join(",")}, i:#{@out_faces.join(",")})"
+        "cell #%010d : L%d T%5.1f C%5.1f" % [ id, level, temperature, conductivity] +
+            " F(o:#{@in_faces.join(",").rjust(24)}, i:#{@out_faces.join(",").rjust(24)}),"+
+            " children(#{@child_cells.map {|c| c.id}.join(",").rjust(48)})" 
     end
 
     def to_bin
@@ -231,27 +233,33 @@ end
 
 ## Build faces connecting cells
 
-(logo.width-1).times do |x|
-    (logo.height-1).times do |y|
-        (MAX_DEPTH-1).times do |z|
+logo.width.times do |x|
+    logo.height.times do |y|
+        MAX_DEPTH.times do |z|
             # connect to right, up and fwd
             this = cell_structure[x][y][z]
             next unless this.exists?
 
-            right = cell_structure[x+1][y][z]
-            up = cell_structure[x][y+1][z]
-            forward = cell_structure[x][y][z+1]
-            if right.exists?
-                build_face(0, 1, this, right)
-                this.right_area = 1
+            if x < logo.width-1
+                right = cell_structure[x+1][y][z]
+                if right.exists?
+                    build_face(0, 1, this, right)
+                    this.right_area = 1
+                end
             end
-            if up.exists?
-                build_face(0, 1, this, up) if up.exists?
-                this.up_area = 1
+            if y < logo.height-1
+                up = cell_structure[x][y+1][z]
+                if up.exists?
+                    build_face(0, 1, this, up) if up.exists?
+                    this.up_area = 1
+                end
             end
-            if forward.exists?
-                build_face(0, 1, this, forward)
-                this.fwd_area = 1
+            if z < MAX_DEPTH-1
+                forward = cell_structure[x][y][z+1]
+                if forward.exists?
+                    build_face(0, 1, this, forward)
+                    this.fwd_area = 1
+                end
             end
         end
     end
@@ -312,25 +320,48 @@ level_cell_structure[0] = cell_structure
     end
 
     # build coarser cell connection faces
-    (lw-1).times do |x|
-        (lh-1).times do |y|
-            (ld-1).times do |z|
+    lw.times do |x|
+        lh.times do |y|
+            ld.times do |z|
                 # connect to right, up and fwd
                 this = coarser[x][y][z]
                 next unless this.exists?
     
-                right = coarser[x+1][y][z]
-                up = coarser[x][y+1][z]
-                forward = coarser[x][y][z+1]
-                build_face(level, this.right_area, this, right) if right.exists? && this.right_area > 0
-                build_face(level, this.up_area, this, up) if up.exists? && this.up_area > 0
-                build_face(level, this.fwd_area, this, forward) if forward.exists? && this.fwd_area > 0
+                if x < lw-1
+                    right = coarser[x+1][y][z]
+                    build_face(level, this.right_area, this, right) if right.exists? && this.right_area > 0
+                end
+                if y < lh-1
+                    up = coarser[x][y+1][z]
+                    build_face(level, this.up_area, this, up) if up.exists? && this.up_area > 0
+                end
+                if z < ld-1
+                    forward = coarser[x][y][z+1]
+                    build_face(level, this.fwd_area, this, forward) if forward.exists? && this.fwd_area > 0
+                end
             end
         end
     end
 end
 
+## DEBUGGING
+
+# find 100% deep stick of cells
+#logo.width.times do |x|
+#    logo.height.times do |y|
+# x = 16
+# y = 16
+#         stick = level_cell_structure[0][x][y]
+#         #next unless stick.all? {|c| c.exists? }
+#         puts "Found #{x}/#{y}:"
+#         stick.each_with_index { |c,z| puts "(%2d/%2d/%2d) " % [x,y,z] + c.to_s }
+#         exit
+#    end
+#end
+
 #puts "occuring cell counts per combined cell: #{dbg_pcell_sizes.uniq}"
+
+## /DEBUGGING
 
 puts "levels: #{LEVELS}"
 puts "vertices: #{vertex_array.size}"
