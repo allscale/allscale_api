@@ -448,6 +448,7 @@ end
 # blender script:
 """
 import bpy
-for mat in bpy.data.materials:
-    mat.use_shadeless = True
+def set_shadeless():
+    for mat in bpy.data.materials:
+        mat.use_shadeless = True
 """

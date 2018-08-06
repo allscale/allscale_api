@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <regex>
 #include <fstream>
+#include <chrono>
 
 #include "allscale/utils/vector.h"
 #include "allscale/api/user/data/mesh.h"
@@ -159,6 +160,7 @@ struct TemperatureStage {
 			char fn[64];
 			snprintf(fn, sizeof(fn), "%s%03d%s", filePrefix, fileId++, fileSuffix);
 			std::cout << "Starting file dump to " << fn << "\n";
+			auto start = std::chrono::high_resolution_clock::now();
 			std::ofstream out(fn);
 
 			// header
@@ -166,36 +168,27 @@ struct TemperatureStage {
 
 			auto& vertexPosition = properties.template get<VertexPosition, Level>();
 
-			int vertexId = 1; // FORTRAN programmers made .obj
-			mesh.template forAll<Cell, Level>([&](auto c) {
-				out << "\n# cell ---\n";
-				// set color according to temperature
-				out << "usemtl r" << (int)temperature[c] << "\n";
-				auto vertices = mesh.template getNeighbors<Cell_to_Vertex>(c);
-				for(auto v : vertices) {
-					const auto& vp = vertexPosition[v];
-					out << "v " << vp.x << " " << vp.y << " " << vp.z << "\n";
-				}
-				std::stringstream ss;
-				ss << "f ~0 ~1 ~3 ~2\n"
-				   << "f ~0 ~4 ~5 ~1\n"
-				   << "f ~0 ~4 ~6 ~2\n"
-				   << "f ~4 ~5 ~7 ~6\n"
-				   << "f ~1 ~5 ~7 ~3\n"
-				   << "f ~2 ~6 ~7 ~3\n";
-				std::string faces = ss.str();
-				for(int i = 0; i < 8; ++i) {
-					char toReplace[8], replacement[8];
-					snprintf(toReplace, sizeof(toReplace), "~%d", i);
-					snprintf(replacement, sizeof(replacement), "%d", vertexId+i);
-					faces = std::regex_replace(faces, std::regex(toReplace), replacement);
-				}
-				out << faces;
-
-				vertexId += 8;
+			mesh.template forAll<Vertex, Level>([&](auto v) {
+				const auto& vp = vertexPosition[v];
+				out << "v " << vp.x << " " << vp.y << " " << vp.z << "\n";
 			});
-
+			mesh.template forAll<Cell, Level>([&](auto c) {
+				// set color according to temperature
+				out << "\nusemtl r" << (int)temperature[c] << "\n";
+				auto vertexRange = mesh.template getNeighbors<Cell_to_Vertex>(c);
+				std::vector<allscale::api::user::data::NodeRef<Vertex>> vertices(vertexRange.begin(), vertexRange.end());
+				auto vp = [&](int i) { return vertices[i].getOrdinal() + 1; };
+				out << "f " << vp(0) << " " << vp(1) << " " << vp(3) << " " << vp(2) << "\n";
+				out << "f " << vp(0) << " " << vp(4) << " " << vp(5) << " " << vp(1) << "\n";
+				out << "f " << vp(0) << " " << vp(4) << " " << vp(6) << " " << vp(2) << "\n";
+				out << "f " << vp(4) << " " << vp(5) << " " << vp(7) << " " << vp(6) << "\n";
+				out << "f " << vp(1) << " " << vp(5) << " " << vp(7) << " " << vp(3) << "\n";
+				out << "f " << vp(2) << " " << vp(6) << " " << vp(7) << " " << vp(3) << "\n";
+			});
 			out << "\n";
+
+			auto end = std::chrono::high_resolution_clock::now();
+			std::cout << "File dump took " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " ms.\n";
 		}
 
 		jacobiSolver();
