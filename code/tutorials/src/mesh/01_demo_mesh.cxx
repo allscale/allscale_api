@@ -107,7 +107,6 @@ struct TemperatureStage {
 		, temperature(mesh.template createNodeData<Cell, value_t, Level>())
 		, fluxes(mesh.template createNodeData<Face, value_t, Level>()) {
 
-		bool first = true;
 		auto& cellTemperature = properties.template get<CellTemperature, Level>();
 		mesh.template forAll<Cell, Level>([&](auto c) {
 			temperature[c] = cellTemperature[c];
@@ -265,16 +264,19 @@ namespace {
 		static AMFFile load(const std::string& fname) {
 			AMFFile ret;
 			auto file = fopen(fname.c_str(), "rb");
-			fread(&ret.header, sizeof(ret.header), 1, file);
+			size_t readVal = fread(&ret.header, sizeof(ret.header), 1, file);
+			assert_eq(readVal, 1);
 			assert_eq(ret.header.magic_number, 0xA115ca1e) << fname << " - magic number in header doesn't match";
 			assert_eq(ret.header.num_levels, NUM_LEVELS) << fname << " - mismatch between file number of levels and C++ NUM_LEVELS";
 			std::cout << "File info - " << ret.header.num_levels << " Levels // " << ret.header.num_vertices << " Vertices\n";
 
-			auto loadList = [&](int count, int elem_size, auto& target, const char* name) {
+			auto loadList = [&](size_t count, size_t elem_size, auto& target, const char* name) {
 				target.resize(count);
-				fread(target.data(), elem_size, count, file);
+				size_t readVals = fread(target.data(), elem_size, count, file);
+				assert_eq(readVals, count);
 				uint32_t magic = 0;
-				fread(&magic, sizeof(uint32_t), 1, file);
+				readVals = fread(&magic, sizeof(uint32_t), 1, file);
+				assert_eq(readVals, 1);
 				assert_eq(magic, 0xA115ca1e) << fname << " - magic number after " << name << " list invalid";
 			};
 
@@ -283,7 +285,8 @@ namespace {
 
 			for(int i = 0; i < NUM_LEVELS; ++i) {
 				FLevelHeader levelHeader;
-				fread(&levelHeader, sizeof(levelHeader), 1, file);
+				size_t readVals = fread(&levelHeader, sizeof(levelHeader), 1, file);
+				assert_eq(readVals, 1);
 				assert_eq(levelHeader.magic_number, 0xA115ca1e) << fname << " - magic number in per-level header doesn't match";
 				assert_eq(levelHeader.level, i) << " - level id mismatch";
 				loadList(levelHeader.num_cells, sizeof(FCell), ret.cells[i], "cell");
@@ -296,8 +299,26 @@ namespace {
 		}
 	};
 
+	// forward declarations
+	template<typename Builder, unsigned Level>
+	class MeshFromFileBuilder;
+
+	template<typename Builder, unsigned VLevel>
+	struct VertexAssembler {
+		void assembleVertices(Builder& builder, MeshFromFileBuilder<Builder, VLevel>& levelBuilder);
+	};
+	template<typename Builder, unsigned Level>
+	struct HierarchyLinker {
+		void linkHierarchy(Builder& builder, MeshFromFileBuilder<Builder, Level>& levelBuilder, MeshFromFileBuilder<Builder, Level+1>& subBuilder);
+	};
+
 	template<typename Builder, unsigned Level>
 	class MeshFromFileBuilder {
+
+		template<typename VBuilder, unsigned VLevel>
+		friend struct VertexAssembler;
+		template<typename HBuilder, unsigned HLevel>
+		friend struct HierarchyLinker;
 
 		using CellRef = typename data::NodeRef<Cell,Level>;
 		using FaceRef = typename data::NodeRef<Face,Level>;
@@ -309,50 +330,6 @@ namespace {
 
 		const AMFFile& amfFile;
 		MeshFromFileBuilder<Builder, Level+1> subBuilder;
-
-		template<unsigned VLevel>
-		struct VertexAssembler {
-			void assembleVertices(Builder& builder, MeshFromFileBuilder<Builder, VLevel>& levelBuilder) { }
-		};
-		template<>
-		struct VertexAssembler<0> {
-			void assembleVertices(Builder& builder, MeshFromFileBuilder<Builder, 0>& levelBuilder) {
-				// create vertices
-				for(size_t i = 0; i < levelBuilder.amfFile.vertices.size(); ++i) {
-					levelBuilder.vertices.push_back(builder.template create<Vertex,0>());
-				}
-				// link cells to vertices
-				for(size_t id = 0; id < levelBuilder.amfFile.cells[0].size(); ++id) {
-					const auto& cell = levelBuilder.amfFile.cells[0][id];
-
-					for(const auto& vtxId : cell.vertex_ids) {
-						if(vtxId != -1) {
-							builder.template link<Cell_to_Vertex>(levelBuilder.cells[id], levelBuilder.vertices[vtxId]);
-						}
-					}
-				}
-			}
-		};
-
-		template<unsigned Level>
-		struct HierarchyLinker {
-			void linkHierarchy(Builder& builder, MeshFromFileBuilder<Builder, Level>& levelBuilder, MeshFromFileBuilder<Builder, Level+1>& subBuilder) {
-				// link cells to child cells
-				for(size_t id = 0; id < levelBuilder.amfFile.cells[Level+1].size(); ++id) {
-					const auto& amfCell = levelBuilder.amfFile.cells[Level+1][id];
-					const auto& targetCell = subBuilder.getCell(static_cast<int>(id));
-					for(const auto childCellId : amfCell.child_cell_ids) {
-						if(childCellId != -1) {
-							builder.template link<Parent_to_Child>(targetCell, levelBuilder.cells[childCellId]);
-						}
-					}
-				}
-			}
-		};
-		template<>
-		struct HierarchyLinker<NUM_LEVELS-1> {
-			void linkHierarchy(Builder& builder, MeshFromFileBuilder<Builder, Level>& levelBuilder, MeshFromFileBuilder<Builder, Level+1>& subBuilder) { }
-		};
 
 	  public:
 
@@ -393,27 +370,27 @@ namespace {
 				}
 			}
 
-			VertexAssembler<Level>{}.assembleVertices(builder, *this);
+			VertexAssembler<Builder, Level>{}.assembleVertices(builder, *this);
 			subBuilder.assembleMesh(builder);
-			HierarchyLinker<Level>{}.linkHierarchy(builder, *this, subBuilder);
+			HierarchyLinker<Builder, Level>{}.linkHierarchy(builder, *this, subBuilder);
 
-			printf("Finished geometry for level %lu - %10lu vertices %10lu cells %10lu faces\n", Level, (unsigned)vertices.size(), (unsigned)cells.size(), (unsigned)faces.size());
+			printf("Finished geometry for level %u - %10u vertices %10u cells %10u faces\n", Level, (unsigned)vertices.size(), (unsigned)cells.size(), (unsigned)faces.size());
 		}
 
-		void addVertexProperties(Mesh<NUM_LEVELS>& mesh, MeshProperties<Mesh<NUM_LEVELS>>& properties) {
+		void addVertexProperties(MeshProperties<Mesh<NUM_LEVELS>>& properties) {
 			// vertex properties
 			auto& vertexPosition = properties.template get<VertexPosition,Level>();
-			for(int vid = 0; vid < vertices.size(); ++vid) {
+			for(size_t vid = 0; vid < vertices.size(); ++vid) {
 				const auto& mVtx = vertices[vid];
 				const auto& fVtx = amfFile.vertices[vid];
 				vertexPosition[mVtx] = { fVtx.x, fVtx.y, fVtx.z };
 			}
 		}
 
-		void addPropertyData(Mesh<NUM_LEVELS>& mesh, MeshProperties<Mesh<NUM_LEVELS>>& properties) {
+		void addPropertyData(MeshProperties<Mesh<NUM_LEVELS>>& properties) {
 			// cell properties
 			auto& cellTemperature = properties.template get<CellTemperature,Level>();
-			for(int cid = 0; cid < cells.size(); ++cid) {
+			for(size_t cid = 0; cid < cells.size(); ++cid) {
 				const auto& mCell = cells[cid];
 				const auto& fCell = amfFile.cells[Level][cid];
 				cellTemperature[mCell] = fCell.temperature;
@@ -422,7 +399,7 @@ namespace {
 			// face properties
 			auto& faceArea = properties.template get<FaceArea,Level>();
 			auto& faceConductivity = properties.template get<FaceConductivity,Level>();
-			for(int fid = 0; fid < faces.size(); ++fid) {
+			for(size_t fid = 0; fid < faces.size(); ++fid) {
 				const auto& mFace = faces[fid];
 				const auto& fFace = amfFile.faces[Level][fid];
 				faceArea[mFace] = fFace.area / pow(4,Level);
@@ -433,16 +410,59 @@ namespace {
 			}
 
 			// initialize sublevel properties
-			subBuilder.addPropertyData(mesh, properties);
+			subBuilder.addPropertyData(properties);
 		}
 	};
 	template<typename Builder>
 	class MeshFromFileBuilder<Builder, NUM_LEVELS> {
 	  public:
 		MeshFromFileBuilder(const AMFFile&) { }
-		data::NodeRef<Cell,NUM_LEVELS> getCell(int idx) { return {}; }
-		void assembleMesh(Builder& builder) { }
-		void addPropertyData(Mesh<NUM_LEVELS>& mesh, MeshProperties<Mesh<NUM_LEVELS>>& properties) { }
+		data::NodeRef<Cell,NUM_LEVELS> getCell(int) { return {}; }
+		void assembleMesh(Builder&) { }
+		void addPropertyData(MeshProperties<Mesh<NUM_LEVELS>>&) { }
+	};
+
+
+	template<typename Builder, unsigned VLevel>
+	void VertexAssembler<Builder, VLevel>::assembleVertices(Builder& builder, MeshFromFileBuilder<Builder, VLevel>& levelBuilder) {
+		// vertices are only assembled at level 0
+	}
+	template<typename Builder>
+	struct VertexAssembler<Builder, 0> {
+		void assembleVertices(Builder& builder, MeshFromFileBuilder<Builder, 0>& levelBuilder) {
+			// create vertices
+			for(size_t i = 0; i < levelBuilder.amfFile.vertices.size(); ++i) {
+				levelBuilder.vertices.push_back(builder.template create<Vertex,0>());
+			}
+			// link cells to vertices
+			for(size_t id = 0; id < levelBuilder.amfFile.cells[0].size(); ++id) {
+				const auto& cell = levelBuilder.amfFile.cells[0][id];
+
+				for(const auto& vtxId : cell.vertex_ids) {
+					if(vtxId != -1) {
+						builder.template link<Cell_to_Vertex>(levelBuilder.cells[id], levelBuilder.vertices[vtxId]);
+					}
+				}
+			}
+		}
+	};
+
+	template<typename Builder, unsigned Level>
+	void HierarchyLinker<Builder, Level>::linkHierarchy(Builder& builder, MeshFromFileBuilder<Builder, Level>& levelBuilder, MeshFromFileBuilder<Builder, Level+1>& subBuilder) {
+		// link cells to child cells
+		for(size_t id = 0; id < levelBuilder.amfFile.cells[Level+1].size(); ++id) {
+			const auto& amfCell = levelBuilder.amfFile.cells[Level+1][id];
+			const auto& targetCell = subBuilder.getCell(static_cast<int>(id));
+			for(const auto childCellId : amfCell.child_cell_ids) {
+				if(childCellId != -1) {
+					builder.template link<Parent_to_Child>(targetCell, levelBuilder.cells[childCellId]);
+				}
+			}
+		}
+	}
+	template<typename Builder>
+	struct HierarchyLinker<Builder, NUM_LEVELS-1> {
+		void linkHierarchy(Builder&, MeshFromFileBuilder<Builder, NUM_LEVELS-1>&, MeshFromFileBuilder<Builder, NUM_LEVELS>&) { }
 	};
 
 	std::pair<Mesh<NUM_LEVELS>, MeshProperties<Mesh<NUM_LEVELS>>> loadAMF(const std::string& filename) {
@@ -458,8 +478,8 @@ namespace {
 
 		// create properties
 		auto properties = mesh.template createKnownProperties<MeshProperties<decltype(mesh)>>();
-		fileBuilder.addVertexProperties(mesh, properties);
-		fileBuilder.addPropertyData(mesh, properties);
+		fileBuilder.addVertexProperties(properties);
+		fileBuilder.addPropertyData(properties);
 
 		return std::make_pair(std::move(mesh), std::move(properties));
 	}
@@ -470,7 +490,7 @@ int main() {
 	// the number of simulated steps
 	const int S = 10000;
 
-	auto pair = loadAMF(R"(Z:\allscale\git\allscale-compiler\api\scripts\demo\mesh.amf)");
+	auto pair = loadAMF(R"(mesh.amf)");
 
 	auto& mesh = pair.first;
 	auto& properties = pair.second;
