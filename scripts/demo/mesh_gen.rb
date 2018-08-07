@@ -11,7 +11,7 @@ lookup = {        # depth   init temp   conductivity
 }
 
 
-LEVELS = 1
+LEVELS = 3
 
 MAX_DEPTH = 16
 

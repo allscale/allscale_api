@@ -268,6 +268,14 @@ namespace algorithm {
 
 	};
 
+	template<
+		template<typename M, unsigned L> class StageBody,
+		typename Mesh,
+		typename ...UserArgs
+	>
+	VCycle<StageBody, Mesh> make_vcycle(const Mesh& mesh, UserArgs&&... userArgs) {
+		return algorithm::VCycle<StageBody, typename std::remove_reference<Mesh>::type>{mesh, userArgs...};
+	}
 
 } // end namespace algorithm
 } // end namespace user
