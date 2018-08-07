@@ -10,10 +10,10 @@ lookup = {        # depth   init temp   conductivity
     2197781247 => [ 0.25  ,   120     ,     1.0/6.0 ], # green (background construct)
 }
 
-
-LEVELS = 3
-
+LEVELS = 8
 MAX_DEPTH = 16
+
+COARSEST_LENGTH = 2 ** LEVELS 
 
 def gen_ids()
     max = 8
@@ -38,6 +38,7 @@ class Cell
     attr :out_faces
 
     attr_accessor :child_cells
+    attr_accessor :parent_cell
     attr_accessor :vertices
 
     # store connection area for easier hierarchy building 
@@ -67,6 +68,7 @@ class Cell
         @out_faces ||= []
         @in_faces ||= []
         @child_cells ||= []
+        @parent_cell = nil
         @vertices ||= []
 
         @right_area = 0.0
@@ -103,6 +105,8 @@ class Cell
         out_faces_write = make_output(out_faces, 3)
         vertices_write = make_output(vertices, 8)
         child_cells_write = make_output(child_cells, 8)
+        raise "Cell with no child cells!" if level > 0 && !child_cells.any? { |c| c.exists? }
+        raise "Cell with no parent cell!\n#{to_s}" if level < LEVELS-1 && !parent_cell
         out_array = ([level, temperature, conductivity] + in_faces_write + out_faces_write + vertices_write + child_cells_write)
         ret = out_array.pack("ldd#{"l"*(3+3+8+8)}")
         rs = ret.size
@@ -196,16 +200,26 @@ end
 
 ## Build cells from image and add vertices
 
-cell_structure = Array.new(logo.width) { Array.new(logo.height) { Array.new(MAX_DEPTH) { Cell.new } } } 
+def round_to(num, target_divisor)
+    num + (num % target_divisor)
+end
+
+# expand working area to be divisible by coarsest cell width
+WIDTH = round_to(logo.width, COARSEST_LENGTH)
+HEIGHT = round_to(logo.height, COARSEST_LENGTH)
+DEPTH = round_to(MAX_DEPTH, COARSEST_LENGTH)
+
+cell_structure = Array.new(WIDTH) { Array.new(HEIGHT) { Array.new(DEPTH) { Cell.new } } } 
 cell_array = Array.new(LEVELS) { [] }
 cell_count = 0
 
-vertex_structure = Array.new(logo.width+1) { Array.new(logo.height+1) { Array.new(MAX_DEPTH+1) { Vertex.new } } }
+vertex_structure = Array.new(WIDTH+1) { Array.new(HEIGHT+1) { Array.new(DEPTH+1) { Vertex.new } } }
 vertex_array = []
 
-logo.width.times do |x|
-    logo.height.times do |y|
-        col = logo[x,logo.height-y-1]
+WIDTH.times do |x|
+    HEIGHT.times do |y|
+        next if x >= logo.width || y >= logo.height
+        col = logo[x,y]
         raise "unexpected color" unless lookup.include?(col)
         depth, init, cond = lookup[col]
 
@@ -233,28 +247,28 @@ end
 
 ## Build faces connecting cells
 
-logo.width.times do |x|
-    logo.height.times do |y|
-        MAX_DEPTH.times do |z|
+WIDTH.times do |x|
+    HEIGHT.times do |y|
+        DEPTH.times do |z|
             # connect to right, up and fwd
             this = cell_structure[x][y][z]
             next unless this.exists?
 
-            if x < logo.width-1
+            if x < WIDTH-1
                 right = cell_structure[x+1][y][z]
                 if right.exists?
                     build_face(0, 1, this, right)
                     this.right_area = 1
                 end
             end
-            if y < logo.height-1
+            if y < HEIGHT-1
                 up = cell_structure[x][y+1][z]
                 if up.exists?
                     build_face(0, 1, this, up) if up.exists?
                     this.up_area = 1
                 end
             end
-            if z < MAX_DEPTH-1
+            if z < DEPTH-1
                 forward = cell_structure[x][y][z+1]
                 if forward.exists?
                     build_face(0, 1, this, forward)
@@ -272,10 +286,10 @@ dbg_pcell_sizes = []
 level_cell_structure = []
 level_cell_structure[0] = cell_structure
 1.upto(LEVELS-1) do |level|
-    factor = 2 ** level
-    lw = logo.width/factor
-    lh = logo.height/factor
-    ld = MAX_DEPTH/factor
+    factor = 2.0 ** level
+    lw = (WIDTH/factor).ceil
+    lh = (HEIGHT/factor).ceil
+    ld = (DEPTH/factor).ceil
     level_cell_structure[level] = Array.new(lw) { Array.new(lh) { Array.new(ld) { Cell.new } } }
     coarser = level_cell_structure[level]
     finer = level_cell_structure[level-1]
@@ -289,7 +303,11 @@ level_cell_structure[0] = cell_structure
                 up_child_cells = []
                 fwd_child_cells = []
                 REL_IDS.each do |rid|
-                    target = finer[x*2+rid[0]][y*2+rid[1]][z*2+rid[2]]
+                    fxid = x*2+rid[0]
+                    fyid = y*2+rid[1]
+                    fzid = z*2+rid[2]
+                    next if fxid >= finer.size || fyid >= finer[fxid].size || fzid >= finer[fxid][fyid].size
+                    target = finer[fxid][fyid][fzid]
                     if target.exists?
                         child_cells << target 
                         right_child_cells << target if rid[0]==1
@@ -313,6 +331,7 @@ level_cell_structure[0] = cell_structure
 
                 # connect hierarchy
                 coarser[x][y][z].child_cells = child_cells
+                child_cells.each { |cc| cc.parent_cell = coarser[x][y][z] }
 
                 cell_array[level] << coarser[x][y][z]
             end
@@ -347,8 +366,8 @@ end
 ## DEBUGGING
 
 # find 100% deep stick of cells
-#logo.width.times do |x|
-#    logo.height.times do |y|
+#WIDTH.times do |x|
+#    HEIGHT.times do |y|
 # x = 16
 # y = 16
 #         stick = level_cell_structure[0][x][y]

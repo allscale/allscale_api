@@ -12,8 +12,10 @@
 
 using namespace allscale::api::user;
 
-// -- Number of hierarchical levels in the mesh data structure --
-constexpr int NUM_LEVELS = 3;
+// -- Number of hierarchical levels, pre-smoothing and post-smoothing steps in the V-cycle --
+constexpr int NUM_LEVELS = 8;
+constexpr int PRE_STEPS = 2;
+constexpr int POST_STEPS = 3;
 
 // -- define types to model the topology of meshes --
 using value_t = double;
@@ -139,11 +141,11 @@ struct TemperatureStage {
 
 	void computeFineToCoarse() {
 		outputResult();
-		jacobiSolver();
+		for(int i = 0; i < PRE_STEPS; ++i) jacobiSolver();
 	}
 
 	void computeCoarseToFine() {
-		jacobiSolver();
+		for(int i = 0; i < POST_STEPS; ++i) jacobiSolver();
 	}
 
 	void restrictFrom(TemperatureStage<Mesh,Level-1>& childStage) {
@@ -163,7 +165,7 @@ struct TemperatureStage {
 			auto children = mesh.template getChildren<Parent_to_Child>(c);
 			for(auto child : children) {
 				auto preTemp = childStage.temperature[child];
-				childStage.temperature[child] += temperature[c] - preTemp;
+				childStage.temperature[child] += (temperature[c] - preTemp);
 				assert_temperature(childStage.temperature[child]) << "Pre child temp: " << preTemp;
 			}
 		});
@@ -188,5 +190,5 @@ int main(int argc, char** argv) {
 
 	vcycle.run(timeSteps);
 
-    return EXIT_SUCCESS;
+	return EXIT_SUCCESS;
 }

@@ -208,7 +208,7 @@ namespace amfloader {
 
 
 	template<typename Builder, unsigned VLevel>
-	void VertexAssembler<Builder, VLevel>::assembleVertices(Builder& builder, MeshFromFileBuilder<Builder, VLevel>& levelBuilder) {
+	void VertexAssembler<Builder, VLevel>::assembleVertices(Builder&, MeshFromFileBuilder<Builder, VLevel>&) {
 		// vertices are only assembled at level 0
 	}
 	template<typename Builder>
