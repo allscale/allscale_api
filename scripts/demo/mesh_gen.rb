@@ -5,13 +5,13 @@ logo = ChunkyPNG::Image.from_file('demo_logo_smaller.png')
 
 lookup = {        # depth   init temp   conductivity
     4294967295 => [ 0.0   ,     0     ,     0.0 ], # white (nothing)
-    589242623  => [ 1.0   ,     0     ,     0.2 ], # black (cool letter)
-    4136047359 => [ 1.0   ,   511     ,     0.2 ], # orange (hot letter)
-    2197781247 => [ 0.25  ,   120     ,     0.2 ], # green (background construct)
+    589242623  => [ 1.0   ,     0     ,     1.0/6.0 ], # black (cool letter)
+    4136047359 => [ 1.0   ,   511     ,     1.0/6.0 ], # orange (hot letter)
+    2197781247 => [ 0.25  ,   120     ,     1.0/6.0 ], # green (background construct)
 }
 
 
-LEVELS = 3
+LEVELS = 1
 
 MAX_DEPTH = 16
 
@@ -205,7 +205,7 @@ vertex_array = []
 
 logo.width.times do |x|
     logo.height.times do |y|
-        col = logo[x,y]
+        col = logo[x,logo.height-y-1]
         raise "unexpected color" unless lookup.include?(col)
         depth, init, cond = lookup[col]
 
@@ -444,11 +444,3 @@ File.open("mesh.amf", "wb+") do |out|
     end
     
 end
-
-# blender script:
-"""
-import bpy
-def set_shadeless():
-    for mat in bpy.data.materials:
-        mat.use_shadeless = True
-"""

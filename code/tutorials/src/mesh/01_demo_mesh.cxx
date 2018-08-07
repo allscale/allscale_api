@@ -14,9 +14,14 @@ using namespace allscale::api::user;
 #define assert_between(__low, __v, __high)                                                                                                                    \
 	if(__allscale_unused auto __allscale_temp_object_ = insieme::utils::detail::LazyAssertion((__low) <= (__v) && (__v) <= (__high)))                         \
 	std::cerr << "\nAssertion " #__low " <= " #__v " <= " #__high " of " __FILE__ ":" __allscale_xstr_(__LINE__) " failed!\n\t" #__v " = " << (__v) << "\n"
+#define MIN_TEMP 0
+#define MAX_TEMP 511
+#define assert_temperature(__v)                                                                                                                               \
+	assert_between(MIN_TEMP, __v, MAX_TEMP)
+//#define assert_temperature(__v) if(0) std::cerr
 
 // -- Number of hierarchical levels in the mesh data structure --
-const int NUM_LEVELS = 3;
+const int NUM_LEVELS = 1;
 
 // -- define types to model the topology of meshes --
 using value_t = double;
@@ -95,22 +100,18 @@ struct TemperatureStage {
 
 	// Cell data
 	attribute<Cell, value_t> temperature;
-	attribute<Cell, value_t> temperatureBuffer;
 	attribute<Face, value_t> fluxes;
 
 	TemperatureStage(const Mesh& mesh, MeshProperties<Mesh>& properties)
 		: mesh(mesh), properties(properties)
 		, temperature(mesh.template createNodeData<Cell, value_t, Level>())
-		, temperatureBuffer(mesh.template createNodeData<Cell, value_t, Level>())
 		, fluxes(mesh.template createNodeData<Face, value_t, Level>()) {
-
-		// -- initialize attributes --
 
 		bool first = true;
 		auto& cellTemperature = properties.template get<CellTemperature, Level>();
 		mesh.template forAll<Cell, Level>([&](auto c) {
 			temperature[c] = cellTemperature[c];
-			assert_between(0, temperature[c], 511) << "While initializing level " << Level;
+			assert_temperature(temperature[c]) << "While initializing level " << Level;
 		});
 	}
 
@@ -118,77 +119,76 @@ struct TemperatureStage {
 		auto& faceConductivity = properties.template get<FaceConductivity, Level>();
 		auto& faceArea         = properties.template get<FaceArea, Level>();
 
-		// calculation of the flux
+		// calculation of the per-face flux
 		mesh.template pforAll<Face, Level>([&](auto f){
 			auto in = mesh.template getNeighbor<Face_to_Cell_In>(f);
 			auto out = mesh.template getNeighbor<Face_to_Cell_Out>(f);
 
-			assert_between(0, temperature[in], 511) << "On level " << Level;
-			assert_between(0, temperature[out], 511) << "On level " << Level;
+			assert_temperature(temperature[in]) << "On level " << Level;
+			assert_temperature(temperature[out]) << "On level " << Level;
 
-			value_t gradTemperature = temperature[out] - temperature[in];
+			value_t gradTemperature = temperature[in] - temperature[out];
 			value_t flux = faceConductivity[f] * faceArea[f] * gradTemperature;
 
 			fluxes[f] = flux;
 		});
 
-		// update of solution
+		// update of the per-cell solution
 		mesh.template pforAll<Cell, Level>([&](auto c){
 			auto subtractingFaces = mesh.template getNeighbors<Face_to_Cell_In>(c);
-			std::stringstream subtractingFluxes;
+			value_t prevtemp = temperature[c];
 			for(auto sf : subtractingFaces) {
-				temperature[c] += fluxes[sf];
-				subtractingFluxes << fluxes[sf] << ", ";
+				temperature[c] -= fluxes[sf];
 			}
 			auto addingFaces = mesh.template getNeighbors<Face_to_Cell_Out>(c);
-			std::stringstream addingFluxes;
 			for(auto af : addingFaces) {
-				temperature[c] -= fluxes[af];
-				addingFluxes << fluxes[af] << ", ";
+				temperature[c] += fluxes[af];
 			}
 
-			assert_between(0, temperature[c], 511) << "On level " << Level << "\n adding fluxes: " << addingFluxes.str() << "\n subtracting fluxes: " << subtractingFluxes.str();
+			assert_temperature(temperature[c]) << "On level " << Level << "\nprev temp: " << prevtemp << "\nCell id: " << c.getOrdinal();
 		});
 	}
 
 	void computeFineToCoarse() {
 		if(Level == 0) {
 			static int fileId = 0;
-			constexpr const char* filePrefix = "step";
-			constexpr const char* fileSuffix = ".obj";
-			constexpr const char* mtlFile = "ramp.mtl";
-			char fn[64];
-			snprintf(fn, sizeof(fn), "%s%03d%s", filePrefix, fileId++, fileSuffix);
-			std::cout << "Starting file dump to " << fn << "\n";
-			auto start = std::chrono::high_resolution_clock::now();
-			std::ofstream out(fn);
+			if(fileId % 1000 == 0) {
+				constexpr const char* filePrefix = "step";
+				constexpr const char* fileSuffix = ".obj";
+				constexpr const char* mtlFile = "ramp.mtl";
+				char fn[64];
+				snprintf(fn, sizeof(fn), "%s%03d%s", filePrefix, fileId, fileSuffix);
+				auto start = std::chrono::high_resolution_clock::now();
+				std::ofstream out(fn);
 
-			// header
-			out << "mtllib " << mtlFile << "\n";
+				// header
+				out << "mtllib " << mtlFile << "\n";
 
-			auto& vertexPosition = properties.template get<VertexPosition, Level>();
+				auto& vertexPosition = properties.template get<VertexPosition, Level>();
 
-			mesh.template forAll<Vertex, Level>([&](auto v) {
-				const auto& vp = vertexPosition[v];
-				out << "v " << vp.x << " " << vp.y << " " << vp.z << "\n";
-			});
-			mesh.template forAll<Cell, Level>([&](auto c) {
-				// set color according to temperature
-				out << "\nusemtl r" << (int)temperature[c] << "\n";
-				auto vertexRange = mesh.template getNeighbors<Cell_to_Vertex>(c);
-				std::vector<allscale::api::user::data::NodeRef<Vertex>> vertices(vertexRange.begin(), vertexRange.end());
-				auto vp = [&](int i) { return vertices[i].getOrdinal() + 1; };
-				out << "f " << vp(0) << " " << vp(1) << " " << vp(3) << " " << vp(2) << "\n";
-				out << "f " << vp(0) << " " << vp(4) << " " << vp(5) << " " << vp(1) << "\n";
-				out << "f " << vp(0) << " " << vp(4) << " " << vp(6) << " " << vp(2) << "\n";
-				out << "f " << vp(4) << " " << vp(5) << " " << vp(7) << " " << vp(6) << "\n";
-				out << "f " << vp(1) << " " << vp(5) << " " << vp(7) << " " << vp(3) << "\n";
-				out << "f " << vp(2) << " " << vp(6) << " " << vp(7) << " " << vp(3) << "\n";
-			});
-			out << "\n";
+				mesh.template forAll<Vertex, Level>([&](auto v) {
+					const auto& vp = vertexPosition[v];
+					out << "v " << vp.x << " " << vp.y << " " << vp.z << "\n";
+				});
+				mesh.template forAll<Cell, Level>([&](auto c) {
+					// set color according to temperature
+					out << "\nusemtl r" << (temperature[c] > MAX_TEMP ? 31337 : (int)temperature[c]) << "\n";
+					auto vertexRange = mesh.template getNeighbors<Cell_to_Vertex>(c);
+					std::vector<data::NodeRef<Vertex>> vertices(vertexRange.begin(), vertexRange.end());
+					auto vp = [&](int i) { return vertices[i].getOrdinal() + 1; };
+					out << "f " << vp(0) << " " << vp(1) << " " << vp(3) << " " << vp(2) << "\n";
+					out << "f " << vp(0) << " " << vp(4) << " " << vp(5) << " " << vp(1) << "\n";
+					out << "f " << vp(0) << " " << vp(4) << " " << vp(6) << " " << vp(2) << "\n";
+					out << "f " << vp(4) << " " << vp(5) << " " << vp(7) << " " << vp(6) << "\n";
+					out << "f " << vp(1) << " " << vp(5) << " " << vp(7) << " " << vp(3) << "\n";
+					out << "f " << vp(2) << " " << vp(6) << " " << vp(7) << " " << vp(3) << "\n";
+				});
+				out << "\n";
 
-			auto end = std::chrono::high_resolution_clock::now();
-			std::cout << "File dump took " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " ms.\n";
+				auto end = std::chrono::high_resolution_clock::now();
+				std::cout << "File dumped to " << fn << " in " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " ms.\n";
+			}
+			fileId++;
 		}
 
 		jacobiSolver();
@@ -200,39 +200,27 @@ struct TemperatureStage {
 
 	void restrictFrom(TemperatureStage<Mesh,Level-1>& childStage) {
 		mesh.template pforAll<Cell, Level>([&](auto c) {
-			// set to average temperature of children, and store the average for prolongation
 			auto children = mesh.template getChildren<Parent_to_Child>(c);
 			value_t avgTemperature = 0;
 			for(auto child : children) {
 				avgTemperature += childStage.temperature[child];
 			}
 			avgTemperature /= children.size();
-			assert_between(0, avgTemperature, 511);
 			temperature[c] = avgTemperature;
-			temperatureBuffer[c] = avgTemperature;
 		});
 	}
 
 	void prolongateTo(TemperatureStage<Mesh,Level-1>& childStage) {
 		mesh.template pforAll<Cell, Level>([&](auto c) {
 			auto children = mesh.template getChildren<Parent_to_Child>(c);
-
-			value_t diff = temperature[c] - temperatureBuffer[c];
-
-			for(auto child: children) {
-				auto pretemp = childStage.temperature[child];
-				//childStage.temperature[child] += diff;
-				childStage.temperature[child] += (temperature[c] - childStage.temperature[child]);
-				assert_between(0, childStage.temperature[child], 511) << "Pre child temp: " << pretemp << "\n diff: " << diff;
+			for(auto child : children) {
+				auto preTemp = childStage.temperature[child];
+				childStage.temperature[child] += temperature[c] - preTemp;
+				assert_temperature(childStage.temperature[child]) << "Pre child temp: " << preTemp;
 			}
 		});
 	}
 };
-
-namespace detail {
-	std::pair<Mesh<NUM_LEVELS>, MeshProperties<Mesh<NUM_LEVELS>>> createTube(const int N);
-}
-
 
 namespace {
 	// file format structures
@@ -437,12 +425,10 @@ namespace {
 			for(int fid = 0; fid < faces.size(); ++fid) {
 				const auto& mFace = faces[fid];
 				const auto& fFace = amfFile.faces[Level][fid];
-				//faceArea[mFace] = fFace.area;
-				//assert_between(0.9, faceArea[mFace], pow(4,Level) + 0.1) << "While loading level " << Level;
 				faceArea[mFace] = fFace.area / pow(4,Level);
 				assert_between(0.0, faceArea[mFace], 1.0) << "While loading level " << Level;
 				auto avgCellConductivity = (amfFile.cells[Level][fFace.in_cell_id].conductivity + amfFile.cells[Level][fFace.out_cell_id].conductivity) / 2.0;
-				assert_between(0.19, avgCellConductivity, 0.21) << "While loading level " << Level;
+				assert_between(0.0, avgCellConductivity, 1.0/6.0) << "While loading level " << Level << "\n(Total potential conductivity to a cell from 6 faces must not be greater than 1)";
 				faceConductivity[mFace] = avgCellConductivity;
 			}
 
@@ -482,7 +468,7 @@ namespace {
 
 int main() {
 	// the number of simulated steps
-	const int S = 10;
+	const int S = 10000;
 
 	auto pair = loadAMF(R"(Z:\allscale\git\allscale-compiler\api\scripts\demo\mesh.amf)");
 
