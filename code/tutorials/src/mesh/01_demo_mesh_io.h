@@ -272,39 +272,48 @@ namespace amfloader {
 template<typename Mesh, unsigned Level>
 void TemperatureStage<Mesh, Level>::outputResult() {
 	if(Level == 0) {
+		bool outputCsv = getenv("OUTPUT_CSV");
 		static int fileId = 0;
 		if(fileId % outputFreq == 0) {
 			constexpr const char* filePrefix = "step";
-			constexpr const char* fileSuffix = ".obj";
 			constexpr const char* mtlFile = "ramp.mtl";
+			const char* fileSuffix = outputCsv ? ".csv" : ".obj";
 			char fn[64];
 			snprintf(fn, sizeof(fn), "%s%03d%s", filePrefix, fileId, fileSuffix);
 			auto start = std::chrono::high_resolution_clock::now();
 			std::ofstream out(fn);
 
 			// header
-			out << "mtllib " << mtlFile << "\n";
+			if(!outputCsv) out << "mtllib " << mtlFile << "\n";
+			else out << "x,y,z,temp\n";
 
 			auto& vertexPosition = properties.template get<VertexPosition, Level>();
 
-			mesh.template forAll<Vertex, Level>([&](auto v) {
-				const auto& vp = vertexPosition[v];
-				out << "v " << vp.x << " " << vp.y << " " << vp.z << "\n";
-			});
+			if(!outputCsv) {
+				mesh.template forAll<Vertex, Level>([&](auto v) {
+					const auto& vp = vertexPosition[v];
+					out << "v " << vp.x << " " << vp.y << " " << vp.z << "\n";
+				});
+			}
 			mesh.template forAll<Cell, Level>([&](auto c) {
-				// set color according to temperature
-				out << "\nusemtl r" << (temperature[c] > MAX_TEMP ? 31337 : (int)temperature[c]) << "\n";
 				auto vertexRange = mesh.template getNeighbors<Cell_to_Vertex>(c);
-				std::vector<data::NodeRef<Vertex>> vertices(vertexRange.begin(), vertexRange.end());
-				auto vp = [&](int i) { return vertices[i].getOrdinal() + 1; };
-				out << "f " << vp(0) << " " << vp(1) << " " << vp(3) << " " << vp(2) << "\n";
-				out << "f " << vp(0) << " " << vp(4) << " " << vp(5) << " " << vp(1) << "\n";
-				out << "f " << vp(0) << " " << vp(4) << " " << vp(6) << " " << vp(2) << "\n";
-				out << "f " << vp(4) << " " << vp(5) << " " << vp(7) << " " << vp(6) << "\n";
-				out << "f " << vp(1) << " " << vp(5) << " " << vp(7) << " " << vp(3) << "\n";
-				out << "f " << vp(2) << " " << vp(6) << " " << vp(7) << " " << vp(3) << "\n";
+				std::vector<data::NodeRef<Vertex, Level>> vertices(vertexRange.begin(), vertexRange.end());
+				if(!outputCsv) {
+					// set color according to temperature
+					out << "\nusemtl r" << (temperature[c] > MAX_TEMP ? 31337 : (int)temperature[c]) << "\n";
+					auto vp = [&](int i) { return vertices[i].getOrdinal() + 1; };
+					out << "f " << vp(0) << " " << vp(1) << " " << vp(3) << " " << vp(2) << "\n";
+					out << "f " << vp(0) << " " << vp(4) << " " << vp(5) << " " << vp(1) << "\n";
+					out << "f " << vp(0) << " " << vp(4) << " " << vp(6) << " " << vp(2) << "\n";
+					out << "f " << vp(4) << " " << vp(5) << " " << vp(7) << " " << vp(6) << "\n";
+					out << "f " << vp(1) << " " << vp(5) << " " << vp(7) << " " << vp(3) << "\n";
+					out << "f " << vp(2) << " " << vp(6) << " " << vp(7) << " " << vp(3) << "\n";
+				}
+				else {
+					auto& vp = vertexPosition[vertices[0]];
+					out << vp.x << "," << vp.y << "," << vp.z << "," << temperature[c] << "\n";
+				}
 			});
-			out << "\n";
 
 			auto end = std::chrono::high_resolution_clock::now();
 			std::cout << "File dumped to " << fn << " in " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " ms.\n";

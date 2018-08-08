@@ -1,7 +1,7 @@
 
 require 'chunky_png'
 
-logo = ChunkyPNG::Image.from_file('demo_logo_smaller.png')
+logo = ChunkyPNG::Image.from_file('demo_logo.png')
 
 lookup = {        # depth   init temp   conductivity
     4294967295 => [ 0.0   ,     0     ,     0.0 ], # white (nothing)
@@ -10,7 +10,7 @@ lookup = {        # depth   init temp   conductivity
     2197781247 => [ 0.25  ,   120     ,     1.0/6.0 ], # green (background construct)
 }
 
-LEVELS = 8
+LEVELS = 4
 MAX_DEPTH = 16
 
 COARSEST_LENGTH = 2 ** LEVELS 

@@ -13,7 +13,7 @@
 using namespace allscale::api::user;
 
 // -- Number of hierarchical levels, pre-smoothing and post-smoothing steps in the V-cycle --
-constexpr int NUM_LEVELS = 8;
+constexpr int NUM_LEVELS = 4;
 constexpr int PRE_STEPS = 2;
 constexpr int POST_STEPS = 3;
 
