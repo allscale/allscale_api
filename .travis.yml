@@ -32,6 +32,13 @@ matrix:
           sources: ubuntu-toolchain-r-test
           packages: g++-7
     - os: linux
+      compiler: gcc
+      env: BUILD_TYPE=Debug CXX_EVAL="g++-8" CC_EVAL="gcc-8"
+      addons:
+        apt:
+          sources: ubuntu-toolchain-r-test
+          packages: g++-8
+    - os: linux
       compiler: clang
       env: BUILD_TYPE=Debug CXX_EVAL="clang++-3.8" CC_EVAL="clang-3.8"
       addons:
@@ -123,6 +130,13 @@ matrix:
         apt:
           sources: ubuntu-toolchain-r-test
           packages: g++-7
+    - os: linux
+      compiler: gcc
+      env: BUILD_TYPE=Release CXX_EVAL="g++-8" CC_EVAL="gcc-8"
+      addons:
+        apt:
+          sources: ubuntu-toolchain-r-test
+          packages: g++-8
     - os: linux
       compiler: clang
       env: BUILD_TYPE=Release CXX_EVAL="clang++-3.8" CC_EVAL="clang-3.8"
