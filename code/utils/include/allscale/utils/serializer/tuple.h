@@ -10,10 +10,10 @@ namespace allscale {
 namespace utils {
 
 	/**
-	 * Add support for serializing / de-serializing tuples of trivial element types.
+	 * No tuple is trivially serializable, since object layout is unspecified.
 	 */
 	template<typename ... Args>
-	struct is_trivially_serializable<std::tuple<Args...>, typename std::enable_if<all_trivially_serializable<Args...>::value>::type> : public std::true_type {};
+	struct is_trivially_serializable<std::tuple<Args...>, void> : public std::false_type {};
 
 
 	namespace detail {
@@ -49,9 +49,7 @@ namespace utils {
 	 * Add support for serializing / de-serializing tuples of non-trivial element types.
 	 */
 	template<typename ... Args>
-	struct serializer<std::tuple<Args...>,typename std::enable_if<
-				all_serializable<Args...>::value && !all_trivially_serializable<Args...>::value,
-			void>::type> {
+	struct serializer<std::tuple<Args...>,typename std::enable_if<all_serializable<Args...>::value,void>::type> {
 
 		static std::tuple<Args...> load(ArchiveReader& reader) {
 			return detail::load_helper<sizeof...(Args),Args...>{}(reader);
