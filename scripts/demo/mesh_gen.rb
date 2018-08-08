@@ -1,7 +1,9 @@
 
 require 'chunky_png'
 
-logo = ChunkyPNG::Image.from_file('demo_logo.png')
+img_fn = ARGV.size>0 ? ARGV[0] : 'demo_logo.png'
+
+logo = ChunkyPNG::Image.from_file(img_fn)
 
 lookup = {        # depth   init temp   conductivity
     4294967295 => [ 0.0   ,     0     ,     0.0 ], # white (nothing)
@@ -10,7 +12,7 @@ lookup = {        # depth   init temp   conductivity
     2197781247 => [ 0.25  ,   120     ,     1.0/6.0 ], # green (background construct)
 }
 
-LEVELS = 4
+LEVELS = ARGV.size>1 ? ARGV[1].to_i : 1
 MAX_DEPTH = 16
 
 COARSEST_LENGTH = 2 ** LEVELS 
@@ -443,7 +445,7 @@ def write_array(outf, arr, name, elemsize)
     write_magic_number(outf)
 end
 
-File.open("mesh.amf", "wb+") do |out|
+File.open("mesh_#{img_fn[0...-4]}_l#{LEVELS}.amf", "wb+") do |out|
     # header
     write_magic_number(out)
     out.write([LEVELS, vertex_array.size].pack("ll"))

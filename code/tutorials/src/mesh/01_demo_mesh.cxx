@@ -87,16 +87,19 @@ struct TemperatureStage {
 	const Mesh& mesh;
 	MeshProperties<Mesh>& properties;
 
-	// Output configuration
+	// Output configuration & checking
 	int outputFreq;
+	double energySum = -1.0;
 
 	// Cell data
 	attribute<Cell, value_t> temperature;
+	attribute<Cell, value_t> oldTemperature;
 	attribute<Face, value_t> fluxes;
 
 	TemperatureStage(const Mesh& mesh, MeshProperties<Mesh>& properties, int outputFreq)
 		: mesh(mesh), properties(properties), outputFreq(outputFreq)
 		, temperature(mesh.template createNodeData<Cell, value_t, Level>())
+		, oldTemperature(mesh.template createNodeData<Cell, value_t, Level>())
 		, fluxes(mesh.template createNodeData<Face, value_t, Level>()) {
 
 		auto& cellTemperature = properties.template get<CellTemperature, Level>();
@@ -157,6 +160,7 @@ struct TemperatureStage {
 			}
 			avgTemperature /= children.size();
 			temperature[c] = avgTemperature;
+			oldTemperature[c] = avgTemperature;
 		});
 	}
 
@@ -164,8 +168,8 @@ struct TemperatureStage {
 		mesh.template pforAll<Cell, Level>([&](auto c) {
 			auto children = mesh.template getChildren<Parent_to_Child>(c);
 			for(auto child : children) {
-				auto preTemp = childStage.temperature[child];
-				childStage.temperature[child] += (temperature[c] - preTemp);
+				auto preTemp = oldTemperature[c];
+				childStage.temperature[child] += (temperature[c] - preTemp)/children.size();
 				assert_temperature(childStage.temperature[child]) << "Pre child temp: " << preTemp;
 			}
 		});
