@@ -126,7 +126,7 @@ namespace core {
 		std::is_destructible<F>::value &&
 
 		// the region covered by the fragment has to be obtainable
-		std::is_same<decltype((void (F::*)(utils::Archive&) const)(&F::getCoveredRegion)), void (F::*)(utils::Archive&) const>::value &&
+		std::is_same<decltype((const typename F::region_type& (F::*)(void) const)(&F::getCoveredRegion)), const typename F::region_type& (F::*)(void) const>::value &&
 
 		// there has to be a resize operator
 		std::is_same<decltype((void (F::*)(const typename F::region_type&))(&F::resize)), void (F::*)(const typename F::region_type&)>::value &&

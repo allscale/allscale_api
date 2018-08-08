@@ -813,8 +813,8 @@ namespace data {
 			// copy data line by line using memcpy
 			area.scanByLines([&](const point& a, const point& b){
 				auto start = flatten(a);
-				auto length = (flatten(b) - start) * sizeof(T);
-				std::memcpy(&data[start],&other.data[start],length);
+				auto length = (flatten(b) - start);
+				copyInternal(other, start, length);
 			});
 		}
 
@@ -850,6 +850,18 @@ namespace data {
 		}
 
 	private:
+
+		template<typename X = T>
+		std::enable_if_t<std::is_trivially_copyable<X>::value,void> copyInternal(const GridFragment& other, const coordinate_type& start, const std::size_t& length) {
+			std::memcpy(&data[start],&other.data[start],sizeof(T)*length);
+		}
+
+		template<typename X = T>
+		std::enable_if_t<!std::is_trivially_copyable<X>::value,void> copyInternal(const GridFragment& other, const coordinate_type& start, const std::size_t& length) {
+			for(coordinate_type i=start; std::size_t(i-start)<length; i++) {
+				new (&data[i]) X(other.data[i]);
+			}
+		}
 
 		static std::size_t area(const GridPoint<Dims>& pos) {
 			std::size_t res = 1;
