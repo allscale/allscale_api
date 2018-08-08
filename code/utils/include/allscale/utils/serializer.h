@@ -454,7 +454,7 @@ namespace utils {
 	struct is_trivially_serializable : public std::false_type {};
 
 	template<typename T>
-	struct is_trivially_serializable<T, typename std::enable_if<std::is_base_of<trivially_serializable,T>::value,void>::type> : public std::true_type {};
+	struct is_trivially_serializable<T, typename std::enable_if<std::is_base_of<trivially_serializable,T>::value && std::is_convertible<T*,trivially_serializable*>::value,void>::type> : public std::true_type {};
 
 	template <typename T, typename _>
 	struct is_serializable : public std::false_type {};
