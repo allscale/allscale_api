@@ -38,8 +38,6 @@ namespace utils {
 		EXPECT_FALSE((is_trivially_serializable<std::tuple<int, NotSerializable>>::value));
 		EXPECT_FALSE((is_trivially_serializable<std::tuple<NotSerializable, int>>::value));
 
-		EXPECT_FALSE((std::is_convertible<int,std::tuple<int,std::string>>::value));
-
 	}
 
 	TEST(Serializer,StdTupleEmpty) {
