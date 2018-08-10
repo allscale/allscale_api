@@ -22,25 +22,7 @@ namespace utils {
 
 		data_type data;
 
-		template<typename T>
-		typename std::enable_if<std::is_trivially_copyable<T>::value,void>::type
-		assignInternal(const StaticGrid& other) {
-			std::memcpy(&data,&other.data,sizeof(data_type));
-		}
-
-		template<typename T>
-		typename std::enable_if<!std::is_trivially_copyable<T>::value,void>::type
-		assignInternal(const StaticGrid& other) {
-			data = other.data;
-		}
-
 	public:
-
-		StaticGrid& operator=(const StaticGrid& other) {
-			if (this == &other) return *this;
-			assignInternal<Cell>(other);
-			return *this;
-		}
 
 		Cell& operator[](const addr_type& addr) {
 			return this->template operator[]<sizeof...(rest)+1>(addr);
@@ -148,25 +130,7 @@ namespace utils {
 
 		data_type data;
 
-		template<typename T>
-		typename std::enable_if<std::is_trivially_copyable<T>::value,void>::type
-		assignInternal(const StaticGrid& other) {
-			std::memcpy(&data,&other.data,sizeof(data_type));
-		}
-
-		template<typename T>
-		typename std::enable_if<!std::is_trivially_copyable<T>::value,void>::type
-		assignInternal(const StaticGrid& other) {
-			data = other.data;
-		}
-
 	public:
-
-		StaticGrid& operator=(const StaticGrid& other) {
-			if (this == &other) return *this;
-			assignInternal<Cell>(other);
-			return *this;
-		}
 
 		Cell& operator[](const addr_type& addr) {
 			return this->template operator[]<0>(addr);

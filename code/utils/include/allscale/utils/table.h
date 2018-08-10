@@ -57,22 +57,11 @@ namespace utils {
 		Table(T* begin, T* end)
 			: Table(begin,std::distance(begin,end)) {}
 
-
 		Table(const Table& other)
 			: length(other.length),
 			  data(allocate(length)),
 			  owned(true) {
-
-			// see whether there is something to do
-			if (length > 0 && std::is_trivially_copy_constructible<T>::value) {
-				std::memcpy(data,other.data,sizeof(T)*length);
-				return;
-			}
-
-			// use in-place constructor to copy data
-			for(std::size_t i=0; i<length; i++) {
-				new (&data[i]) T(other.data[i]);
-			}
+			  copyInternal(other);
 		}
 
 		Table(Table&& other)
@@ -234,6 +223,23 @@ namespace utils {
 			while(c%8 != 0) {
 				body();
 				c++;
+			}
+		}
+	
+		template<typename X = T>
+		std::enable_if_t<std::is_trivially_copyable<X>::value,void> copyInternal(const Table& other) {
+			// see whether there is something to do
+			if (length > 0) {
+				std::memcpy(data,other.data,sizeof(X)*length);
+			}
+		}
+
+
+		template<typename X = T>
+		std::enable_if_t<!std::is_trivially_copyable<X>::value,void> copyInternal(const Table& other) {
+			// use in-place constructor to copy data
+			for(std::size_t i=0; i<length; i++) {
+				new (&data[i]) X(other.data[i]);
 			}
 		}
 
