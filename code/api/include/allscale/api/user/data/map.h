@@ -248,7 +248,7 @@ namespace data {
 		/**
 		 * Merges all the data from the given fragment into this fragment.
 		 */
-		void insert(const MapFragment& other, const region_type& fraction) {
+		void insertRegion(const MapFragment& other, const region_type& fraction) {
 			assert_true(core::isSubRegion(fraction,region))
 					<< "Cannot insert non-sub-set region into this fragment.";
 			assert_true(core::isSubRegion(fraction,other.region))

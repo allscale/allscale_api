@@ -1689,11 +1689,6 @@ namespace data {
 				return res;
 			}
 
-			template<typename ... Rest>
-			static MeshRegion merge(const MeshRegion& a, const MeshRegion& b, const Rest& ... rest) {
-				return merge(merge(a,b),rest...);
-			}
-
 			static MeshRegion intersect(const MeshRegion& a, const MeshRegion& b) {
 
 				MeshRegion res;
@@ -2444,7 +2439,7 @@ namespace data {
 
 			}
 
-			void insert(const MeshDataFragment& other, const region_type& area) {
+			void insertRegion(const MeshDataFragment& other, const region_type& area) {
 				assert_true(core::isSubRegion(area,other.coveredRegion)) << "New data " << area << " not covered by source of size " << coveredRegion << "\n";
 				assert_true(core::isSubRegion(area,coveredRegion))       << "New data " << area << " not covered by target of size " << coveredRegion << "\n";
 

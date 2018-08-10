@@ -462,8 +462,8 @@ namespace utils {
 	template <typename T>
 	struct is_serializable<T, typename std::enable_if<
 			// everything that has a proper serializer instance is serializable
-			std::is_same<decltype((T(*)(ArchiveReader&))(&serializer<T>::load)), T(*)(ArchiveReader&)>::value &&
-			std::is_same<decltype((void(*)(ArchiveWriter&, const T&))(&serializer<T>::store)), void(*)(ArchiveWriter&, const T&)>::value,
+			std::is_same<decltype(&serializer<T>::load), T(*)(ArchiveReader&)>::value &&
+			std::is_same<decltype(&serializer<T>::store), void(*)(ArchiveWriter&, const T&)>::value,
 		void>::type> : public std::true_type {};
 
 
