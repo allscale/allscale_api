@@ -276,6 +276,14 @@ namespace data {
 			return !min.strictlyDominatedBy(max);
 		}
 
+		const point_type& getMin() const {
+			return min;
+		}
+
+		const point_type& getMax() const {
+			return max;
+		}
+
 		std::size_t area() const {
 			std::size_t res = 1;
 			for(std::size_t i=0; i<Dims; i++) {
@@ -428,6 +436,8 @@ namespace data {
 
 	public:
 
+		enum { Dimensions = Dims };
+
 		GridRegion() {}
 
 		GridRegion(coordinate_type N)
@@ -487,6 +497,10 @@ namespace data {
 
 		bool empty() const {
 			return regions.empty();
+		}
+
+		const std::vector<box_type>& getBoxes() const {
+			return regions;
 		}
 
 		std::size_t area() const {
