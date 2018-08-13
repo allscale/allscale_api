@@ -454,7 +454,7 @@ namespace utils {
 	struct is_trivially_serializable : public std::false_type {};
 
 	template<typename T>
-	struct is_trivially_serializable<T, typename std::enable_if<std::is_base_of<trivially_serializable,T>::value,void>::type> : public std::true_type {};
+	struct is_trivially_serializable<T, typename std::enable_if<std::is_base_of<trivially_serializable,T>::value && std::is_convertible<T*,trivially_serializable*>::value,void>::type> : public std::true_type {};
 
 	template <typename T, typename _>
 	struct is_serializable : public std::false_type {};
@@ -462,8 +462,8 @@ namespace utils {
 	template <typename T>
 	struct is_serializable<T, typename std::enable_if<
 			// everything that has a proper serializer instance is serializable
-			std::is_same<decltype((T(*)(Archive&))(&serializer<T>::load)), T(*)(Archive&)>::value &&
-			std::is_same<decltype((void(*)(Archive&, const T&))(&serializer<T>::store)), void(*)(Archive&, const T&)>::value,
+			std::is_same<decltype(&serializer<T>::load), T(*)(ArchiveReader&)>::value &&
+			std::is_same<decltype(&serializer<T>::store), void(*)(ArchiveWriter&, const T&)>::value,
 		void>::type> : public std::true_type {};
 
 

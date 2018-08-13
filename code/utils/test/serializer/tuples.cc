@@ -9,7 +9,6 @@ namespace utils {
 
 	struct NotSerializable {};
 
-
 	TEST(Serializer, StdTuple) {
 
 		// check that pairs are recognized as serializable
@@ -28,11 +27,11 @@ namespace utils {
 		EXPECT_FALSE((is_serializable<std::tuple<NotSerializable, int>>::value));
 
 
-
-		// check support for trivially serializable elements
-		EXPECT_TRUE((is_trivially_serializable<std::tuple<int, int>>::value));
-		EXPECT_TRUE((is_trivially_serializable<std::tuple<float, int>>::value));
-		EXPECT_TRUE((is_trivially_serializable<std::tuple<int, float>>::value));
+		// no version should be trivially serializable (since layout/organization is unspecified)
+		EXPECT_FALSE((is_trivially_serializable<std::tuple<>>::value));
+		EXPECT_FALSE((is_trivially_serializable<std::tuple<int, int>>::value));
+		EXPECT_FALSE((is_trivially_serializable<std::tuple<float, int>>::value));
+		EXPECT_FALSE((is_trivially_serializable<std::tuple<int, float>>::value));
 		EXPECT_FALSE((is_trivially_serializable<std::tuple<int, std::string>>::value));
 		EXPECT_FALSE((is_trivially_serializable<std::tuple<std::string, int>>::value));
 

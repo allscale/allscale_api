@@ -607,7 +607,7 @@ namespace data {
 		EXPECT_EQ(2000002046,counterB);
 
 		// transfer data from B to A (direct)
-		fA.insert(fB,region::root());
+		fA.insertRegion(fB,region::root());
 
 		counterA = 1000000000;
 		counterB = 2000000000;
@@ -709,7 +709,7 @@ namespace data {
 		EXPECT_EQ(2000001025,counterB);
 
 		// transfer data from B to A (direct)
-		fA.insert(fB,region::root());
+		fA.insertRegion(fB,region::root());
 
 		counterA = 1000000000;
 		counterB = 2000000000;

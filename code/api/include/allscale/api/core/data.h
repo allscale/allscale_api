@@ -85,19 +85,19 @@ namespace core {
 			utils::is_serializable<R>::value &&
 
 			// there has to be an emptiness check
-			std::is_same<decltype((bool (R::*)(void) const)(&R::empty)), bool (R::*)(void) const>::value &&
+			std::is_same<decltype(&R::empty), bool (R::*)(void) const>::value &&
 
 			// there has to be an union operation
-			std::is_same<decltype((R (*)(const R&, const R&))(&R::merge)), R(*)(const R&, const R&)>::value &&
+			std::is_same<decltype(&R::merge), R(*)(const R&, const R&)>::value &&
 
 			// there has to be an intersection operation
-			std::is_same<decltype((R(*)(const R&, const R&))(&R::intersect)), R(*)(const R&, const R&)>::value &&
+			std::is_same<decltype(&R::intersect), R(*)(const R&, const R&)>::value &&
 
 			// there has to be a set difference operation
-			std::is_same<decltype((R(*)(const R&, const R&))(&R::difference)), R(*)(const R&, const R&)>::value &&
+			std::is_same<decltype(&R::difference), R(*)(const R&, const R&)>::value &&
 
 			// there has to be a span operator, computing the hull of two regions
-			std::is_same<decltype((R(*)(const R&, const R&))(&R::span)), R(*)(const R&, const R&)>::value,
+			std::is_same<decltype(&R::span), R(*)(const R&, const R&)>::value,
 
 		void>::type> : public std::true_type {};
 
@@ -126,22 +126,22 @@ namespace core {
 		std::is_destructible<F>::value &&
 
 		// the region covered by the fragment has to be obtainable
-		std::is_same<decltype((void (F::*)(utils::Archive&) const)(&F::getCoveredRegion)), void (F::*)(utils::Archive&) const>::value &&
+		std::is_same<decltype(&F::getCoveredRegion), const typename F::region_type& (F::*)(void) const>::value &&
 
 		// there has to be a resize operator
-		std::is_same<decltype((void (F::*)(const typename F::region_type&))(&F::resize)), void (F::*)(const typename F::region_type&)>::value &&
+		std::is_same<decltype(&F::resize), void (F::*)(const typename F::region_type&)>::value &&
 
-		// there is an insert operator importing data from an existing fragment
-		std::is_same<decltype((void (F::*)(const F&, const typename F::region_type&))(&F::insert)), void (F::*)(const F&, const typename F::region_type&)>::value &&
+		// there is an insertRegion operator importing data from an existing fragment
+		std::is_same<decltype(&F::insertRegion), void (F::*)(const F&, const typename F::region_type&)>::value &&
 
 		// there is a extract operator extracting a region of data from the present fragment
-		std::is_same<decltype((void (F::*)(utils::ArchiveWriter&, const typename F::region_type&) const)(&F::extract)), void (F::*)(utils::ArchiveWriter&, const typename F::region_type&) const>::value &&
+		std::is_same<decltype(&F::extract), void (F::*)(utils::ArchiveWriter&, const typename F::region_type&) const>::value &&
 
 		// there is a insert operator, importing previously extracted data into this fragment
-		std::is_same<decltype((void (F::*)(utils::ArchiveReader&))(&F::insert)), void (F::*)(utils::ArchiveReader&)>::value &&
+		std::is_same<decltype(&F::insert), void (F::*)(utils::ArchiveReader&)>::value &&
 
 		// can be concerted into a facade
-		std::is_same<decltype((typename F::facade_type (F::*)(void))(&F::mask)), typename F::facade_type(F::*)(void)>::value,
+		std::is_same<decltype(&F::mask), typename F::facade_type(F::*)(void)>::value,
 
 		void>::type> : public std::true_type{};
 

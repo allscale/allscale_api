@@ -585,7 +585,7 @@ namespace data {
 			covered = newSize;
 		}
 
-		void insert(const StaticBalancedBinaryTreeFragment& src, const region_type& region) {
+		void insertRegion(const StaticBalancedBinaryTreeFragment& src, const region_type& region) {
 			assert_true(core::isSubRegion(region,src.covered)) << "Can't import non-covered region!";
 			assert_true(core::isSubRegion(region,covered))     << "Can't import non-covered region!";
 
@@ -712,7 +712,7 @@ namespace data {
 			covered = newSize;
 		}
 
-		void insert(const StaticBalancedBinaryTreeFragment& src, const region_type& region) {
+		void insertRegion(const StaticBalancedBinaryTreeFragment& src, const region_type& region) {
 			assert_true(core::isSubRegion(region,src.covered)) << "Can't import non-covered region!";
 			assert_true(core::isSubRegion(region,covered))     << "Can't import non-covered region!";
 

@@ -276,6 +276,14 @@ namespace data {
 			return !min.strictlyDominatedBy(max);
 		}
 
+		const point_type& getMin() const {
+			return min;
+		}
+
+		const point_type& getMax() const {
+			return max;
+		}
+
 		std::size_t area() const {
 			std::size_t res = 1;
 			for(std::size_t i=0; i<Dims; i++) {
@@ -428,6 +436,8 @@ namespace data {
 
 	public:
 
+		enum { Dimensions = Dims };
+
 		GridRegion() {}
 
 		GridRegion(coordinate_type N)
@@ -489,6 +499,10 @@ namespace data {
 			return regions.empty();
 		}
 
+		const std::vector<box_type>& getBoxes() const {
+			return regions;
+		}
+
 		std::size_t area() const {
 			std::size_t res = 0;
 			for(const auto& cur : regions) {
@@ -515,11 +529,6 @@ namespace data {
 
 			// done
 			return res;
-		}
-
-		template<typename ... Rest>
-		static GridRegion merge(const GridRegion& a, const GridRegion& b, const Rest& ... rest) {
-			return merge(merge(a,b),rest...);
 		}
 
 		static GridRegion intersect(const GridRegion& a, const GridRegion& b) {
@@ -576,7 +585,7 @@ namespace data {
 			return res;
 		}
 
-		static GridRegion span(const box_type& a, const box_type& b) {
+		static GridRegion spanBoxes(const box_type& a, const box_type& b) {
 
 			GridRegion res;
 			box_type cur(coordinate_type(0));
@@ -594,7 +603,7 @@ namespace data {
 			GridRegion res;
 			for(const auto& ba : a.regions) {
 				for(const auto& bb : b.regions) {
-					res = merge(res,span(ba,bb));
+					res = merge(res, spanBoxes(ba,bb));
 				}
 			}
 			return res;
@@ -806,15 +815,15 @@ namespace data {
 			});
 		}
 
-		void insert(const GridFragment& other, const region_type& area) {
+		void insertRegion(const GridFragment& other, const region_type& area) {
 			assert_true(core::isSubRegion(area,other.coveredRegion)) << "New data " << area << " not covered by source of size " << other.coveredRegion << "\n";
 			assert_true(core::isSubRegion(area,coveredRegion))       << "New data " << area << " not covered by target of size " << coveredRegion << "\n";
 
 			// copy data line by line using memcpy
 			area.scanByLines([&](const point& a, const point& b){
 				auto start = flatten(a);
-				auto length = (flatten(b) - start) * sizeof(T);
-				std::memcpy(&data[start],&other.data[start],length);
+				auto length = (flatten(b) - start);
+				copyInternal(other, start, length);
 			});
 		}
 
@@ -850,6 +859,18 @@ namespace data {
 		}
 
 	private:
+
+		template<typename X = T>
+		std::enable_if_t<std::is_trivially_copyable<X>::value,void> copyInternal(const GridFragment& other, const coordinate_type& start, const std::size_t& length) {
+			std::memcpy(&data[start],&other.data[start],sizeof(T)*length);
+		}
+
+		template<typename X = T>
+		std::enable_if_t<!std::is_trivially_copyable<X>::value,void> copyInternal(const GridFragment& other, const coordinate_type& start, const std::size_t& length) {
+			for(coordinate_type i=start; std::size_t(i-start)<length; i++) {
+				new (&data[i]) X(other.data[i]);
+			}
+		}
 
 		static std::size_t area(const GridPoint<Dims>& pos) {
 			std::size_t res = 1;

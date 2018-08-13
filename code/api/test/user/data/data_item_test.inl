@@ -122,7 +122,7 @@ void testFragment(const typename Fragment::shared_data_type& shared, const typen
 	EXPECT_EQ(c, tmp.getCoveredRegion());
 	
 	// load c-share for fA into tmp
-	tmp.insert(fA,c);	
+	tmp.insertRegion(fA,c);	
 	EXPECT_EQ(c, tmp.getCoveredRegion());
 	
 	// resize tmp to d
@@ -130,8 +130,8 @@ void testFragment(const typename Fragment::shared_data_type& shared, const typen
 	EXPECT_EQ(d, tmp.getCoveredRegion());
 	
 	// load fA and fB into tmp
-	tmp.insert(fA, Region::difference(a,c));
-	tmp.insert(fB, Region::difference(b,a));
+	tmp.insertRegion(fA, Region::difference(a,c));
+	tmp.insertRegion(fB, Region::difference(b,a));
 	
 	auto facada = fA.mask();
 }

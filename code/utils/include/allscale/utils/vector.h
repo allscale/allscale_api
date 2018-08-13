@@ -109,6 +109,18 @@ namespace utils {
 			return out << vec.data;
 		}
 
+		template<typename X = T>
+		std::enable_if_t<is_serializable<X>::value, void>
+		store(utils::ArchiveWriter& writer) const {
+			writer.write(data);
+		}
+
+		template<typename X = T>
+		static std::enable_if_t<is_serializable<X>::value, Vector>
+		load(utils::ArchiveReader& reader) {
+			return { reader.read<std::array<X, Dims>>()};
+		}
+
 	};
 
 	namespace detail {
@@ -347,6 +359,20 @@ namespace utils {
 			return out << "[" << vec.x << "," << vec.y << "," << vec.z << "]";
 		}
 
+		template<typename X = T>
+		std::enable_if_t<is_serializable<X>::value, void>
+		store(utils::ArchiveWriter& writer) const {
+			writer.write(x);
+			writer.write(y);
+			writer.write(z);
+		}
+
+		template<typename X = T>
+		static std::enable_if_t<is_serializable<X>::value, Vector>
+		load(utils::ArchiveReader& reader) {
+			return { reader.read<X>(), reader.read<X>(), reader.read<X>() };
+		}
+
 	};
 
 	template<typename T>
@@ -436,6 +462,19 @@ namespace utils {
 			return out << "[" << vec.x << "," << vec.y << "]";
 		}
 
+		template<typename X = T>
+		std::enable_if_t<is_serializable<X>::value, void>
+		store(utils::ArchiveWriter& writer) const {
+			writer.write(x);
+			writer.write(y);
+		}
+		
+		template<typename X = T>
+		static std::enable_if_t<is_serializable<X>::value, Vector>
+		load(utils::ArchiveReader& reader) {
+			return { reader.read<X>(), reader.read<X>() };
+		}
+
 	};
 
 	/**
@@ -443,13 +482,6 @@ namespace utils {
 	 */
 	template<typename T, std::size_t Dims>
 	struct is_trivially_serializable<Vector<T,Dims>, typename std::enable_if<is_trivially_serializable<T>::value>::type> : public std::true_type {};
-
-	/**
-	 * Add support for serializing / de-serializing Vector instances.
-	 * The implementation is simply re-using the serializing capabilities of arrays.
-	 */
-	template<typename T, std::size_t Dims>
-	struct serializer<Vector<T,Dims>,typename std::enable_if<!is_trivially_serializable<T>::value && is_serializable<T>::value,void>::type> : public serializer<std::array<T,Dims>> {};
 
 } // end namespace utils
 } // end namespace allscale

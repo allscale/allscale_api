@@ -133,7 +133,7 @@ namespace data {
 				covered = newSize;
 			}
 
-			void insert(const ScalarFragment& f, const ScalarRegion& region) {
+			void insertRegion(const ScalarFragment& f, const ScalarRegion& region) {
 				assert_false(covered.empty());
 				if (region.empty()) return;
 				value = f.value;

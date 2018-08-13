@@ -107,12 +107,12 @@ namespace data {
 		SetRegion<int> c;
 		c.add(8,9);
 		MapFragment<int,int> fC(c);
-		fC.insert(fB,c);
+		fC.insertRegion(fB,c);
 
 		SetRegion<int> nb;
 		nb.add(3,4,5,6,7);
 		fB.resize(nb);
-		fB.insert(fA,SetRegion<int>::intersect(a,nb));
+		fB.insertRegion(fA,SetRegion<int>::intersect(a,nb));
 
 		SetRegion<int> na = SetRegion<int>::difference(a,nb);
 		fA.resize(na);

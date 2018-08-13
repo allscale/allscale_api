@@ -214,8 +214,8 @@ namespace data {
 //		std::cout << "intersect: " << region::intersect(newPartC,partA) << "\n";
 
 		// move data from A and B to C
-		fC.insert(fA,region::intersect(newPartC,partA));
-		fC.insert(fB,region::intersect(newPartC,partB));
+		fC.insertRegion(fA,region::intersect(newPartC,partA));
+		fC.insertRegion(fB,region::intersect(newPartC,partB));
 
 
 		// shrink A and B
