@@ -285,6 +285,9 @@ static const std::map<OutputFormat, const char*> fmtSuffixes {
 
 template<typename Mesh, unsigned Level>
 void TemperatureStage<Mesh, Level>::outputResult() {
+	static auto simStartTime = std::chrono::high_resolution_clock::now();
+	static long long simTime = 0;
+	simTime += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - simStartTime).count();
 	if(Level == 0) {
 		bool checkResult = getenv("CHECK_RESULT");
 		if(checkResult) {
@@ -311,7 +314,7 @@ void TemperatureStage<Mesh, Level>::outputResult() {
 			char fn[64];
 			snprintf(fn, sizeof(fn), "%s%03d.%s", filePrefix, fileId, fileSuffix);
 			auto start = std::chrono::high_resolution_clock::now();
-			std::ofstream out(fn);
+			std::ofstream out(fn, std::ios::binary);
 
 			auto& vertexPosition = properties.template get<VertexPosition, Level>();
 
@@ -319,15 +322,23 @@ void TemperatureStage<Mesh, Level>::outputResult() {
 				case OutputFormat::AVF: {
 					if(fileId == 0) { // only write geometry on step 0
 						std::ofstream g("geom.avf", std::ios::binary);
+						g << "Mesh geometry information: " << mesh.template getNumNodes<Cell>() << " Cells / " <<  mesh.template getNumNodes<Face>() << " Faces / " << Mesh::levels << " Levels\n";
 						mesh.template forAll<Cell, Level>([&](auto c) {
-							auto v = mesh.template getNeighbors<Cell_to_Vertex>(c).front();
-							auto& vp = vertexPosition[v];
-							g << vp.x << "," << vp.y << "," << vp.z << "\n";
+							if(mesh.template getNeighbors<Cell_to_Face_In>(c).size() + mesh.template getNeighbors<Cell_to_Face_Out>(c).size() < 6) {
+								auto v = mesh.template getNeighbors<Cell_to_Vertex>(c).front();
+								auto& vp = vertexPosition[v];
+								g << vp.x << "," << vp.y << "," << vp.z << "\n";
+							}
 						});
 					}
-					out << "# Timestep " << fileId << "\n";
+					char buffer[512];
+					snprintf(buffer, sizeof(buffer), "Step %3d - Simulation execution time %12lld ms\n", fileId, simTime);
+					out << buffer;
 					mesh.template forAll<Cell, Level>([&](auto c) {
-						out << temperature[c] << "\n";
+						if(mesh.template getNeighbors<Cell_to_Face_In>(c).size() + mesh.template getNeighbors<Cell_to_Face_Out>(c).size() < 6) {
+							float temp = static_cast<float>(temperature[c]);
+							out.write((const char*)&temp, sizeof(float));
+						}
 					});
 					break;
 				}
@@ -365,8 +376,9 @@ void TemperatureStage<Mesh, Level>::outputResult() {
 			}
 
 			auto end = std::chrono::high_resolution_clock::now();
-			std::cout << "File dumped to " << fn << " in " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " ms.\n";
+			std::cout << "File dumped to " << fn << " in " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms.\n";
 		}
 		fileId++;
+		simStartTime = std::chrono::high_resolution_clock::now();
 	}
 }
