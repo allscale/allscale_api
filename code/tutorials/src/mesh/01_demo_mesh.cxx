@@ -180,7 +180,11 @@ struct TemperatureStage {
 
 int main(int argc, char** argv) {
 
-	assert_ge(argc, 2) << "Usage: 01_mesh_demo [amf file] [timesteps (default 10)] [output frequency (default 1)]";
+	if(argc < 2) {
+		std::cout << "Usage: 01_mesh_demo [amf file] [timesteps (default 10)] [output frequency (default 1)]\n";
+		return EXIT_SUCCESS;
+	}
+
 	int timeSteps = argc > 2 ? atoi(argv[2]) : 10;
 	int outputFreq = argc > 3 ? atoi(argv[3]) : 1;
 

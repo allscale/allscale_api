@@ -49,7 +49,7 @@ namespace amfloader {
 		static AMFFile load(const std::string& fname) {
 			AMFFile ret;
 			auto file = fopen(fname.c_str(), "rb");
-			assert_gt(file, 0) << "Could not open " << fname << " for reading";
+			assert_true(file) << "Could not open " << fname << " for reading";
 			size_t readVal = fread(&ret.header, sizeof(ret.header), 1, file);
 			assert_eq(readVal, 1);
 			assert_eq(ret.header.magic_number, 0xA115ca1e) << fname << " - magic number in header doesn't match";
@@ -371,6 +371,9 @@ void TemperatureStage<Mesh, Level>::outputResult() {
 						out << "f " << vp(1) << " " << vp(5) << " " << vp(7) << " " << vp(3) << "\n";
 						out << "f " << vp(2) << " " << vp(6) << " " << vp(7) << " " << vp(3) << "\n";
 					});
+					break;
+				}
+				case OutputFormat::None: {
 					break;
 				}
 			}
