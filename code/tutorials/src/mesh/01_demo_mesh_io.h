@@ -50,7 +50,7 @@ namespace amfloader {
 			AMFFile ret;
 			auto file = fopen(fname.c_str(), "rb");
 			assert_true(file) << "Could not open " << fname << " for reading";
-			size_t readVal = fread(&ret.header, sizeof(ret.header), 1, file);
+			__allscale_unused size_t readVal = fread(&ret.header, sizeof(ret.header), 1, file);
 			assert_eq(readVal, 1);
 			assert_eq(ret.header.magic_number, 0xA115ca1e) << fname << " - magic number in header doesn't match";
 			assert_eq(ret.header.num_levels, NUM_LEVELS) << fname << " - mismatch between file number of levels and C++ NUM_LEVELS";
@@ -58,7 +58,7 @@ namespace amfloader {
 
 			auto loadList = [&](size_t count, size_t elem_size, auto& target, const char* name) {
 				target.resize(count);
-				size_t readVals = fread(target.data(), elem_size, count, file);
+				__allscale_unused size_t readVals = fread(target.data(), elem_size, count, file);
 				assert_eq(readVals, count);
 				uint32_t magic = 0;
 				readVals = fread(&magic, sizeof(uint32_t), 1, file);
@@ -71,7 +71,7 @@ namespace amfloader {
 
 			for(int i = 0; i < NUM_LEVELS; ++i) {
 				FLevelHeader levelHeader;
-				size_t readVals = fread(&levelHeader, sizeof(levelHeader), 1, file);
+				__allscale_unused size_t readVals = fread(&levelHeader, sizeof(levelHeader), 1, file);
 				assert_eq(readVals, 1);
 				assert_eq(levelHeader.magic_number, 0xA115ca1e) << fname << " - magic number in per-level header doesn't match";
 				assert_eq(levelHeader.level, i) << " - level id mismatch";
@@ -128,13 +128,13 @@ namespace amfloader {
 		void assembleMesh(Builder& builder) {
 
 			// create cells
-			for(const auto& cell : amfFile.cells[Level]) {
+			for(__allscale_unused const auto& cell : amfFile.cells[Level]) {
 				cells.push_back(builder.template create<Cell, Level>());
 				assert_eq(cell.level, Level) << "Cell level mismatch";
 			}
 
 			// create faces
-			for(const auto& face : amfFile.faces[Level]) {
+			for(__allscale_unused const auto& face : amfFile.faces[Level]) {
 				faces.push_back(builder.template create<Face, Level>());
 				assert_eq(face.level, Level) << "Face level mismatch";
 			}
@@ -260,7 +260,7 @@ namespace amfloader {
 		MeshBuilder<NUM_LEVELS> builder;
 		MeshFromFileBuilder<MeshBuilder<NUM_LEVELS>, 0> fileBuilder(file);
 		fileBuilder.assembleMesh(builder);
-		auto mesh = std::move(builder).build();
+		auto mesh = std::move(builder).build<PARTITION_DEPTH>();
 
 		// create properties
 		auto properties = mesh.template createKnownProperties<MeshProperties<decltype(mesh)>>();
@@ -272,6 +272,7 @@ namespace amfloader {
 }
 
 enum class OutputFormat {
+	Unset,
 	None,
 	AVF,
 	CSV,
@@ -285,9 +286,19 @@ static const std::map<OutputFormat, const char*> fmtSuffixes {
 
 template<typename Mesh, unsigned Level>
 void TemperatureStage<Mesh, Level>::outputResult() {
+	OutputFormat fmt = OutputFormat::Unset;
+	if(fmt == OutputFormat::Unset) {
+		fmt = OutputFormat::None;
+		if(getenv("OUTPUT_AVF")) fmt = OutputFormat::AVF;
+		else if(getenv("OUTPUT_CSV")) fmt = OutputFormat::CSV;
+		else if(getenv("OUTPUT_OBJ")) fmt = OutputFormat::OBJ;
+	}
+	if(fmt == OutputFormat::None) return;
+
 	static auto simStartTime = std::chrono::high_resolution_clock::now();
 	static long long simTime = 0;
 	simTime += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - simStartTime).count();
+
 	if(Level == 0) {
 		bool checkResult = getenv("CHECK_RESULT");
 		if(checkResult) {
@@ -300,11 +311,6 @@ void TemperatureStage<Mesh, Level>::outputResult() {
 			}
 			energySum = sum;
 		}
-
-		OutputFormat fmt = OutputFormat::None;
-		if(getenv("OUTPUT_AVF")) fmt = OutputFormat::AVF;
-		else if(getenv("OUTPUT_CSV")) fmt = OutputFormat::CSV;
-		else if(getenv("OUTPUT_OBJ")) fmt = OutputFormat::OBJ;
 
 		static int fileId = 0;
 		if((fmt != OutputFormat::None) && fileId % outputFreq == 0) {
@@ -373,9 +379,7 @@ void TemperatureStage<Mesh, Level>::outputResult() {
 					});
 					break;
 				}
-				case OutputFormat::None: {
-					break;
-				}
+				default: break;
 			}
 
 			auto end = std::chrono::high_resolution_clock::now();

@@ -16,6 +16,7 @@ using namespace allscale::api::user;
 constexpr int NUM_LEVELS = 4;
 constexpr int PRE_STEPS = 2;
 constexpr int POST_STEPS = 3;
+constexpr int PARTITION_DEPTH = 5;
 
 // -- define types to model the topology of meshes --
 using value_t = double;
@@ -66,7 +67,7 @@ using MeshBuilder = data::MeshBuilder<
 >;
 
 // -- type of a mesh --
-template<unsigned levels = 1, unsigned PartitionDepth = 0>
+template<unsigned levels = 1, unsigned PartitionDepth = PARTITION_DEPTH>
 using Mesh = typename MeshBuilder<levels>::template mesh_type<PartitionDepth>;
 
 // -- type of the properties of a mesh --
@@ -116,7 +117,7 @@ struct TemperatureStage {
 		auto& faceArea         = properties.template get<FaceArea, Level>();
 
 		// calculation of the per-face flux
-		mesh.template pforAll<Face, Level>([&](auto f){
+		mesh.template pforAll<Face, Level>([&](auto f) {
 			auto in = mesh.template getNeighbor<Face_to_Cell_In>(f);
 			auto out = mesh.template getNeighbor<Face_to_Cell_Out>(f);
 
@@ -127,9 +128,9 @@ struct TemperatureStage {
 		});
 
 		// update of the per-cell solution
-		mesh.template pforAll<Cell, Level>([&](auto c){
-			auto subtractingFaces = mesh.template getNeighbors<Face_to_Cell_In>(c);
+		mesh.template pforAll<Cell, Level>([&](auto c) {
 			value_t prevtemp = temperature[c];
+			auto subtractingFaces = mesh.template getNeighbors<Face_to_Cell_In>(c);
 			for(auto sf : subtractingFaces) {
 				temperature[c] -= fluxes[sf];
 			}
