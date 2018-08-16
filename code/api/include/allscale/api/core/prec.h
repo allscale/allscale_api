@@ -168,7 +168,8 @@ namespace core {
 		impl::sequential::unreleased_treeture<O> sequentialCall(impl::sequential::dependencies&& deps, const I& in, const Funs& ... funs) const {
 			// check for the base case, producing a value to be wrapped
 			if (bc_test(in)) {
-				return impl::sequential::spawn(std::move(deps),[&]{ return detail::call_first().template call<O>(base, in); });
+				const auto& base = this->base;
+				return impl::sequential::spawn(std::move(deps),[&base,&in]{ return detail::call_first().template call<O>(base, in); });
 			}
 
 			// run sequential step case producing an immediate value
@@ -179,9 +180,9 @@ namespace core {
 		template<bool root, typename DepsKind, typename ... Funs>
 		impl::reference::unreleased_treeture<O> parallelCall(impl::reference::dependencies<DepsKind>&& deps, const I& in, const Funs& ... funs) const {
 			// check for the base case
-			const auto& base = this->base;
 			if (bc_test(in)) {
-				return impl::reference::spawn<root>(std::move(deps), [=] {
+				const auto& base = this->base;
+				return impl::reference::spawn<root>(std::move(deps), [base,in] {
 					return detail::call_first().template call<O>(base, in);
 				});
 			}
@@ -192,9 +193,9 @@ namespace core {
 					// the dependencies of the new task
 					std::move(deps),
 					// the process version (sequential):
-					[=] { return detail::call_last().template call<impl::sequential::unreleased_treeture<O>>(step, in, funs.sequential_call()...).get(); },
+					[step,in,funs...] { return detail::call_last().template call<impl::sequential::unreleased_treeture<O>>(step, in, funs.sequential_call()...).get(); },
 					// the split version (parallel):
-					[=] { return detail::call_first().template call<impl::reference::unreleased_treeture<O>>(step, in, funs.parallel_call()...); }
+					[step,in,funs...] { return detail::call_first().template call<impl::reference::unreleased_treeture<O>>(step, in, funs.parallel_call()...); }
 			);
 		}
 
