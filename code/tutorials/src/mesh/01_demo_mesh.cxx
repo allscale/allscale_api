@@ -13,9 +13,9 @@
 using namespace allscale::api::user;
 
 // -- Number of hierarchical levels, pre-smoothing and post-smoothing steps in the V-cycle --
-constexpr int NUM_LEVELS = 4;
-constexpr int PRE_STEPS = 2;
+constexpr int NUM_LEVELS = 8;
 constexpr int POST_STEPS = 3;
+constexpr int PRE_STEPS = 2 + (NUM_LEVELS == 1 ? POST_STEPS : 0);
 constexpr int PARTITION_DEPTH = 5;
 
 // -- define types to model the topology of meshes --
@@ -41,7 +41,9 @@ struct Parent_to_Child : public data::hierarchy<Cell,Cell> {};
 
 // -- property data --
 struct CellTemperature  : public data::mesh_property<Cell,value_t> {};
+struct CellVolume       : public data::mesh_property<Cell,value_t> {};
 struct FaceArea         : public data::mesh_property<Face,value_t> {};
+struct FaceVolumeRatio  : public data::mesh_property<Face,value_t> {};
 struct FaceConductivity : public data::mesh_property<Face,value_t> {};
 struct VertexPosition   : public data::mesh_property<Vertex, Point> {};
 
@@ -74,7 +76,9 @@ using Mesh = typename MeshBuilder<levels>::template mesh_type<PartitionDepth>;
 template<typename Mesh>
 using MeshProperties = data::MeshProperties<Mesh::levels, typename Mesh::partition_tree_type,
 	CellTemperature,
+	CellVolume,
 	FaceArea,
+	FaceVolumeRatio,
 	FaceConductivity,
 	VertexPosition>;
 
@@ -115,6 +119,7 @@ struct TemperatureStage {
 	void jacobiSolver() {
 		auto& faceConductivity = properties.template get<FaceConductivity, Level>();
 		auto& faceArea         = properties.template get<FaceArea, Level>();
+		auto& faceVolumeRatio    = properties.template get<FaceVolumeRatio, Level>();
 
 		// calculation of the per-face flux
 		mesh.template pforAll<Face, Level>([&](auto f) {
@@ -122,7 +127,7 @@ struct TemperatureStage {
 			auto out = mesh.template getNeighbor<Face_to_Cell_Out>(f);
 
 			value_t gradTemperature = temperature[in] - temperature[out];
-			value_t flux = faceConductivity[f] * faceArea[f] * gradTemperature;
+			value_t flux = faceVolumeRatio[f] * faceConductivity[f] * faceArea[f] * gradTemperature;
 
 			fluxes[f] = flux;
 		});
@@ -170,7 +175,7 @@ struct TemperatureStage {
 			auto children = mesh.template getChildren<Parent_to_Child>(c);
 			for(auto child : children) {
 				auto preTemp = oldTemperature[c];
-				childStage.temperature[child] += (temperature[c] - preTemp)/children.size();
+				childStage.temperature[child] += (temperature[c] - preTemp) / children.size() * 4.0;
 				assert_temperature(childStage.temperature[child]) << "Pre child temp: " << preTemp;
 			}
 		});

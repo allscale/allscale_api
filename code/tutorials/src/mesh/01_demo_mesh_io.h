@@ -97,6 +97,10 @@ namespace amfloader {
 	struct HierarchyLinker {
 		void linkHierarchy(Builder& builder, MeshFromFileBuilder<Builder, Level>& levelBuilder, MeshFromFileBuilder<Builder, Level+1>& subBuilder);
 	};
+	template<typename MeshT, typename MeshPropertiesT, unsigned Level>
+	struct VolumePropertyCalculator {
+		void setVolume(const MeshT& mesh, MeshPropertiesT& properties);
+	};
 
 	template<typename Builder, unsigned Level>
 	class MeshFromFileBuilder {
@@ -173,18 +177,21 @@ namespace amfloader {
 			}
 		}
 
-		void addPropertyData(MeshProperties<Mesh<NUM_LEVELS>>& properties) {
+		void addPropertyData(const Mesh<NUM_LEVELS>& mesh, MeshProperties<Mesh<NUM_LEVELS>>& properties) {
 			// cell properties
 			auto& cellTemperature = properties.template get<CellTemperature,Level>();
+			auto& cellVolume = properties.template get<CellVolume,Level>();
 			for(size_t cid = 0; cid < cells.size(); ++cid) {
 				const auto& mCell = cells[cid];
 				const auto& fCell = amfFile.cells[Level][cid];
 				cellTemperature[mCell] = fCell.temperature;
 			}
+			VolumePropertyCalculator<Mesh<NUM_LEVELS>, MeshProperties<Mesh<NUM_LEVELS>>, Level>{}.setVolume(mesh, properties);
 
 			// face properties
 			auto& faceArea = properties.template get<FaceArea,Level>();
 			auto& faceConductivity = properties.template get<FaceConductivity,Level>();
+			auto& faceVolumeRatio = properties.template get<FaceVolumeRatio,Level>();
 			for(size_t fid = 0; fid < faces.size(); ++fid) {
 				const auto& mFace = faces[fid];
 				const auto& fFace = amfFile.faces[Level][fid];
@@ -193,10 +200,16 @@ namespace amfloader {
 				auto avgCellConductivity = (amfFile.cells[Level][fFace.in_cell_id].conductivity + amfFile.cells[Level][fFace.out_cell_id].conductivity) / 2.0;
 				assert_between(0.0, avgCellConductivity, 1.0/6.0) << "While loading level " << Level << "\n(Total potential conductivity to a cell from 6 faces must not be greater than 1)";
 				faceConductivity[mFace] = avgCellConductivity;
+
+				auto inVolume = cellVolume[mesh.template getNeighbor<Face_to_Cell_In>(mFace)];
+				auto outVolume = cellVolume[mesh.template getNeighbor<Face_to_Cell_Out>(mFace)];
+				auto largerVolume = std::max(inVolume, outVolume);
+				auto smallerVolume = std::min(inVolume, outVolume);
+				faceVolumeRatio[mFace] = smallerVolume / largerVolume;
 			}
 
 			// initialize sublevel properties
-			subBuilder.addPropertyData(properties);
+			subBuilder.addPropertyData(mesh, properties);
 		}
 	};
 	template<typename Builder>
@@ -205,7 +218,7 @@ namespace amfloader {
 		MeshFromFileBuilder(const AMFFile&) { }
 		data::NodeRef<Cell,NUM_LEVELS> getCell(int) { return {}; }
 		void assembleMesh(Builder&) { }
-		void addPropertyData(MeshProperties<Mesh<NUM_LEVELS>>&) { }
+		void addPropertyData(const Mesh<NUM_LEVELS>&, MeshProperties<Mesh<NUM_LEVELS>>&) { }
 	};
 
 
@@ -251,6 +264,28 @@ namespace amfloader {
 		void linkHierarchy(Builder&, MeshFromFileBuilder<Builder, NUM_LEVELS-1>&, MeshFromFileBuilder<Builder, NUM_LEVELS>&) { }
 	};
 
+	template<typename MeshT, typename MeshPropertiesT, unsigned Level>
+	void VolumePropertyCalculator<MeshT, MeshPropertiesT, Level>::setVolume(const MeshT& mesh, MeshPropertiesT& properties) {
+		auto& cellVolume = properties.template get<CellVolume,Level>();
+		mesh.template forAll<Cell, Level>([&](const auto& c) {
+			value_t vol = 0;
+			for(auto child : mesh.template getChildren<Parent_to_Child>(c)) {
+				auto& subVolume = properties.template get<CellVolume,Level-1>();
+				vol += subVolume[child];
+			}
+			cellVolume[c] = vol;
+		});
+	}
+	template<typename MeshT, typename MeshPropertiesT>
+	struct VolumePropertyCalculator<MeshT, MeshPropertiesT, 0> {
+		void setVolume(const MeshT& mesh, MeshPropertiesT& properties) {
+			auto& cellVolume = properties.template get<CellVolume,0>();
+			mesh.template forAll<Cell>([&](const auto& c) {
+				cellVolume[c] = 1;
+			});
+		}
+	};
+
 	std::pair<Mesh<NUM_LEVELS>, MeshProperties<Mesh<NUM_LEVELS>>> loadAMF(const std::string& filename) {
 
 		// load file
@@ -265,7 +300,7 @@ namespace amfloader {
 		// create properties
 		auto properties = mesh.template createKnownProperties<MeshProperties<decltype(mesh)>>();
 		fileBuilder.addVertexProperties(properties);
-		fileBuilder.addPropertyData(properties);
+		fileBuilder.addPropertyData(mesh, properties);
 
 		return std::make_pair(std::move(mesh), std::move(properties));
 	}
@@ -286,7 +321,7 @@ static const std::map<OutputFormat, const char*> fmtSuffixes {
 
 template<typename Mesh, unsigned Level>
 void TemperatureStage<Mesh, Level>::outputResult() {
-	OutputFormat fmt = OutputFormat::Unset;
+	static OutputFormat fmt = OutputFormat::Unset;
 	if(fmt == OutputFormat::Unset) {
 		fmt = OutputFormat::None;
 		if(getenv("OUTPUT_AVF")) fmt = OutputFormat::AVF;
@@ -307,7 +342,7 @@ void TemperatureStage<Mesh, Level>::outputResult() {
 				sum += temperature[c];
 			});
 			if(energySum > 0.0) {
-				assert_between(-0.01, sum - energySum, 0.01) << "Lost/gained too much energy!\n From " << energySum << " to " << sum;
+				assert_between(-0.1, sum - energySum, 0.1) << "Lost/gained too much energy!\n From " << energySum << " to " << sum;
 			}
 			energySum = sum;
 		}
