@@ -2,7 +2,9 @@
 
 #include <utility>
 
+// stuff we need to include before (the intercepted) prec.h gets included
 #include "allscale/utils/assert.h"
+#include "allscale/utils/serializer.h"
 
 #include "allscale/api/core/prec.h"
 
