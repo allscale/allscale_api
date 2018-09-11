@@ -177,7 +177,7 @@ namespace data {
 		// -- move data to second fragment --
 
 		fB.resize(on);
-		fB.insert(fA,on);
+		fB.insertRegion(fA,on);
 
 		// write in first fragment
 		Scalar<int> sB = fB.mask();

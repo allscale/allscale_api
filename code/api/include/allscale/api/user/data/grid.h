@@ -531,11 +531,6 @@ namespace data {
 			return res;
 		}
 
-		template<typename ... Rest>
-		static GridRegion merge(const GridRegion& a, const GridRegion& b, const Rest& ... rest) {
-			return merge(merge(a,b),rest...);
-		}
-
 		static GridRegion intersect(const GridRegion& a, const GridRegion& b) {
 
 			// if one of the sets is empty => done
@@ -590,7 +585,7 @@ namespace data {
 			return res;
 		}
 
-		static GridRegion span(const box_type& a, const box_type& b) {
+		static GridRegion spanBoxes(const box_type& a, const box_type& b) {
 
 			GridRegion res;
 			box_type cur(coordinate_type(0));
@@ -608,7 +603,7 @@ namespace data {
 			GridRegion res;
 			for(const auto& ba : a.regions) {
 				for(const auto& bb : b.regions) {
-					res = merge(res,span(ba,bb));
+					res = merge(res, spanBoxes(ba,bb));
 				}
 			}
 			return res;
@@ -820,7 +815,7 @@ namespace data {
 			});
 		}
 
-		void insert(const GridFragment& other, const region_type& area) {
+		void insertRegion(const GridFragment& other, const region_type& area) {
 			assert_true(core::isSubRegion(area,other.coveredRegion)) << "New data " << area << " not covered by source of size " << other.coveredRegion << "\n";
 			assert_true(core::isSubRegion(area,coveredRegion))       << "New data " << area << " not covered by target of size " << coveredRegion << "\n";
 

@@ -113,7 +113,7 @@ namespace data {
 			});
 		}
 
-		void insert(const StaticGridFragment& other, const region_type& area) {
+		void insertRegion(const StaticGridFragment& other, const region_type& area) {
 			assert_true(core::isSubRegion(area,other.size)) << "New data " << area << " not covered by source of size " << size << "\n";
 			assert_true(core::isSubRegion(area,size))       << "New data " << area << " not covered by target of size " << size << "\n";
 
@@ -157,7 +157,7 @@ namespace data {
 
 	private:
 
-		static std::size_t area(const StaticGridPoint<Dims>& pos) {
+		static std::size_t area(const point& pos) {
 			std::size_t res = 1;
 			for(std::size_t i=0; i<Dims; ++i) {
 				res *= pos[i];
@@ -165,7 +165,7 @@ namespace data {
 			return res;
 		}
 
-		coordinate_type flatten(const StaticGridPoint<Dims>& pos) const {
+		coordinate_type flatten(const point& pos) const {
 
 			static const std::array<coordinate_type, Dims> totalSize{ { Sizes ... } };
 

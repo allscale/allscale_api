@@ -1198,13 +1198,13 @@ namespace data {
 		Region newPartA = Region({0,0}, {250,750});
 		Region newPartB = Region({250,0}, {500,750});
 		Region newPartC = Region({0,750}, {500,1000});
-		EXPECT_EQ(full,Region::merge(newPartA,newPartB,newPartC));
+		EXPECT_EQ(full,Region::merge(newPartA, Region::merge(newPartB,newPartC)));
 
 		Fragment fC(shared,newPartC);
 
 		// move data from A and B to C
-		fC.insert(fA,Region::intersect(newPartC,partA));
-		fC.insert(fB,Region::intersect(newPartC,partB));
+		fC.insertRegion(fA,Region::intersect(newPartC,partA));
+		fC.insertRegion(fB,Region::intersect(newPartC,partB));
 
 		// shrink A and B
 		fA.resize(newPartA);
