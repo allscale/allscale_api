@@ -65,8 +65,12 @@ namespace utils {
 			if (!other.valid) return *this;
 
 			// copy other state
-			valid = true;
-			asRef() = other.asRef();
+			if (!valid) {
+				valid = true;
+				new (obj) T(other.asRef());
+			} else {
+				asRef() = other.asRef();
+			}
 
 			// done
 			return *this;
@@ -82,8 +86,12 @@ namespace utils {
 			if (!other.valid) return *this;
 
 			// copy other state
-			valid = true;
-			asRef() = std::move(other.asRef());
+			if (!valid) {
+				valid = true;
+				new (obj) T(std::move(other.asRef()));
+			} else {
+				asRef() = std::move(other.asRef());
+			}
 
 			// invalidate other
 			other.discard();
