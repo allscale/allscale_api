@@ -55,6 +55,12 @@ class Cell
         @id = -1
     end
 
+    def self.new_parent(lvl)
+        ret = Cell.new
+        ret.set(lvl, 0 ,0)
+        ret
+    end
+
     def exists?
         @id != -1
     end 

@@ -16,8 +16,8 @@ namespace amfloader {
 		int32_t level;
 		double temperature;
 		double conductivity;
-		std::array<int32_t,3> in_face_ids;
-		std::array<int32_t,3> out_face_ids;
+		std::array<int32_t,25> in_face_ids;
+		std::array<int32_t,25> out_face_ids;
 		std::array<int32_t,8> vertex_ids;
 		std::array<int32_t,8> child_cell_ids;
 	};
@@ -164,7 +164,7 @@ namespace amfloader {
 			subBuilder.assembleMesh(builder);
 			HierarchyLinker<Builder, Level>{}.linkHierarchy(builder, *this, subBuilder);
 
-			printf("Finished geometry for level %u - %10u vertices %10u cells %10u faces\n", Level, (unsigned)vertices.size(), (unsigned)cells.size(), (unsigned)faces.size());
+			printf("Finished geometry for level %2u - %10u vertices %10u cells %10u faces\n", Level, (unsigned)vertices.size(), (unsigned)cells.size(), (unsigned)faces.size());
 		}
 
 		void addVertexProperties(MeshProperties<Mesh<NUM_LEVELS>>& properties) {
@@ -195,7 +195,7 @@ namespace amfloader {
 			for(size_t fid = 0; fid < faces.size(); ++fid) {
 				const auto& mFace = faces[fid];
 				const auto& fFace = amfFile.faces[Level][fid];
-				faceArea[mFace] = fFace.area / pow(4,Level);
+				faceArea[mFace] = fFace.area / (pow(4,Level)*2);
 				assert_between(0.0, faceArea[mFace], 1.0) << "While loading level " << Level;
 				auto avgCellConductivity = (amfFile.cells[Level][fFace.in_cell_id].conductivity + amfFile.cells[Level][fFace.out_cell_id].conductivity) / 2.0;
 				assert_between(0.0, avgCellConductivity, 1.0/6.0) << "While loading level " << Level << "\n(Total potential conductivity to a cell from 6 faces must not be greater than 1)";

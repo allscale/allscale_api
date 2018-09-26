@@ -13,7 +13,7 @@
 using namespace allscale::api::user;
 
 // -- Number of hierarchical levels, pre-smoothing and post-smoothing steps in the V-cycle --
-constexpr int NUM_LEVELS = 8;
+constexpr int NUM_LEVELS = 20;
 constexpr int POST_STEPS = 3;
 constexpr int PRE_STEPS = 2 + (NUM_LEVELS == 1 ? POST_STEPS : 0);
 constexpr int PARTITION_DEPTH = 5;
@@ -119,7 +119,7 @@ struct TemperatureStage {
 	void jacobiSolver() {
 		auto& faceConductivity = properties.template get<FaceConductivity, Level>();
 		auto& faceArea         = properties.template get<FaceArea, Level>();
-		auto& faceVolumeRatio    = properties.template get<FaceVolumeRatio, Level>();
+		auto& faceVolumeRatio  = properties.template get<FaceVolumeRatio, Level>();
 
 		// calculation of the per-face flux
 		mesh.template pforAll<Face, Level>([&](auto f) {
@@ -171,11 +171,12 @@ struct TemperatureStage {
 	}
 
 	void prolongateTo(TemperatureStage<Mesh,Level-1>& childStage) {
-		mesh.template pforAll<Cell, Level>([&](auto c) {
+		value_t correctionFactor = sqrt(8.0) + (Level-1)/8.0;
+		mesh.template pforAll<Cell, Level>([&,correctionFactor](auto c) {
 			auto children = mesh.template getChildren<Parent_to_Child>(c);
 			for(auto child : children) {
 				auto preTemp = oldTemperature[c];
-				childStage.temperature[child] += (temperature[c] - preTemp) / children.size() * 4.0;
+				childStage.temperature[child] += (temperature[c] - preTemp) / children.size() * correctionFactor;
 				assert_temperature(childStage.temperature[child]) << "Pre child temp: " << preTemp;
 			}
 		});
