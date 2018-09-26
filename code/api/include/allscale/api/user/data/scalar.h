@@ -45,7 +45,7 @@ namespace data {
 
 		public:
 
-			ScalarRegion() = default;
+			ScalarRegion() : flag(false) {}
 
 			ScalarRegion(bool value) : flag(value) {}
 
