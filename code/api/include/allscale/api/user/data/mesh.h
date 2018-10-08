@@ -776,6 +776,8 @@ namespace data {
 
 		};
 
+		// a constant for an unknown parent
+		static constexpr NodeID unknownParent{std::numeric_limits<node_index_t>::max()};
 
 		template<unsigned Levels, typename ... HierachyKinds>
 		class HierarchySet {
@@ -798,10 +800,7 @@ namespace data {
 			public:
 
 				void addChild(const NodeID& parent, const NodeID& child) {
-					// a constant for an unknown parent
-					static const NodeID unknownParent(std::numeric_limits<node_index_t>::max());
-
-					assert_ne(parent,unknownParent) << "Unknown parent constant must not be used!";
+					assert_ne(parent, unknownParent) << "Unknown parent constant must not be used!";
 
 					// register child as a child of parent
 					if (parent >= children.size()) {
@@ -810,7 +809,6 @@ namespace data {
 					auto& list = children[parent];
 					for(auto& cur : list) if (cur == child) return;
 					list.push_back(child);
-
 
 					// register parent of child
 					if (child >= parents.size()) {
@@ -829,13 +827,11 @@ namespace data {
 				}
 
 				void close() {
-					// a constant for an unknown parent
-					static const NodeID unknownParent(std::numeric_limits<node_index_t>::max());
-
 					// get maximum index of parents
 					std::size_t maxParent = 0;
 					for(const auto& cur : parents) {
-						maxParent = std::max<std::size_t>(maxParent,cur);
+						assert_ne(cur, unknownParent) << "Unknown parent when mesh is being closed - invalid.";
+						maxParent = std::max<std::size_t>(maxParent, cur);
 					}
 
 					// compute total number of parent-child links
@@ -2977,6 +2973,11 @@ namespace data {
 
 		// -- mesh property handling --
 
+		template<typename PropertiesType>
+		PropertiesType createKnownProperties() const {
+			return PropertiesType(*this);
+		}
+
 		template<typename ... Properties>
 		MeshProperties<Levels,partition_tree_type,Properties...> createProperties() const {
 			return MeshProperties<Levels,partition_tree_type,Properties...>(*this);
@@ -3117,7 +3118,8 @@ namespace data {
 		template<typename HierarchyKind, typename NodeKindA, typename NodeKindB, unsigned LevelA, unsigned LevelB>
 		void link(const NodeRef<NodeKindA,LevelA>& parent, const NodeRef<NodeKindB,LevelB>& child) {
 			// TODO: check that HierarchyKind is a valid hierarchy kind
-			static_assert(LevelA == LevelB+1, "Can not connect nodes of non-adjacent levels in hierarchies");
+			static_assert(LevelA != LevelB, "Can not build hierarchy between nodes on the same level.");
+			static_assert(LevelA == LevelB+1, "Can not connect nodes of non-adjacent levels in hierarchies.");
 			static_assert(LevelA < Levels, "Trying to create a hierarchical edge to an invalid level.");
 			static_assert(std::is_same<NodeKindA,typename HierarchyKind::parent_node_kind>::value, "Invalid source node type");
 			static_assert(std::is_same<NodeKindB,typename HierarchyKind::child_node_kind>::value, "Invalid target node type");
