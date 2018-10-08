@@ -78,7 +78,7 @@ matrix:
       env: BUILD_TYPE=Debug CXX_EVAL="clang++-7" CC_EVAL="clang-7"
       addons:
         apt:
-          sources: [ llvm-toolchain-trusty, ubuntu-toolchain-r-test ]
+          sources: [ llvm-toolchain-trusty-7, ubuntu-toolchain-r-test ]
           packages: [ clang-7, g++-5 ]
     # ------------- OS X ------------- #
     - os: osx
@@ -177,7 +177,7 @@ matrix:
       env: BUILD_TYPE=Release CXX_EVAL="clang++-7" CC_EVAL="clang-7"
       addons:
         apt:
-          sources: [ llvm-toolchain-trusty, ubuntu-toolchain-r-test ]
+          sources: [ llvm-toolchain-trusty-7, ubuntu-toolchain-r-test ]
           packages: [ clang-7, g++-5 ]
     # ------------- OS X ------------- #
     - os: osx
