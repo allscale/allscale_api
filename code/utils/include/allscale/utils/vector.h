@@ -310,7 +310,7 @@ namespace utils {
 		}
 
 		const T& operator[](std::size_t i) const {
-			return asArray()[i];
+			return (i==0) ? x : (i==1) ? y : z;
 		}
 
 		Vector& operator=(const Vector& other) = default;
