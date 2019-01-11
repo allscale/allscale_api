@@ -268,3 +268,25 @@ namespace reference {
 } // end namespace core
 } // end namespace api
 } // end namespace allscale
+
+namespace std {
+
+	// adding support for using TaskPaths and TaskIDs as key in unordered containers.
+
+	template<>
+	struct hash<allscale::api::core::impl::reference::TaskPath> {
+		std::size_t operator()(const allscale::api::core::impl::reference::TaskPath& path) const {
+			return (decltype(path.getPath())(1) << path.getLength()) | path.getPath();
+		}
+	};
+
+	template<>
+	struct hash<allscale::api::core::impl::reference::TaskID> {
+		std::size_t operator()(const allscale::api::core::impl::reference::TaskID& id) const {
+			auto res = hash<allscale::api::core::impl::reference::TaskPath>()(id.getPath());
+			res ^= id.getRootID() + 0x9e3779b9 + (res<<6) + (res>>2);
+			return res;
+		}
+	};
+
+} // end namespace std
