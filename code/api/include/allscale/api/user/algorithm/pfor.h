@@ -1115,7 +1115,8 @@ namespace algorithm {
 				},
 				[body](const detail::RecArgsWithDependencies<Iter, Dependency>& rg, const auto&) {
 					// the alternative is processing the step sequentially
-					rg.range.forEach(body);
+					auto body_ = body;
+					rg.range.forEach(body_);
 				}
 			)
 		)(dependency.toCoreDependencies(),detail::RecArgsWithDependencies<Iter, Dependency>{0,r,dependency}) };
@@ -1144,7 +1145,8 @@ namespace algorithm {
 				},
 				[body](const detail::RecArgsNoDependencies<Iter>& r, const auto&) {
 					// the alternative is processing the step sequentially
-					r.range.forEach(body);
+					auto body_ = body;
+					r.range.forEach(body_);
 				}
 			)
 		)(detail::RecArgsNoDependencies<Iter>{0,r}) };
