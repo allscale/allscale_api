@@ -1109,10 +1109,9 @@ namespace algorithm {
 					auto& left = fragments.left;
 					auto& right = fragments.right;
 					auto dep = rg.dependencies.split(left,right);
-					return core::parallel(
-						nested(dep.left.toCoreDependencies(), detail::RecArgsWithDependencies<Iter, Dependency>{rg.depth+1, left, dep.left} ),
-						nested(dep.right.toCoreDependencies(), detail::RecArgsWithDependencies<Iter, Dependency>{rg.depth+1, right,dep.right})
-					);
+					auto leftTask = nested(dep.left.toCoreDependencies(), detail::RecArgsWithDependencies<Iter, Dependency>{rg.depth+1, left, dep.left} );
+					auto rightTask = nested(dep.right.toCoreDependencies(), detail::RecArgsWithDependencies<Iter, Dependency>{rg.depth+1, right,dep.right});
+					return core::parallel(std::move(leftTask),std::move(rightTask));
 				},
 				[body](const detail::RecArgsWithDependencies<Iter, Dependency>& rg, const auto&) {
 					// the alternative is processing the step sequentially
@@ -1139,10 +1138,9 @@ namespace algorithm {
 				[](const detail::RecArgsNoDependencies<Iter>& r, const auto& nested) {
 					// in the step case we split the range and process sub-ranges recursively
 					auto fragments = r.range.split(r.depth);
-					return core::parallel(
-						nested(detail::RecArgsNoDependencies<Iter>{r.depth+1,fragments.left}),
-						nested(detail::RecArgsNoDependencies<Iter>{r.depth+1,fragments.right})
-					);
+					auto left = nested(detail::RecArgsNoDependencies<Iter>{r.depth+1,fragments.left});
+					auto right = nested(detail::RecArgsNoDependencies<Iter>{r.depth+1,fragments.right});
+					return core::parallel(std::move(left),std::move(right));
 				},
 				[body](const detail::RecArgsNoDependencies<Iter>& r, const auto&) {
 					// the alternative is processing the step sequentially
