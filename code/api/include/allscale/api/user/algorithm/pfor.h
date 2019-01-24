@@ -1100,7 +1100,8 @@ namespace algorithm {
 			},
 			[body](const detail::RecArgsWithDependencies<Iter, Dependency>& rg) {
 				// apply the body operation to every element in the remaining range
-				rg.range.forEach(body);
+				auto body_ = body;
+				rg.range.forEach(body_);
 			},
 			core::pick(
 				[](const detail::RecArgsWithDependencies<Iter, Dependency>& rg, const auto& nested) {
@@ -1133,7 +1134,8 @@ namespace algorithm {
 			},
 			[body](const detail::RecArgsNoDependencies<Iter>& r) {
 				// apply the body operation to every element in the remaining range
-				r.range.forEach(body);
+				auto body_ = body;
+				r.range.forEach(body_);
 			},
 			core::pick(
 				[](const detail::RecArgsNoDependencies<Iter>& r, const auto& nested) {
