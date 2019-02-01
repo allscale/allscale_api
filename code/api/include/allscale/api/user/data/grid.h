@@ -488,11 +488,13 @@ namespace data {
 		}
 
 		bool operator==(const GridRegion& other) const {
-			return difference(*this,other).empty() && other.difference(other,*this).empty();
+			if (this == &other) return true;
+			if (regions == other.regions) return true;
+			return difference(*this,other).empty() && difference(other,*this).empty();
 		}
 
 		bool operator!=(const GridRegion& other) const {
-			return regions != other.regions;
+			return !(*this == other);
 		}
 
 		bool empty() const {
