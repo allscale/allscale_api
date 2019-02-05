@@ -53,8 +53,8 @@ namespace data {
 		template<std::size_t I>
 		struct difference_computer {
 
-			template<std::size_t Dims>
-			void collectDifferences(const GridBox<Dims>& a, const GridBox<Dims>& b, GridBox<Dims>& cur, std::vector<GridBox<Dims>>& res) {
+			template<std::size_t Dims, typename Op>
+			void collectDifferences(const GridBox<Dims>& a, const GridBox<Dims>& b, GridBox<Dims>& cur, const Op& op) {
 				std::size_t i = I-1;
 
 				// if b is within a
@@ -62,44 +62,44 @@ namespace data {
 
 					// cover left part
 					cur.min[i] = a.min[i]; cur.max[i] = b.min[i];
-					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,op);
 
 					// cover center part
 					cur.min[i] = b.min[i]; cur.max[i] = b.max[i];
-					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,op);
 
 					// cover right part
 					cur.min[i] = b.max[i]; cur.max[i] = a.max[i];
-					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,op);
 
 				// if a is within b
 				} else if (b.min[i] <= a.min[i] && a.max[i] <= b.max[i]) {
 
 					// cover inner part
 					cur.min[i] = a.min[i]; cur.max[i] = a.max[i];
-					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,op);
 
 				// if a is on the left
 				} else if (a.min[i] <= b.min[i]) {
 
 					// cover left part
 					cur.min[i] = a.min[i]; cur.max[i] = b.min[i];
-					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,op);
 
 					// cover right part
 					cur.min[i] = b.min[i]; cur.max[i] = a.max[i];
-					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,op);
 
 				// otherwise a is on the right
 				} else {
 
 					// cover left part
 					cur.min[i] = a.min[i]; cur.max[i] = b.max[i];
-					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,op);
 
 					// cover right part
 					cur.min[i] = b.max[i]; cur.max[i] = a.max[i];
-					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,res);
+					if (cur.min[i] < cur.max[i]) difference_computer<I-1>().collectDifferences(a,b,cur,op);
 
 				}
 
@@ -110,9 +110,9 @@ namespace data {
 		template<>
 		struct difference_computer<0> {
 
-			template<std::size_t Dims>
-			void collectDifferences(const GridBox<Dims>&, const GridBox<Dims>& b, GridBox<Dims>& cur, std::vector<GridBox<Dims>>& res) {
-				if(!b.covers(cur) && !cur.empty()) res.push_back(cur);
+			template<std::size_t Dims, typename Op>
+			void collectDifferences(const GridBox<Dims>&, const GridBox<Dims>& b, GridBox<Dims>& cur, const Op& op) {
+				if(!b.covers(cur) && !cur.empty()) op(cur);
 			}
 		};
 
@@ -369,7 +369,9 @@ namespace data {
 			// slice up every single dimension
 			GridBox cur;
 			std::vector<GridBox> res;
-			detail::difference_computer<Dims>().collectDifferences(a,b,cur,res);
+			detail::difference_computer<Dims>().collectDifferences(a,b,cur,[&](const GridBox& box){
+				res.push_back(box);
+			});
 			return res;
 		}
 
@@ -490,7 +492,7 @@ namespace data {
 		bool operator==(const GridRegion& other) const {
 			if (this == &other) return true;
 			if (regions == other.regions) return true;
-			return difference(*this,other).empty() && difference(other,*this).empty();
+			return isSubRegion(*this,other) && isSubRegion(other,*this);
 		}
 
 		bool operator!=(const GridRegion& other) const {
@@ -511,6 +513,48 @@ namespace data {
 				res += cur.area();
 			}
 			return res;
+		}
+
+		bool covers(const box_type& box) const {
+
+			// test whether any region covers the full box
+			for(const auto& cur : regions) {
+				if (cur.covers(box)) return true;
+			}
+
+			// it might still be that multiple boxes cover the given box, each partially
+			for(const auto& cur : regions) {
+				if (cur.intersectsWith(box)) {
+					// check whether fragments can be covered
+					bool covered = true;
+					box_type tmp = cur;
+					detail::difference_computer<Dims>().collectDifferences(box,cur,tmp,[&](const box_type& box){
+						covered = covered && covers(box);
+					});
+					if (covered) return true;
+				}
+			}
+
+			// could not be properly covered
+			return false;
+		}
+
+		static bool isSubRegion(const GridRegion& a, const GridRegion& b) {
+
+			// if they are identical => a is a subset of b
+			if (&a == &b) return true;
+
+			// quick cheap checks
+			if (a.empty()) return true;
+			if (b.empty()) return false;
+
+			// check whether any region of a is not fully covered by the regions of b
+			for(const auto& cur : a.regions) {
+				if(!b.covers(cur)) return false;
+			}
+
+			// everything is covered
+			return true;
 		}
 
 		static GridRegion merge(const GridRegion& a, const GridRegion& b) {
@@ -563,7 +607,6 @@ namespace data {
 
 			// handle empty sets
 			if(a.empty() || b.empty()) return a;
-
 
 			// build result
 			GridRegion res = a;

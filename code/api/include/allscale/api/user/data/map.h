@@ -112,6 +112,21 @@ namespace data {
 		}
 
 		/**
+		 * An operator to test whether a is a subset of b.
+		 */
+		static bool isSubRegion(const SetRegion& a, const SetRegion& b) {
+			// check that it is indeed a subset
+			if (a.empty()) return true;
+			if (a.elements.size() > b.elements.size()) return false;
+
+			// check that it is
+			return std::includes(
+				b.elements.begin(), b.elements.end(),
+				a.elements.begin(), a.elements.end()
+			);
+		}
+
+		/**
 		 * An operator to merge two set regions.
 		 */
 		static SetRegion merge(const SetRegion& a, const SetRegion& b) {

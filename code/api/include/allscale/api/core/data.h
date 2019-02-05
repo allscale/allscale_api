@@ -96,6 +96,9 @@ namespace core {
 			// there has to be a set difference operation
 			std::is_same<decltype(&R::difference), R(*)(const R&, const R&)>::value &&
 
+			// there has to be a sub-region test operation
+			std::is_same<decltype(&R::isSubRegion), bool(*)(const R&, const R&)>::value &&
+
 			// there has to be a span operator, computing the hull of two regions
 			std::is_same<decltype(&R::span), R(*)(const R&, const R&)>::value,
 
@@ -246,7 +249,7 @@ namespace core {
 	template<typename R>
 	typename std::enable_if<is_region<R>::value,bool>::type
 	isSubRegion(const R& a, const R& b) {
-		return R::difference(a,b).empty();
+		return R::isSubRegion(a,b);
 	}
 
 	/**

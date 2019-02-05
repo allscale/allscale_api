@@ -64,6 +64,10 @@ namespace data {
 				return !flag;
 			}
 
+			static bool isSubRegion(const ScalarRegion& a, const ScalarRegion& b) {
+				return !a.flag || b.flag;
+			}
+
 			static ScalarRegion merge(const ScalarRegion& a, const ScalarRegion& b) {
 				return { a.flag || b.flag };
 			}

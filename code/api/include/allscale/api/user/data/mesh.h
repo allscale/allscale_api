@@ -1674,6 +1674,10 @@ namespace data {
 				return refs < other.refs;
 			}
 
+			static bool isSubRegion(const MeshRegion& a, const MeshRegion& b) {
+				return difference(a,b).empty();
+			}
+
 			static MeshRegion merge(const MeshRegion& a, const MeshRegion& b) {
 				MeshRegion res;
 				std::set_union(

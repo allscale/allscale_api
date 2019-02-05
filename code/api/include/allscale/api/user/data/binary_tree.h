@@ -107,6 +107,10 @@ namespace data {
 			return mask.none();
 		}
 
+		static bool isSubRegion(const StaticBalancedBinaryTreeBlockedRegion& a, const StaticBalancedBinaryTreeBlockedRegion& b) {
+			return difference(a,b).empty();
+		}
+
 		static StaticBalancedBinaryTreeBlockedRegion merge(const StaticBalancedBinaryTreeBlockedRegion& a, const StaticBalancedBinaryTreeBlockedRegion& b) {
 			return a.mask | b.mask;
 		}
@@ -248,6 +252,10 @@ namespace data {
 
 		bool empty() const {
 			return mask.none();
+		}
+
+		static bool isSubRegion(const StaticBalancedBinaryTreeRegion& a, const StaticBalancedBinaryTreeRegion& b) {
+			return difference(a,b).empty();
 		}
 
 		static StaticBalancedBinaryTreeRegion merge(const StaticBalancedBinaryTreeRegion& a, const StaticBalancedBinaryTreeRegion& b) {
